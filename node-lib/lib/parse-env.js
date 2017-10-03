@@ -102,6 +102,8 @@ let envDefinitions = {
   // Redis related variables
   REDIS_CONNECT_URI: envalid.url({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI' }),
 
+  MIN_NODE_VERSION: envalid.str({ default: '1.1.7', desc: 'The minimum acceptable Node version for registrations and audits' }),
+
   // Service Specific Variables
 
   // Aggregator service specific variables

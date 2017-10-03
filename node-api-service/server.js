@@ -157,7 +157,7 @@ server.get({ path: '/nodes/random', version: '1.0.0' }, nodes.getNodesRandomV1As
 // get nodes list
 // server.get({ path: '/nodes/:tnt_addr', version: '1.0.0' }, nodes.getNodeByTNTAddrV1Async)
 // register a new node
-// server.post({ path: '/nodes', version: '1.0.0' }, nodes.postNodeV1Async)
+server.post({ path: '/nodes', version: '1.0.0' }, nodes.postNodeV1Async)
 // update an existing node
 server.put({ path: '/nodes/:tnt_addr', version: '1.0.0' }, nodes.putNodeV1Async)
 // get configuration information for this stack

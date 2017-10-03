@@ -24,11 +24,17 @@ const nodeAuditLog = require('../models/NodeAuditLog.js')
 const url = require('url')
 const ip = require('ip')
 const utils = require('../utils.js')
+const semver = require('semver')
+
+const env = require('../parse-env.js')('api')
 
 let registeredNodeSequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
 let nodeAuditLogSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
+
+// The maximium number of registered Nodes to allow, null == unlimitted
+const MAX_REGISTERED_NODES = 100
 
 // The number of results to return when responding to a random nodes query
 const RANDOM_NODES_RESULT_LIMIT = 5
@@ -164,6 +170,15 @@ async function postNodeV1Async (req, res, next) {
     return next(new restify.InvalidArgumentError('invalid content type'))
   }
 
+  let minNodeVersionOK = false
+  if (req.headers && req.headers['X-Node-Version']) {
+    let nodeVersion = req.headers['X-Node-Version']
+    minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION}`)
+  }
+  if (!minNodeVersionOK) {
+    return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION} or greater required`))
+  }
+
   if (!req.params.hasOwnProperty('tnt_addr')) {
     return next(new restify.InvalidArgumentError('invalid JSON body, missing tnt_addr'))
   }
@@ -199,6 +214,16 @@ async function postNodeV1Async (req, res, next) {
   if (parsedPublicUri.hostname === '0.0.0.0') return next(new restify.InvalidArgumentError('0.0.0.0 not allowed in public_uri'))
 
   try {
+    let totalCount = await RegisteredNode.count()
+    if (totalCount >= MAX_REGISTERED_NODES) {
+      return next(new restify.ForbiddenError('Maximum number of Node registrations has been reached.'))
+    }
+  } catch (error) {
+    console.error(`Unable to count registered Nodes: ${error.message}`)
+    return next(new restify.InternalServerError('unable to count registered Nodes'))
+  }
+
+  try {
     let count = await RegisteredNode.count({ where: { tntAddr: lowerCasedTntAddrParam } })
     if (count >= 1) {
       return next(new restify.ConflictError('the Ethereum address provided is already registered.'))
@@ -230,7 +255,7 @@ async function postNodeV1Async (req, res, next) {
     })
   } catch (error) {
     console.error(`Could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}: ${error.message}`)
-    return next(new restify.InternalServerError('could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}'))
+    return next(new restify.InternalServerError(`could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}`))
   }
 
   res.send({
