@@ -97,7 +97,7 @@ async function getProofsByIDV1Async (req, res, next) {
   }, (err) => {
     if (err) return next(new restify.InternalError(err))
     res.contentType = 'application/json'
-    res.cache('public', { maxAge: 5 })
+    res.noCache()
     res.send(hashIdResults)
     return next()
   })
