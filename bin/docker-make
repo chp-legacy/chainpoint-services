@@ -5,7 +5,7 @@
 # Put this script in your $PATH
 
 PROGNAME="$(basename $0)"
-VERSION="v1.1.6"
+VERSION="latest"
 export PATH=$PATH:/usr/local/bin
 
 # Helper functions for guards
