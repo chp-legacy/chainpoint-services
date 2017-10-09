@@ -172,9 +172,13 @@ async function postNodeV1Async (req, res, next) {
   }
 
   let minNodeVersionOK = false
-  if (req.headers && req.headers['X-Node-Version']) {
-    let nodeVersion = req.headers['X-Node-Version']
-    minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION}`)
+  if (req.headers && req.headers['x-node-version']) {
+    let nodeVersion = req.headers['x-node-version']
+    try {
+      minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION}`)
+    } catch (error) {
+      return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION} or greater required`))
+    }
   }
   if (!minNodeVersionOK) {
     return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION} or greater required`))
@@ -309,7 +313,7 @@ async function putNodeV1Async (req, res, next) {
     try {
       let count = await RegisteredNode.count({ where: { publicUri: lowerCasedPublicUri, tntAddr: { $ne: lowerCasedTntAddrParam } } })
       if (count >= 1) {
-        return next(new restify.ConflictError('public URI is already in use'))
+        return next(new restify.ConflictError('the public URI provided is already registered.'))
       }
     } catch (error) {
       console.error(`Unable to count registered Nodes: ${error.message}`)
@@ -393,5 +397,6 @@ module.exports = {
   putNodeV1Async: putNodeV1Async,
   setNodesRegisteredNode: (regNode) => { RegisteredNode = regNode },
   setNodesNodeAuditLog: (nodeAuditLog) => { NodeAuditLog = nodeAuditLog },
-  setRegNodesLimit: (val) => { updateRegNodesLimit(val) }
+  setRegNodesLimit: (val) => { updateRegNodesLimit(val) },
+  setLimitDirect: (val) => { regNodesLimit = val }
 }

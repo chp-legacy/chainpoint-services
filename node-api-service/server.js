@@ -408,5 +408,6 @@ module.exports = {
   setNodesRegisteredNode: (regNode) => { nodes.setNodesRegisteredNode(regNode) },
   setNodesNodeAuditLog: (nodeAuditLog) => { nodes.setNodesNodeAuditLog(nodeAuditLog) },
   server: server,
-  config: config
+  config: config,
+  setRegNodesLimit: (val) => { nodes.setLimitDirect(val) }
 }
