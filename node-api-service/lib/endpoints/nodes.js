@@ -24,11 +24,18 @@ const nodeAuditLog = require('../models/NodeAuditLog.js')
 const url = require('url')
 const ip = require('ip')
 const utils = require('../utils.js')
+const semver = require('semver')
+
+const env = require('../parse-env.js')('api')
 
 let registeredNodeSequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
 let nodeAuditLogSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
+
+// The maximum  number of registered Nodes allowed
+// This value is updated from consul events as changes are detected
+let regNodesLimit = 0
 
 // The number of results to return when responding to a random nodes query
 const RANDOM_NODES_RESULT_LIMIT = 5
@@ -164,6 +171,15 @@ async function postNodeV1Async (req, res, next) {
     return next(new restify.InvalidArgumentError('invalid content type'))
   }
 
+  let minNodeVersionOK = false
+  if (req.headers && req.headers['X-Node-Version']) {
+    let nodeVersion = req.headers['X-Node-Version']
+    minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION}`)
+  }
+  if (!minNodeVersionOK) {
+    return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION} or greater required`))
+  }
+
   if (!req.params.hasOwnProperty('tnt_addr')) {
     return next(new restify.InvalidArgumentError('invalid JSON body, missing tnt_addr'))
   }
@@ -197,6 +213,16 @@ async function postNodeV1Async (req, res, next) {
   if (ip.isPrivate(parsedPublicUri.hostname)) return next(new restify.InvalidArgumentError('public_uri hostname must not be a private IP'))
   // disallow 0.0.0.0
   if (parsedPublicUri.hostname === '0.0.0.0') return next(new restify.InvalidArgumentError('0.0.0.0 not allowed in public_uri'))
+
+  try {
+    let totalCount = await RegisteredNode.count()
+    if (totalCount >= regNodesLimit) {
+      return next(new restify.ForbiddenError('Maximum number of Node registrations has been reached.'))
+    }
+  } catch (error) {
+    console.error(`Unable to count registered Nodes: ${error.message}`)
+    return next(new restify.InternalServerError('unable to count registered Nodes'))
+  }
 
   try {
     let count = await RegisteredNode.count({ where: { tntAddr: lowerCasedTntAddrParam } })
@@ -346,6 +372,18 @@ async function putNodeV1Async (req, res, next) {
   return next()
 }
 
+function updateRegNodesLimit (count) {
+  try {
+    let regNodesLimit = parseInt(count)
+    if (!(regNodesLimit >= 0) || regNodesLimit === null) throw new Error('Bad regNodesLimit value')
+    console.log(`Registered Nodes limit updated to ${count}`)
+  } catch (error) {
+    // the regNodesLimit value being set must be bad
+    console.error(error.message)
+    regNodesLimit = 0
+  }
+}
+
 module.exports = {
   getRegisteredNodeSequelize: () => { return registeredNodeSequelize },
   getNodeAuditLogSequelize: () => { return nodeAuditLogSequelize },
@@ -354,5 +392,6 @@ module.exports = {
   postNodeV1Async: postNodeV1Async,
   putNodeV1Async: putNodeV1Async,
   setNodesRegisteredNode: (regNode) => { RegisteredNode = regNode },
-  setNodesNodeAuditLog: (nodeAuditLog) => { NodeAuditLog = nodeAuditLog }
+  setNodesNodeAuditLog: (nodeAuditLog) => { NodeAuditLog = nodeAuditLog },
+  setRegNodesLimit: (val) => { updateRegNodesLimit(val) }
 }

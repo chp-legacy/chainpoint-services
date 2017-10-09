@@ -104,16 +104,7 @@ buffer-writer@1.0.1:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/buffer-writer/-/buffer-writer-1.0.1.tgz#22a936901e3029afcd7547eb4487ceb697a3bf08"
 
-bunyan@^1.4.0:
-  version "1.8.8"
-  resolved "https://registry.yarnpkg.com/bunyan/-/bunyan-1.8.8.tgz#6549ed6db088e4d82b7be3bcc6d0697159f6e209"
-  optionalDependencies:
-    dtrace-provider "~0.8"
-    moment "^2.10.6"
-    mv "~2"
-    safe-json-stringify "~1"
-
-bunyan@^1.8.12:
+bunyan@^1.4.0, bunyan@^1.8.12:
   version "1.8.12"
   resolved "https://registry.yarnpkg.com/bunyan/-/bunyan-1.8.12.tgz#f150f0f6748abdd72aeae84f04403be2ef113797"
   optionalDependencies:
@@ -890,6 +881,10 @@ semver@^4.3.3:
 semver@^5.0.1:
   version "5.3.0"
   resolved "https://registry.yarnpkg.com/semver/-/semver-5.3.0.tgz#9b2ce5d3de02d17c6012ad326aa6b4d0cf54f94f"
+
+semver@^5.4.1:
+  version "5.4.1"
+  resolved "https://registry.yarnpkg.com/semver/-/semver-5.4.1.tgz#e059c09d8571f0540823733433505d3a2f00b18e"
 
 sequelize-cockroachdb@^1.0.2:
   version "1.0.2"

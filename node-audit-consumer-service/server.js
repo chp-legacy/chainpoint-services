@@ -49,9 +49,6 @@ const MAX_NODE_RESPONSE_CHALLENGE_AGE_MIN = 75
 // The minimum credit balance to receive awards and be publicly advertised
 const MIN_PASSING_CREDIT_BALANCE = 10800
 
-// The minimum Node version in use to qualify for rewards
-const MIN_NODE_VERSION_TO_PASS = '1.1.7'
-
 async function processIncomingAuditJobAsync (msg) {
   if (msg !== null) {
     let auditTaskObj = JSON.parse(msg.content.toString())
@@ -163,7 +160,7 @@ async function processIncomingAuditJobAsync (msg) {
     // check if the Node version is acceptable, catch error if version value is invalid
     nodeVersion = configResultsBody.version
     try {
-      nodeVersionPass = semver.satisfies(nodeVersion, `>=${MIN_NODE_VERSION_TO_PASS}`)
+      nodeVersionPass = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION}`)
     } catch (error) {
       nodeVersionPass = false
     }
