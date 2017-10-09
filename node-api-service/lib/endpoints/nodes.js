@@ -33,8 +33,9 @@ let RegisteredNode = registeredNode.RegisteredNode
 let nodeAuditLogSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
 
-// The maximium number of registered Nodes to allow, null == unlimitted
-const MAX_REGISTERED_NODES = 100
+// The maximum  number of registered Nodes allowed
+// This value is updated from consul events as changes are detected
+let regNodesLimit = 0
 
 // The number of results to return when responding to a random nodes query
 const RANDOM_NODES_RESULT_LIMIT = 5
@@ -215,7 +216,7 @@ async function postNodeV1Async (req, res, next) {
 
   try {
     let totalCount = await RegisteredNode.count()
-    if (totalCount >= MAX_REGISTERED_NODES) {
+    if (totalCount >= regNodesLimit) {
       return next(new restify.ForbiddenError('Maximum number of Node registrations has been reached.'))
     }
   } catch (error) {
@@ -371,6 +372,18 @@ async function putNodeV1Async (req, res, next) {
   return next()
 }
 
+function updateRegNodesLimit (count) {
+  try {
+    let regNodesLimit = parseInt(count)
+    if (!(regNodesLimit >= 0) || regNodesLimit === null) throw new Error('Bad regNodesLimit value')
+    console.log(`Registered Nodes limit updated to ${count}`)
+  } catch (error) {
+    // the regNodesLimit value being set must be bad
+    console.error(error.message)
+    regNodesLimit = 0
+  }
+}
+
 module.exports = {
   getRegisteredNodeSequelize: () => { return registeredNodeSequelize },
   getNodeAuditLogSequelize: () => { return nodeAuditLogSequelize },
@@ -379,5 +392,6 @@ module.exports = {
   postNodeV1Async: postNodeV1Async,
   putNodeV1Async: putNodeV1Async,
   setNodesRegisteredNode: (regNode) => { RegisteredNode = regNode },
-  setNodesNodeAuditLog: (nodeAuditLog) => { NodeAuditLog = nodeAuditLog }
+  setNodesNodeAuditLog: (nodeAuditLog) => { NodeAuditLog = nodeAuditLog },
+  setRegNodesLimit: (val) => { updateRegNodesLimit(val) }
 }

@@ -327,6 +327,35 @@ function startWatches () {
   nistWatch.on('error', function (err) {
     console.error('nistWatch error: ', err)
   })
+
+  // Continuous watch on the consul key holding the regNodesLimit count.
+  var regNodesLimitWatch = consul.watch({ method: consul.kv.get, options: { key: env.REG_NODES_LIMIT_KEY } })
+
+  // Store the updated regNodesLimit count on change
+  regNodesLimitWatch.on('change', function (data, res) {
+    // process only if a value has been returned
+    if (data && data.Value) {
+      nodes.setRegNodesLimit(data.Value)
+    }
+  })
+
+  regNodesLimitWatch.on('error', function (err) {
+    console.error('regNodesLimitWatch error: ', err)
+  })
+
+  consul.kv.get(env.REG_NODES_LIMIT_KEY, function (err, result) {
+    if (err) {
+      console.error(err)
+    } else {
+      // Only create key if it doesn't exist or has no value, default value of 0
+      if (!result) {
+        consul.kv.set(env.REG_NODES_LIMIT_KEY, '0', function (err, result) {
+          if (err) throw err
+          console.log(`Created ${env.REG_NODES_LIMIT_KEY} key`)
+        })
+      }
+    }
+  })
 }
 
 // Instruct REST server to begin listening for request

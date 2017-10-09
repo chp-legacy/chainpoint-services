@@ -83,6 +83,7 @@ let envDefinitions = {
   CONSUL_HOST: envalid.str({ default: 'consul', desc: 'Consul server host' }),
   CONSUL_PORT: envalid.num({ default: 8500, desc: 'Consul server port' }),
   NIST_KEY: envalid.str({ default: 'service/nist/latest', desc: 'The consul key to write to, watch to receive updated NIST object' }),
+  REG_NODES_LIMIT_KEY: envalid.str({ default: 'service/api/nodelimit', desc: 'The consul key to write to, watch to receive updated registered Nodes limit' }),
   CALENDAR_LOCK_KEY: envalid.str({ default: 'service/calendar/blockchain/lock', desc: 'Key used for acquiring calendar write locks' }),
   CHALLENGE_LOCK_KEY: envalid.str({ default: 'service/audit/challenge/lock', desc: 'Key used for acquiring challenge generation locks' }),
   LAST_AUDIT_KEY: envalid.str({ default: 'service/audit/last', desc: 'The consul key to write to, watch to receive updated last audit performed time' }),
