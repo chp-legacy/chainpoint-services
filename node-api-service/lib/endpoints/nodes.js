@@ -230,7 +230,7 @@ async function postNodeV1Async (req, res, next) {
     })
   } catch (error) {
     console.error(`Could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}: ${error.message}`)
-    return next(new restify.InternalServerError('could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}'))
+    return next(new restify.InternalServerError(`could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}`))
   }
 
   res.send({
