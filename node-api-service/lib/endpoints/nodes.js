@@ -425,7 +425,7 @@ function updateRegNodesLimit (count) {
   }
 }
 
-async function getTNTGrainsBalanceForAddressAsync (tntAddress) {
+let getTNTGrainsBalanceForAddressAsync = async (tntAddress) => {
   let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
 
   let options = {
@@ -466,5 +466,6 @@ module.exports = {
   setNodesRegisteredNode: (regNode) => { RegisteredNode = regNode },
   setNodesNodeAuditLog: (nodeAuditLog) => { NodeAuditLog = nodeAuditLog },
   setRegNodesLimit: (val) => { updateRegNodesLimit(val) },
-  setLimitDirect: (val) => { regNodesLimit = val }
+  setLimitDirect: (val) => { regNodesLimit = val },
+  overrideGetTNTGrainsBalanceForAddressAsync: (func) => { getTNTGrainsBalanceForAddressAsync = func }
 }

@@ -2,6 +2,7 @@
 
 process.env.NODE_ENV = 'test'
 process.env.MIN_NODE_VERSION = '1.1.7'
+process.env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD = 500000000000
 
 // test related packages
 const expect = require('chai').expect
@@ -1064,6 +1065,31 @@ describe('Nodes Controller', () => {
         })
     })
 
+    it('should return error with low TNT balance', (done) => {
+      let publicUri = 'http://65.198.32.187'
+      let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
+
+      app.setRegNodesLimit(10)
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 100000000000 })
+
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .send({ tnt_addr: tntAddr1, public_uri: publicUri })
+        .expect('Content-type', /json/)
+        .expect(403)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('ForbiddenError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`TNT adresss ${tntAddr1} does not have the minimum balance of ${process.env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD} TNT grains for Node operation`)
+          done()
+        })
+    })
+
     it('should return error if a tnt_addr already exists', (done) => {
       let publicUri = 'http://65.198.32.187'
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
@@ -1098,6 +1124,7 @@ describe('Nodes Controller', () => {
       })
 
       app.setRegNodesLimit(10)
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .post('/nodes')
@@ -1159,6 +1186,7 @@ describe('Nodes Controller', () => {
       })
 
       app.setRegNodesLimit(10)
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .post('/nodes')
@@ -1220,6 +1248,7 @@ describe('Nodes Controller', () => {
       })
 
       app.setRegNodesLimit(10)
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .post('/nodes')
@@ -1258,11 +1287,74 @@ describe('Nodes Controller', () => {
         })
     })
 
-    it('should return error with malformed tnt_addr', (done) => {
-      let randTntAddr = '0xzxczxc'
+    it('should return error with missing node version', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
 
       request(server)
         .put('/nodes/' + randTntAddr)
+        .set('Content-type', 'application/json')
+        .expect('Content-type', /json/)
+        .expect(426)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('UpgradeRequiredError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION} or greater required`)
+          done()
+        })
+    })
+
+    it('should return error with bad node version', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', 'bad+version')
+        .set('Content-type', 'application/json')
+        .expect('Content-type', /json/)
+        .expect(426)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('UpgradeRequiredError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION} or greater required`)
+          done()
+        })
+    })
+
+    it('should return error with low node version', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', '1.1.1')
+        .set('Content-type', 'application/json')
+        .expect('Content-type', /json/)
+        .expect(426)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('UpgradeRequiredError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION} or greater required`)
+          done()
+        })
+    })
+
+    it('should return error with malformed tnt_addr', (done) => {
+      let randTntAddr = '0xzxczxc'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 100000000000 })
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
         .send({ public_uri: 'http://65.198.32.187' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1281,9 +1373,11 @@ describe('Nodes Controller', () => {
     it('should return error with malformed public_uri', (done) => {
       let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
       let publicUri = 'baduri'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
         .send({ public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1302,9 +1396,11 @@ describe('Nodes Controller', () => {
     it('should return error with missing hmac', (done) => {
       let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
       let publicUri = 'http://65.198.32.187'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
         .send({ public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1323,9 +1419,11 @@ describe('Nodes Controller', () => {
     it('should return error with empty hmac', (done) => {
       let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
       let publicUri = 'http://65.198.32.187'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
         .send({ public_uri: publicUri, hmac: '' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1344,9 +1442,34 @@ describe('Nodes Controller', () => {
     it('should return error with invalid hmac', (done) => {
       let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
       let publicUri = 'http://65.198.32.187'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .send({ public_uri: publicUri, hmac: '!badhmac' })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('invalid JSON body, invalid hmac')
+          done()
+        })
+    })
+
+    it('should return error with invalid hmac', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://65.198.32.187'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
         .send({ public_uri: publicUri, hmac: '!badhmac' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1397,8 +1520,11 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .put('/nodes/' + tntAddr1)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
         .send({ public_uri: publicUri1, hmac: crypto.randomBytes(32).toString('hex') })
         .expect('Content-type', /json/)
         .expect(404)
@@ -1449,6 +1575,8 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .post('/nodes')
         .set('X-Node-Version', process.env.MIN_NODE_VERSION)
@@ -1459,6 +1587,7 @@ describe('Nodes Controller', () => {
 
           request(server)
             .put('/nodes/' + tntAddr1)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
             .send({ public_uri: publicUri1, hmac: crypto.randomBytes(32).toString('hex') })
             .expect('Content-type', /json/)
             .expect(409)
@@ -1475,7 +1604,7 @@ describe('Nodes Controller', () => {
         })
     })
 
-    it('should return OK for valid PUT no change to tnt or IP', (done) => {
+    it('should return error for low balance', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
       })
@@ -1510,6 +1639,8 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .post('/nodes')
         .set('X-Node-Version', process.env.MIN_NODE_VERSION)
@@ -1524,17 +1655,21 @@ describe('Nodes Controller', () => {
           let hmacTxt = [tntAddr1, publicUri, formattedDate].join('')
           let calculatedHMAC = hash.update(hmacTxt).digest('hex')
 
+          app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 100000000000 })
           request(server)
             .put('/nodes/' + tntAddr1)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
             .send({ public_uri: publicUri, hmac: calculatedHMAC })
             .expect('Content-type', /json/)
-            .expect(200)
+            .expect(403)
             .end((err, res) => {
               expect(err).to.equal(null)
-              expect(res.body).to.have.property('tnt_addr')
-                .and.to.equal(tntAddr1)
-              expect(res.body).to.have.property('public_uri')
-                .and.to.equal(publicUri)
+              expect(res.body).to.have.property('code')
+                .and.to.be.a('string')
+                .and.to.equal('ForbiddenError')
+              expect(res.body).to.have.property('message')
+                .and.to.be.a('string')
+                .and.to.equal(`TNT adresss ${tntAddr1} does not have the minimum balance of ${process.env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD} TNT grains for Node operation`)
               done()
             })
         })
@@ -1575,6 +1710,76 @@ describe('Nodes Controller', () => {
           return regNode
         }
       })
+
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
+        .expect(200)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          // HMAC-SHA256(hmac-key, TNT_ADDRESS|IP|YYYYMMDDHHMM)
+          let hash = crypto.createHmac('sha256', res.body.hmac_key)
+          let formattedDate = moment().utc().format('YYYYMMDDHHmm')
+          let hmacTxt = [tntAddr1, publicUri2, formattedDate].join('')
+          let calculatedHMAC = hash.update(hmacTxt).digest('hex')
+
+          request(server)
+            .put('/nodes/' + tntAddr1)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+            .send({ public_uri: publicUri2, hmac: calculatedHMAC })
+            .expect('Content-type', /json/)
+            .expect(200)
+            .end((err, res) => {
+              expect(err).to.equal(null)
+              expect(res.body).to.have.property('tnt_addr')
+                .and.to.equal(tntAddr1)
+              expect(res.body).to.have.property('public_uri')
+                .and.to.equal(publicUri2)
+              done()
+            })
+        })
+    })
+
+    it('should return OK for valid PUT no change to tnt and updated IP', (done) => {
+      app.setAMQPChannel({
+        sendToQueue: function () { }
+      })
+
+      let publicUri1 = 'http://65.198.32.187'
+      let publicUri2 = 'http://65.198.32.188'
+      let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
+      let hmacKey = crypto.randomBytes(32).toString('hex')
+
+      let data = []
+      let regNode = null
+
+      app.setNodesRegisteredNode({
+        count: (params) => {
+          let matches = data.filter((row) => {
+            return row.tntAddr === params.where.tntAddr
+          })
+          return matches.length
+        },
+        create: (params) => {
+          let row = {
+            tntAddr: params.tntAddr,
+            publicUri: params.publicUri,
+            hmacKey: hmacKey
+          }
+          data.push(row)
+          return row
+        },
+        find: (params) => {
+          regNode = data.find((item) => { return item.tntAddr === params.where.tntAddr })
+          if (regNode) regNode.save = () => { }
+          return regNode
+        }
+      })
+
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .post('/nodes')
@@ -1641,6 +1846,8 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .post('/nodes')
         .set('X-Node-Version', process.env.MIN_NODE_VERSION)
@@ -1656,6 +1863,7 @@ describe('Nodes Controller', () => {
 
           request(server)
             .put('/nodes/' + tntAddr1)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
             .send({ hmac: calculatedHMAC })
             .expect('Content-type', /json/)
             .expect(200)
@@ -1720,6 +1928,8 @@ describe('Nodes Controller', () => {
           return regNode
         }
       })
+
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .post('/nodes')

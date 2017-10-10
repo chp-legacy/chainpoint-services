@@ -409,5 +409,6 @@ module.exports = {
   setNodesNodeAuditLog: (nodeAuditLog) => { nodes.setNodesNodeAuditLog(nodeAuditLog) },
   server: server,
   config: config,
-  setRegNodesLimit: (val) => { nodes.setLimitDirect(val) }
+  setRegNodesLimit: (val) => { nodes.setLimitDirect(val) },
+  overrideGetTNTGrainsBalanceForAddressAsync: (func) => { nodes.overrideGetTNTGrainsBalanceForAddressAsync(func) }
 }
