@@ -295,6 +295,19 @@ async function putNodeV1Async (req, res, next) {
     return next(new restify.InvalidArgumentError('invalid content type'))
   }
 
+  let minNodeVersionOK = false
+  if (req.headers && req.headers['x-node-version']) {
+    let nodeVersion = req.headers['x-node-version']
+    try {
+      minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION}`)
+    } catch (error) {
+      return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION} or greater required`))
+    }
+  }
+  if (!minNodeVersionOK) {
+    return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION} or greater required`))
+  }
+
   if (!req.params.hasOwnProperty('tnt_addr')) {
     return next(new restify.InvalidArgumentError('invalid JSON body, missing tnt_addr'))
   }
