@@ -23,6 +23,8 @@
     "lodash": "^4.17.4",
     "moment": "^2.18.1",
     "redis": "^2.7.1",
+    "request": "^2.81.0",
+    "request-promise-native": "^1.0.4",
     "restify": "^4.3.0",
     "restify-cors-middleware": "^0.0.8",
     "restify-errors": "^5.0.0",

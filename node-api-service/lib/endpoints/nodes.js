@@ -25,6 +25,7 @@ const url = require('url')
 const ip = require('ip')
 const utils = require('../utils.js')
 const semver = require('semver')
+const rp = require('request-promise-native')
 
 const env = require('../parse-env.js')('api')
 
@@ -42,6 +43,9 @@ const RANDOM_NODES_RESULT_LIMIT = 5
 
 // The number of recent audit log entries to return
 const AUDIT_HISTORY_COUNT = 10 // at current rate, 5 hours worth
+
+// The minimium TNT grains required to operate a Node
+const minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
 
 // validate eth address is well formed
 let isEthereumAddr = (address) => {
@@ -248,6 +252,16 @@ async function postNodeV1Async (req, res, next) {
     return next(new restify.InternalServerError('unable to count registered Nodes'))
   }
 
+  // check to see if the Node has the min balance required for Node operation
+  try {
+    let nodeBalance = await getTNTGrainsBalanceForAddressAsync(lowerCasedTntAddrParam)
+    if (nodeBalance < minGrainsBalanceNeeded) {
+      return next(new restify.ForbiddenError(`TNT adresss ${lowerCasedTntAddrParam} does not have the minimum balance of ${minGrainsBalanceNeeded} TNT grains for Node operation`))
+    }
+  } catch (error) {
+    return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
+  }
+
   let randHMACKey = crypto.randomBytes(32).toString('hex')
 
   let newNode
@@ -363,6 +377,16 @@ async function putNodeV1Async (req, res, next) {
       regNode.publicUri = lowerCasedPublicUri
     }
 
+    // check to see if the Node has the min balance required for Node operation
+    try {
+      let nodeBalance = await getTNTGrainsBalanceForAddressAsync(lowerCasedTntAddrParam)
+      if (nodeBalance < minGrainsBalanceNeeded) {
+        return next(new restify.ForbiddenError(`TNT adresss ${lowerCasedTntAddrParam} does not have the minimum balance of ${minGrainsBalanceNeeded} TNT grains for Node operation`))
+      }
+    } catch (error) {
+      return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
+    }
+
     await regNode.save()
   } catch (error) {
     console.error(`Could not update RegisteredNode: ${error.message}`)
@@ -385,6 +409,37 @@ function updateRegNodesLimit (count) {
     // the regNodesLimit value being set must be bad
     console.error(error.message)
     regNodesLimit = 0
+  }
+}
+
+async function getTNTGrainsBalanceForAddressAsync (tntAddress) {
+  let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
+
+  let options = {
+    headers: [
+      {
+        name: 'Content-Type',
+        value: 'application/json'
+      }
+    ],
+    method: 'GET',
+    uri: `${ethTntTxUri}/balance/${tntAddress}`,
+    json: true,
+    gzip: true,
+    resolveWithFullResponse: true
+  }
+
+  try {
+    let balanceResponse = await rp(options)
+    let balanceTNTGrains = balanceResponse.body.balance
+    let intBalance = parseInt(balanceTNTGrains)
+    if (intBalance >= 0) {
+      return intBalance
+    } else {
+      throw new Error(`Bad TNT balance value: ${balanceTNTGrains}`)
+    }
+  } catch (error) {
+    throw new Error(`TNT balance read error: ${error.message}`)
   }
 }
 
