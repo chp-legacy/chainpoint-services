@@ -23,7 +23,8 @@ const utils = require('./lib/utils.js')
 const loadProvider = require('./lib/eth-tnt/providerLoader.js')
 const loadToken = require('./lib/eth-tnt/tokenLoader.js')
 const TokenOps = require('./lib/eth-tnt/tokenOps.js')
-const BigNumber = require('bignumber.js')
+
+require('./lib/prototypes.js');
 
 // pull in variables defined in shared EthTokenTrxLog module
 let ethTokenTxSequelize = ethTokenTxLog.sequelize
@@ -69,7 +70,7 @@ async function getLastKnownEventInfoAsync () {
 async function processNewTxAsync (params) {
   // Log out the transaction
   let tntGrainsAmount = params.args.value
-  let tntAmount = new BigNumber(tntGrainsAmount).dividedBy(10 ** 8).toNumber()
+  let tntAmount = tntGrainsAmount.tntAmountFromTransfer()
 
   let tx = {
     txId: params.transactionHash,
@@ -111,22 +112,13 @@ async function processNewTxAsync (params) {
 
   try {
     // Convert the TNT to credits
-    let credits = convertTntGrainsToCredit(tntGrainsAmount)
+    let credits = tntGrainsAmount.tntCreditAmountFromTransfer()
     let prevBalance = nodeToCredit.tntCredit
     await nodeToCredit.increment({ tntCredit: credits })
     console.log(`Issued ${credits} credits to Node ${nodeToCredit.tntAddr} with previous balance of ${prevBalance}, new balance is ${nodeToCredit.tntCredit}`)
   } catch (error) {
     console.error(`Unable to issue credits to Node ${nodeToCredit.tntAddr}: ${error.message}`)
   }
-}
-
-/**
- * Converts TNT token amount (in grains) to credit value
- * @param  {number} tntAmount Grains of TNT to convert
- * @return {number}           Amount of credits
- */
-function convertTntGrainsToCredit (tntGrainsAmount) {
-  return new BigNumber(tntGrainsAmount).times(env.TNT_TO_CREDIT_RATE).dividedBy(10 ** 8).toNumber()
 }
 
 /**

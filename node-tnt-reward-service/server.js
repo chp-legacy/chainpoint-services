@@ -24,8 +24,9 @@ const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
 const calendarBlock = require('./lib/models/CalendarBlock.js')
 const registeredCore = require('./lib/models/RegisteredCore.js')
 const csprng = require('random-number-csprng')
-const BigNumber = require('bignumber.js')
 const heartbeats = require('heartbeats')
+
+require('./lib/prototypes.js');
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -275,8 +276,8 @@ async function calculateCurrentRewardShares () {
       break
   }
   */
-  let nodeTNTGrainsRewardShare = new BigNumber(nodeTNTRewardShare).times(10 ** 8).toNumber()
-  let coreTNTGrainsRewardShare = new BigNumber(coreTNTRewardShare).times(10 ** 8).toNumber()
+  let nodeTNTGrainsRewardShare = nodeTNTRewardShare.tntAmountForTransfer()
+  let coreTNTGrainsRewardShare = coreTNTRewardShare.tntAmountForTransfer()
   return {
     nodeTNTGrainsRewardShare: nodeTNTGrainsRewardShare,
     coreTNTGrainsRewardShare: coreTNTGrainsRewardShare,
