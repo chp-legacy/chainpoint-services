@@ -223,18 +223,19 @@ async function postNodeV1Async (req, res, next) {
 
   let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toLowerCase() : null
   // if an public_uri is provided, it must be valid
-  if (lowerCasedPublicUri && !validUrl.isWebUri(lowerCasedPublicUri)) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, invalid public_uri'))
+  if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
+    if (lowerCasedPublicUri && !validUrl.isWebUri(lowerCasedPublicUri)) {
+      return next(new restify.InvalidArgumentError('invalid JSON body, invalid public_uri'))
+    }
+
+    let parsedPublicUri = url.parse(lowerCasedPublicUri)
+    // ensure that hostname is an IP
+    if (!utils.isIP(parsedPublicUri.hostname)) return next(new restify.InvalidArgumentError('public_uri hostname must be an IP'))
+    // ensure that it is not a private IP
+    if (ip.isPrivate(parsedPublicUri.hostname)) return next(new restify.InvalidArgumentError('public_uri hostname must not be a private IP'))
+    // disallow 0.0.0.0
+    if (parsedPublicUri.hostname === '0.0.0.0') return next(new restify.InvalidArgumentError('0.0.0.0 not allowed in public_uri'))
   }
-
-  let parsedPublicUri = url.parse(lowerCasedPublicUri)
-  // ensure that hostname is an IP
-  if (!utils.isIP(parsedPublicUri.hostname)) return next(new restify.InvalidArgumentError('public_uri hostname must be an IP'))
-  // ensure that it is not a private IP
-  if (ip.isPrivate(parsedPublicUri.hostname)) return next(new restify.InvalidArgumentError('public_uri hostname must not be a private IP'))
-  // disallow 0.0.0.0
-  if (parsedPublicUri.hostname === '0.0.0.0') return next(new restify.InvalidArgumentError('0.0.0.0 not allowed in public_uri'))
-
   try {
     let totalCount = await RegisteredNode.count()
     if (totalCount >= regNodesLimit) {
@@ -255,14 +256,16 @@ async function postNodeV1Async (req, res, next) {
     return next(new restify.InternalServerError('unable to count registered Nodes'))
   }
 
-  try {
-    let count = await RegisteredNode.count({ where: { publicUri: lowerCasedPublicUri } })
-    if (count >= 1) {
-      return next(new restify.ConflictError('the public URI provided is already registered.'))
+  if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
+    try {
+      let count = await RegisteredNode.count({ where: { publicUri: lowerCasedPublicUri } })
+      if (count >= 1) {
+        return next(new restify.ConflictError('the public URI provided is already registered.'))
+      }
+    } catch (error) {
+      console.error(`Unable to count registered Nodes: ${error.message}`)
+      return next(new restify.InternalServerError('unable to count registered Nodes'))
     }
-  } catch (error) {
-    console.error(`Unable to count registered Nodes: ${error.message}`)
-    return next(new restify.InternalServerError('unable to count registered Nodes'))
   }
 
   // check to see if the Node has the min balance required for Node operation
