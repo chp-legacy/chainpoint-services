@@ -15,6 +15,12 @@
 */
 
 /**
+ * env required for tnt to credit rate
+ */
+const env = require('./parse-env.js')
+const BigNumber = require('bignumber.js')
+
+/**
  * Sleep for a specified number of milliseconds
  *
  * @param {number} ms - The number of milliseconds to sleep
@@ -80,11 +86,38 @@ function isIP (value) {
   return isIP
 }
 
+/**
+ * Format TNT Amount for Token Transfer
+ * @return {number}
+ */
+function tntToGrains (tntAmount) {
+  return new BigNumber(tntAmount).times(10 ** 8).toNumber()
+}
+
+/**
+ * Format TNT Amount from Token Transfer
+ * @return {number}
+ */
+function grainsToTNT (grainsAmount) {
+  return new BigNumber(grainsAmount).dividedBy(10 ** 8).toNumber()
+}
+
+/**
+ * Format TNT Amount from Token Transfer to TNT Credit
+ * @return {number}
+ */
+function grainsToCredits (grainsAmount) {
+  return new BigNumber(grainsAmount).times(env.TNT_TO_CREDIT_RATE).dividedBy(10 ** 8).toNumber()
+}
+
 module.exports = {
   sleep: sleep,
   addMinutes: addMinutes,
   addSeconds: addSeconds,
   formatDateISO8601NoMs: formatDateISO8601NoMs,
   isHex: isHex,
-  isIP: isIP
+  isIP: isIP,
+  tntToGrains: tntToGrains,
+  grainsToTNT: grainsToTNT,
+  grainsToCredits: grainsToCredits
 }

@@ -25,7 +25,6 @@ const calendarBlock = require('./lib/models/CalendarBlock.js')
 const registeredCore = require('./lib/models/RegisteredCore.js')
 const csprng = require('random-number-csprng')
 const heartbeats = require('heartbeats')
-require('./lib/prototypes.js')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -275,8 +274,8 @@ async function calculateCurrentRewardShares () {
       break
   }
   */
-  let nodeTNTGrainsRewardShare = nodeTNTRewardShare.tntToGrains()
-  let coreTNTGrainsRewardShare = coreTNTRewardShare.tntToGrains()
+  let nodeTNTGrainsRewardShare = utils.tntToGrains(nodeTNTRewardShare)
+  let coreTNTGrainsRewardShare = utils.tntToGrains(coreTNTRewardShare)
   return {
     nodeTNTGrainsRewardShare: nodeTNTGrainsRewardShare,
     coreTNTGrainsRewardShare: coreTNTGrainsRewardShare,

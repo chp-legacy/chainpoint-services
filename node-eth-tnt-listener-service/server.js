@@ -23,7 +23,6 @@ const utils = require('./lib/utils.js')
 const loadProvider = require('./lib/eth-tnt/providerLoader.js')
 const loadToken = require('./lib/eth-tnt/tokenLoader.js')
 const TokenOps = require('./lib/eth-tnt/tokenOps.js')
-require('./lib/prototypes.js')
 
 // pull in variables defined in shared EthTokenTrxLog module
 let ethTokenTxSequelize = ethTokenTxLog.sequelize
@@ -69,7 +68,7 @@ async function getLastKnownEventInfoAsync () {
 async function processNewTxAsync (params) {
   // Log out the transaction
   let tntGrainsAmount = params.args.value
-  let tntAmount = tntGrainsAmount.grainsToTNT()
+  let tntAmount = utils.grainsToTNT(tntGrainsAmount)
 
   let tx = {
     txId: params.transactionHash,
@@ -111,7 +110,7 @@ async function processNewTxAsync (params) {
 
   try {
     // Convert the TNT to credits
-    let credits = tntGrainsAmount.grainsToCredits()
+    let credits = utils.grainsToCredits(tntGrainsAmount)
     let prevBalance = nodeToCredit.tntCredit
     await nodeToCredit.increment({ tntCredit: credits })
     console.log(`Issued ${credits} credits to Node ${nodeToCredit.tntAddr} with previous balance of ${prevBalance}, new balance is ${nodeToCredit.tntCredit}`)
