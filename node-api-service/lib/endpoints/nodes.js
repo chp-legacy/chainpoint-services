@@ -369,18 +369,22 @@ async function putNodeV1Async (req, res, next) {
       return next()
     }
 
-    // HMAC-SHA256(hmac-key, TNT_ADDRESS|IP|YYYYMMDDHHMM)
-    // Forces Nodes to be within 1 min of Core to generate a valid HMAC
-    let hash = crypto.createHmac('sha256', regNode.hmacKey)
-    let formattedDate = moment().utc().format('YYYYMMDDHHmm')
-    // use req.params.tnt_addr below instead of lowerCasedTntAddrParam to preserve
-    // formatting submitted from Node and used in that Node's calculation
-    // use req.params.public_uri below instead of lowerCasedPublicUri to preserve
-    // formatting submitted from Node and used in that Node's calculation
-    let hmacTxt = [req.params.tnt_addr, req.params.public_uri, formattedDate].join('')
-    let calculatedHMAC = hash.update(hmacTxt).digest('hex')
-
-    if (!_.isEqual(calculatedHMAC, req.params.hmac)) {
+    // HMAC-SHA256(hmac-key, TNT_ADDRESS|IP|YYYYMMDDHHmm)
+    // Forces Nodes to be within +/- 1 min of Core to generate a valid HMAC
+    let formattedDateInt = parseInt(moment().utc().format('YYYYMMDDHHmm'))
+    let acceptableHMACs = []
+    // build an array af acceptable hmac values with -1 minute, current minute, +1 minute
+    for (let x = -1; x <= 1; x++) {
+      // use req.params.tnt_addr below instead of lowerCasedTntAddrParam to preserve
+      // formatting submitted from Node and used in that Node's calculation
+      // use req.params.public_uri below instead of lowerCasedPublicUri to preserve
+      // formatting submitted from Node and used in that Node's calculation
+      let formattedTimeString = (formattedDateInt + x).toString()
+      let hmacTxt = [req.params.tnt_addr, req.params.public_uri, formattedTimeString].join('')
+      let calculatedHMAC = crypto.createHmac('sha256', regNode.hmacKey).update(hmacTxt).digest('hex')
+      acceptableHMACs.push(calculatedHMAC)
+    }
+    if (!_.includes(acceptableHMACs, req.params.hmac)) {
       return next(new restify.InvalidArgumentError('invalid authentication HMAC provided'))
     }
 
