@@ -18,6 +18,7 @@
 const env = require('./lib/parse-env.js')('tnt-reward')
 
 const utils = require('./lib/utils')
+const tntUnits = require('./lib/tntUnits.js')
 const amqp = require('amqplib')
 const rp = require('request-promise-native')
 const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
@@ -274,8 +275,8 @@ async function calculateCurrentRewardShares () {
       break
   }
   */
-  let nodeTNTGrainsRewardShare = utils.tntToGrains(nodeTNTRewardShare)
-  let coreTNTGrainsRewardShare = utils.tntToGrains(coreTNTRewardShare)
+  let nodeTNTGrainsRewardShare = tntUnits.tntToGrains(nodeTNTRewardShare)
+  let coreTNTGrainsRewardShare = tntUnits.tntToGrains(coreTNTRewardShare)
   return {
     nodeTNTGrainsRewardShare: nodeTNTGrainsRewardShare,
     coreTNTGrainsRewardShare: coreTNTGrainsRewardShare,

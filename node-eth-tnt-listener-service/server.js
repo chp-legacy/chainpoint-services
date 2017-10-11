@@ -20,6 +20,7 @@ const env = require('./lib/parse-env.js')('eth-tnt-listener')
 const ethTokenTxLog = require('./lib/models/EthTokenTrxLog.js')
 const registeredNode = require('./lib/models/RegisteredNode.js')
 const utils = require('./lib/utils.js')
+const tntUnits = require('./lib/tntUnits.js')
 const loadProvider = require('./lib/eth-tnt/providerLoader.js')
 const loadToken = require('./lib/eth-tnt/tokenLoader.js')
 const TokenOps = require('./lib/eth-tnt/tokenOps.js')
@@ -68,7 +69,7 @@ async function getLastKnownEventInfoAsync () {
 async function processNewTxAsync (params) {
   // Log out the transaction
   let tntGrainsAmount = params.args.value
-  let tntAmount = utils.grainsToTNT(tntGrainsAmount)
+  let tntAmount = tntUnits.grainsToTNT(tntGrainsAmount)
 
   let tx = {
     txId: params.transactionHash,
@@ -110,7 +111,7 @@ async function processNewTxAsync (params) {
 
   try {
     // Convert the TNT to credits
-    let credits = utils.grainsToCredits(tntGrainsAmount)
+    let credits = tntUnits.grainsToCredits(tntGrainsAmount)
     let prevBalance = nodeToCredit.tntCredit
     await nodeToCredit.increment({ tntCredit: credits })
     console.log(`Issued ${credits} credits to Node ${nodeToCredit.tntAddr} with previous balance of ${prevBalance}, new balance is ${nodeToCredit.tntCredit}`)
