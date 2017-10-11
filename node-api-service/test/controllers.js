@@ -1598,7 +1598,7 @@ describe('Nodes Controller', () => {
                 .and.to.equal('InvalidArgument')
               expect(res.body).to.have.property('message')
                 .and.to.be.a('string')
-                .and.to.equal('invalid authentication HMAC provided')
+                .and.to.equal('Invalid authentication HMAC provided. Try NTP sync.')
               done()
             })
         })

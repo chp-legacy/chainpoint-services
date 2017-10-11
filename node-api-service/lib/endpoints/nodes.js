@@ -385,7 +385,7 @@ async function putNodeV1Async (req, res, next) {
       acceptableHMACs.push(calculatedHMAC)
     }
     if (!_.includes(acceptableHMACs, req.params.hmac)) {
-      return next(new restify.InvalidArgumentError('invalid authentication HMAC provided'))
+      return next(new restify.InvalidArgumentError('Invalid authentication HMAC provided. Try NTP sync.'))
     }
 
     if (lowerCasedPublicUri == null || _.isEmpty(lowerCasedPublicUri)) {
