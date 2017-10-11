@@ -166,6 +166,19 @@ async function getNodesRandomV1Async (req, res, next) {
 }
 
 /**
+ * GET /nodes/blacklist retrieve handler
+ *
+ * Retrieve an IP blacklist that can be pulled by Nodes to
+ * block connnections from abusive IPs
+ */
+async function getNodesBlacklistV1Async (req, res, next) {
+  let list = { blacklist: [] }
+  res.cache('public', { maxAge: 600 })
+  res.send(list)
+  return next()
+}
+
+/**
  * POST /node create handler
  *
  * Create a new registered Node
@@ -464,6 +477,7 @@ module.exports = {
   getRegisteredNodeSequelize: () => { return registeredNodeSequelize },
   getNodeAuditLogSequelize: () => { return nodeAuditLogSequelize },
   getNodesRandomV1Async: getNodesRandomV1Async,
+  getNodesBlacklistV1Async: getNodesBlacklistV1Async,
   getNodeByTNTAddrV1Async: getNodeByTNTAddrV1Async,
   postNodeV1Async: postNodeV1Async,
   putNodeV1Async: putNodeV1Async,
