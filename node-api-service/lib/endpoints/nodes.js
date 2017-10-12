@@ -235,7 +235,7 @@ async function postNodeV1Async (req, res, next) {
   try {
     let totalCount = await RegisteredNode.count()
     if (totalCount >= regNodesLimit) {
-      return next(new restify.ForbiddenError('Maximum number of Node registrations has been reached.'))
+      return next(new restify.ForbiddenError('Maximum number of Node registrations has been reached'))
     }
   } catch (error) {
     console.error(`Unable to count registered Nodes: ${error.message}`)
@@ -245,7 +245,7 @@ async function postNodeV1Async (req, res, next) {
   try {
     let count = await RegisteredNode.count({ where: { tntAddr: lowerCasedTntAddrParam } })
     if (count >= 1) {
-      return next(new restify.ConflictError('the Ethereum address provided is already registered.'))
+      return next(new restify.ConflictError('the Ethereum address provided is already registered'))
     }
   } catch (error) {
     console.error(`Unable to count registered Nodes: ${error.message}`)
@@ -256,7 +256,7 @@ async function postNodeV1Async (req, res, next) {
     try {
       let count = await RegisteredNode.count({ where: { publicUri: lowerCasedPublicUri } })
       if (count >= 1) {
-        return next(new restify.ConflictError('the public URI provided is already registered.'))
+        return next(new restify.ConflictError('the public URI provided is already registered'))
       }
     } catch (error) {
       console.error(`Unable to count registered Nodes: ${error.message}`)
@@ -352,7 +352,7 @@ async function putNodeV1Async (req, res, next) {
     try {
       let count = await RegisteredNode.count({ where: { publicUri: lowerCasedPublicUri, tntAddr: { $ne: lowerCasedTntAddrParam } } })
       if (count >= 1) {
-        return next(new restify.ConflictError('the public URI provided is already registered.'))
+        return next(new restify.ConflictError('the public URI provided is already registered'))
       }
     } catch (error) {
       console.error(`Unable to count registered Nodes: ${error.message}`)
@@ -397,7 +397,7 @@ async function putNodeV1Async (req, res, next) {
       acceptableHMACs.push(calculatedHMAC)
     }
     if (!_.includes(acceptableHMACs, req.params.hmac)) {
-      return next(new restify.InvalidArgumentError('Invalid authentication HMAC provided. Try NTP sync.'))
+      return next(new restify.InvalidArgumentError('Invalid authentication HMAC provided - Try NTP sync'))
     }
 
     if (lowerCasedPublicUri == null || _.isEmpty(lowerCasedPublicUri)) {

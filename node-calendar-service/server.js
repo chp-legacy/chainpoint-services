@@ -588,7 +588,7 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
             })
         }, (err) => {
           if (err) {
-            console.error('Anchor aggregation had errors.')
+            console.error('Anchor aggregation had errors')
             return seriesCallback(err)
           } else {
             console.log('Anchor aggregation complete')

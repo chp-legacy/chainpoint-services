@@ -23,7 +23,7 @@ const TokenOps = require('../tokenOps.js')
 
 // Verify the correct command line options are passed in
 if (process.argv.length !== 4) {
-  console.error('Invalid number of params.')
+  console.error('Invalid number of params')
   console.log('Usage: node transferTokens.js <send_to_addr> <amt_in_base_units>')
   process.exit(-1)
 }

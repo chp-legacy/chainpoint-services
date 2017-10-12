@@ -209,7 +209,7 @@ async function generateAuditChallengeAsync () {
     if (topBlock) {
       currentBlockHeight = parseInt(topBlock.id, 10)
     } else {
-      console.error('Cannot generate challenge, no genesis block found.')
+      console.error('Cannot generate challenge, no genesis block found')
       return
     }
     // calulcate min and max values with special exception for low block count

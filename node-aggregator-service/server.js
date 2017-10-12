@@ -169,7 +169,7 @@ let finalize = () => {
             })
         }, (err) => {
           if (err) {
-            console.error('Processing of tree', treesToFinalize.indexOf(treeDataObj) + 1, 'had errors.')
+            console.error('Processing of tree', treesToFinalize.indexOf(treeDataObj) + 1, 'had errors')
             return callback(err)
           } else {
             // pass all the hash_msg objects to the series() callback

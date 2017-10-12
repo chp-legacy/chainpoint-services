@@ -49,7 +49,7 @@ module.exports = async (provider, tokenAddr) => {
 
   // Didn't find it there either... bail out
   if (!deployedToken) {
-    console.error('TierionNetworkToken Token ERC20 Contract Address is not found deployed or set as env var (ETH_TNT_TOKEN_ADDR).  Exiting...')
+    console.error('TierionNetworkToken Token ERC20 Contract Address is not found deployed or set as env var (ETH_TNT_TOKEN_ADDR) - Exiting...')
     process.exit(-1)
   }
 

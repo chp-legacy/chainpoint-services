@@ -23,7 +23,7 @@ const TokenOps = require('../tokenOps.js')
 
 // Verify the correct command line options are passed in
 if (process.argv.length !== 4) {
-  console.error('Invalid number of params.')
+  console.error('Invalid number of params')
   console.log('Usage: node watchTransfers.js <target_addr_to_watch> <start_block>')
   process.exit(-1)
 }
