@@ -216,15 +216,10 @@ async function postNodeV1Async (req, res, next) {
     lowerCasedTntAddrParam = req.params.tnt_addr.toLowerCase()
   }
 
-  // a POST without public_uri prop represents a non-public Node
-  if (req.params.hasOwnProperty('public_uri') && _.isEmpty(req.params.public_uri)) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, invalid empty public_uri, remove if non-public IP'))
-  }
-
-  let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toLowerCase() : null
+  let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toString().toLowerCase() : null
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
-    if (lowerCasedPublicUri && !validUrl.isWebUri(lowerCasedPublicUri)) {
+    if (!validUrl.isWebUri(lowerCasedPublicUri)) {
       return next(new restify.InvalidArgumentError('invalid JSON body, invalid public_uri'))
     }
 
@@ -236,6 +231,7 @@ async function postNodeV1Async (req, res, next) {
     // disallow 0.0.0.0
     if (parsedPublicUri.hostname === '0.0.0.0') return next(new restify.InvalidArgumentError('0.0.0.0 not allowed in public_uri'))
   }
+
   try {
     let totalCount = await RegisteredNode.count()
     if (totalCount >= regNodesLimit) {
@@ -339,7 +335,7 @@ async function putNodeV1Async (req, res, next) {
     lowerCasedTntAddrParam = req.params.tnt_addr.toLowerCase()
   }
 
-  let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toLowerCase() : null
+  let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toString().toLowerCase() : null
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
     if (!validUrl.isWebUri(lowerCasedPublicUri)) {

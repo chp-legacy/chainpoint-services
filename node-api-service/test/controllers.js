@@ -1046,11 +1046,11 @@ describe('Nodes Controller', () => {
         })
     })
 
-    it('should return error with empty public_uri', (done) => {
+    it('should return error with bad public_uri', (done) => {
       request(server)
         .post('/nodes')
         .set('X-Node-Version', process.env.MIN_NODE_VERSION)
-        .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: '' })
+        .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'badval' })
         .expect('Content-type', /json/)
         .expect(409)
         .end((err, res) => {
@@ -1060,7 +1060,64 @@ describe('Nodes Controller', () => {
             .and.to.equal('InvalidArgument')
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
-            .and.to.equal('invalid JSON body, invalid empty public_uri, remove if non-public IP')
+            .and.to.equal('invalid JSON body, invalid public_uri')
+          done()
+        })
+    })
+
+    it('should return error with non-IP public_uri', (done) => {
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'http://www.chainpoint.org' })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('public_uri hostname must be an IP')
+          done()
+        })
+    })
+
+    it('should return error with private public_uri', (done) => {
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'http://127.0.0.1' })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('public_uri hostname must not be a private IP')
+          done()
+        })
+    })
+
+    it('should return error with 0.0.0.0 public_uri', (done) => {
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'http://0.0.0.0' })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('0.0.0.0 not allowed in public_uri')
           done()
         })
     })
@@ -1389,6 +1446,75 @@ describe('Nodes Controller', () => {
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
             .and.to.equal('invalid JSON body, invalid public_uri')
+          done()
+        })
+    })
+
+    it('should return error with non-IP public_uri', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://www.chainpoint.org'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .send({ public_uri: publicUri })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('public_uri hostname must be an IP')
+          done()
+        })
+    })
+
+    it('should return error with private public_uri', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://127.0.0.1'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .send({ public_uri: publicUri })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('public_uri hostname must not be a private IP')
+          done()
+        })
+    })
+
+    it('should return error with 0.0.0.0 public_uri', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://0.0.0.0'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .send({ public_uri: publicUri })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('0.0.0.0 not allowed in public_uri')
           done()
         })
     })
