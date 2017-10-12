@@ -1,7 +1,8 @@
 /* global describe, it */
 
 process.env.NODE_ENV = 'test'
-process.env.MIN_NODE_VERSION = '1.1.7'
+process.env.MIN_NODE_VERSION_EXISTING = '1.1.7'
+process.env.MIN_NODE_VERSION_NEW = '1.2.0'
 process.env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD = 500000000000
 
 // test related packages
@@ -946,7 +947,7 @@ describe('Nodes Controller', () => {
             .and.to.equal('UpgradeRequiredError')
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
-            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION} or greater required`)
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_NEW} or greater required`)
           done()
         })
     })
@@ -965,7 +966,7 @@ describe('Nodes Controller', () => {
             .and.to.equal('UpgradeRequiredError')
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
-            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION} or greater required`)
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_NEW} or greater required`)
           done()
         })
     })
@@ -973,7 +974,7 @@ describe('Nodes Controller', () => {
     it('should return error with low node version', (done) => {
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', '1.1.1')
+        .set('X-Node-Version', '1.1.9')
         .send({ public_uri: 'http://65.198.32.187' })
         .expect('Content-type', /json/)
         .expect(426)
@@ -984,7 +985,7 @@ describe('Nodes Controller', () => {
             .and.to.equal('UpgradeRequiredError')
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
-            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION} or greater required`)
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_NEW} or greater required`)
           done()
         })
     })
@@ -992,7 +993,7 @@ describe('Nodes Controller', () => {
     it('should return error with no tnt_addr', (done) => {
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ public_uri: 'http://65.198.32.187' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1011,7 +1012,7 @@ describe('Nodes Controller', () => {
     it('should return error with empty tnt_addr', (done) => {
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: '', public_uri: 'http://65.198.32.187' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1030,7 +1031,7 @@ describe('Nodes Controller', () => {
     it('should return error with malformed tnt_addr', (done) => {
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: '0xabc', public_uri: 'http://65.198.32.187' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1049,7 +1050,7 @@ describe('Nodes Controller', () => {
     it('should return error with bad public_uri', (done) => {
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'badval' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1068,7 +1069,7 @@ describe('Nodes Controller', () => {
     it('should return error with non-IP public_uri', (done) => {
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'http://www.chainpoint.org' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1087,7 +1088,7 @@ describe('Nodes Controller', () => {
     it('should return error with private public_uri', (done) => {
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'http://127.0.0.1' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1106,7 +1107,7 @@ describe('Nodes Controller', () => {
     it('should return error with 0.0.0.0 public_uri', (done) => {
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'http://0.0.0.0' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1131,7 +1132,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(403)
@@ -1185,14 +1186,14 @@ describe('Nodes Controller', () => {
 
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri })
         .expect(200)
         .end((err, res) => {
           expect(err).to.equal(null)
           request(server)
             .post('/nodes')
-            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
             .send({ tnt_addr: tntAddr1, public_uri: publicUri })
             .expect(409)
             .end((err, res) => {
@@ -1247,14 +1248,14 @@ describe('Nodes Controller', () => {
 
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri })
         .expect(200)
         .end((err, res) => {
           expect(err).to.equal(null)
           request(server)
             .post('/nodes')
-            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
             .send({ tnt_addr: tntAddr2, public_uri: publicUri })
             .expect(409)
             .end((err, res) => {
@@ -1309,7 +1310,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(200)
@@ -1359,7 +1360,7 @@ describe('Nodes Controller', () => {
             .and.to.equal('UpgradeRequiredError')
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
-            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION} or greater required`)
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_EXISTING} or greater required`)
           done()
         })
     })
@@ -1380,7 +1381,7 @@ describe('Nodes Controller', () => {
             .and.to.equal('UpgradeRequiredError')
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
-            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION} or greater required`)
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_EXISTING} or greater required`)
           done()
         })
     })
@@ -1401,7 +1402,7 @@ describe('Nodes Controller', () => {
             .and.to.equal('UpgradeRequiredError')
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
-            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION} or greater required`)
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_EXISTING} or greater required`)
           done()
         })
     })
@@ -1411,7 +1412,7 @@ describe('Nodes Controller', () => {
       app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 100000000000 })
       request(server)
         .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: 'http://65.198.32.187' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1434,7 +1435,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1457,7 +1458,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1480,7 +1481,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1503,7 +1504,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1526,7 +1527,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1549,7 +1550,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri, hmac: '' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1572,7 +1573,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri, hmac: '!badhmac' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1595,7 +1596,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri, hmac: '!badhmac' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1650,7 +1651,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .put('/nodes/' + tntAddr1)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri1, hmac: crypto.randomBytes(32).toString('hex') })
         .expect('Content-type', /json/)
         .expect(404)
@@ -1705,7 +1706,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
         .expect(200)
         .end((err, res) => {
@@ -1713,7 +1714,7 @@ describe('Nodes Controller', () => {
 
           request(server)
             .put('/nodes/' + tntAddr1)
-            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
             .send({ public_uri: publicUri1, hmac: crypto.randomBytes(32).toString('hex') })
             .expect('Content-type', /json/)
             .expect(409)
@@ -1769,7 +1770,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri })
         .expect(200)
         .end((err, res) => {
@@ -1784,7 +1785,7 @@ describe('Nodes Controller', () => {
           app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 100000000000 })
           request(server)
             .put('/nodes/' + tntAddr1)
-            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
             .send({ public_uri: publicUri, hmac: calculatedHMAC })
             .expect('Content-type', /json/)
             .expect(403)
@@ -1841,7 +1842,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
         .expect(200)
         .end((err, res) => {
@@ -1854,7 +1855,7 @@ describe('Nodes Controller', () => {
 
           request(server)
             .put('/nodes/' + tntAddr1)
-            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
             .send({ public_uri: publicUri2, hmac: calculatedHMAC })
             .expect('Content-type', /json/)
             .expect(200)
@@ -1909,7 +1910,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
         .expect(200)
         .end((err, res) => {
@@ -1922,7 +1923,7 @@ describe('Nodes Controller', () => {
 
           request(server)
             .put('/nodes/' + tntAddr1)
-            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
             .send({ public_uri: publicUri2, hmac: calculatedHMAC })
             .expect('Content-type', /json/)
             .expect(200)
@@ -1976,7 +1977,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
         .expect(200)
         .end((err, res) => {
@@ -1989,7 +1990,7 @@ describe('Nodes Controller', () => {
 
           request(server)
             .put('/nodes/' + tntAddr1)
-            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
             .send({ hmac: calculatedHMAC })
             .expect('Content-type', /json/)
             .expect(200)
@@ -2059,7 +2060,7 @@ describe('Nodes Controller', () => {
 
       request(server)
         .post('/nodes')
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
         .expect(200)
         .end((err, res) => {
@@ -2067,7 +2068,7 @@ describe('Nodes Controller', () => {
 
           request(server)
             .post('/nodes')
-            .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
             .send({ tnt_addr: tntAddr2, public_uri: publicUri2 })
             .expect(200)
             .end((err, res) => {
@@ -2080,7 +2081,7 @@ describe('Nodes Controller', () => {
 
               request(server)
                 .put('/nodes/' + tntAddr1)
-                .set('X-Node-Version', process.env.MIN_NODE_VERSION)
+                .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
                 .send({ public_uri: publicUri2, hmac: calculatedHMAC })
                 .expect('Content-type', /json/)
                 .expect(409)

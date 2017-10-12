@@ -192,13 +192,13 @@ async function postNodeV1Async (req, res, next) {
   if (req.headers && req.headers['x-node-version']) {
     let nodeVersion = req.headers['x-node-version']
     try {
-      minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION}`)
+      minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION_NEW}`)
     } catch (error) {
-      return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION} or greater required`))
+      return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION_NEW} or greater required`))
     }
   }
   if (!minNodeVersionOK) {
-    return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION} or greater required`))
+    return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION_NEW} or greater required`))
   }
 
   if (!req.params.hasOwnProperty('tnt_addr')) {
@@ -311,13 +311,13 @@ async function putNodeV1Async (req, res, next) {
   if (req.headers && req.headers['x-node-version']) {
     let nodeVersion = req.headers['x-node-version']
     try {
-      minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION}`)
+      minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION_EXISTING}`)
     } catch (error) {
-      return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION} or greater required`))
+      return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION_EXISTING} or greater required`))
     }
   }
   if (!minNodeVersionOK) {
-    return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION} or greater required`))
+    return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION_EXISTING} or greater required`))
   }
 
   if (!req.params.hasOwnProperty('tnt_addr')) {

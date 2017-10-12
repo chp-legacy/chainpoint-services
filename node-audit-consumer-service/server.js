@@ -160,7 +160,7 @@ async function processIncomingAuditJobAsync (msg) {
     // check if the Node version is acceptable, catch error if version value is invalid
     nodeVersion = configResultsBody.version
     try {
-      nodeVersionPass = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION}`)
+      nodeVersionPass = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION_EXISTING}`)
     } catch (error) {
       nodeVersionPass = false
     }
