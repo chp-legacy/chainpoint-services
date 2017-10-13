@@ -1,7 +1,7 @@
 /* global describe, it */
 
 process.env.NODE_ENV = 'test'
-process.env.MIN_NODE_VERSION_EXISTING = '1.1.7'
+process.env.MIN_NODE_VERSION_EXISTING = '1.2.0'
 process.env.MIN_NODE_VERSION_NEW = '1.2.0'
 process.env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD = 500000000000
 

@@ -103,7 +103,7 @@ let envDefinitions = {
   // Redis related variables
   REDIS_CONNECT_URI: envalid.url({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI' }),
 
-  MIN_NODE_VERSION_EXISTING: envalid.str({ default: '1.1.7', desc: 'The minimum acceptable Node version for existing registrations and to pass audits' }),
+  MIN_NODE_VERSION_EXISTING: envalid.str({ default: '1.2.0', desc: 'The minimum acceptable Node version for existing registrations and to pass audits' }),
   MIN_NODE_VERSION_NEW: envalid.str({ default: '1.2.0', desc: 'The minimum acceptable Node version for new registrations' }),
 
   // Service Specific Variables
@@ -174,7 +174,7 @@ let envDefinitions = {
   // TNT Reward service specific variables
   REWARDS_PER_HOUR: validateFactorOfSixty({ default: 2, desc: 'The number of times per hour to calculate and distribute rewards, defaults to 2, must be a factor of 60, no greater than 20' }),
   MIN_CONSECUTIVE_AUDIT_PASSES_FOR_REWARD: envalid.num({ default: 4, desc: 'The minimum number of consecutive audits, where all tests pass, that must occur to be eligible for a reward' }),
-  MIN_TNT_GRAINS_BALANCE_FOR_REWARD: envalid.num({ default: 50000000000, desc: 'The minimum balance of TNT, in Grains, that an address must contain in order to be eligible for a reward' }),
+  MIN_TNT_GRAINS_BALANCE_FOR_REWARD: envalid.num({ default: 500000000000, desc: 'The minimum balance of TNT, in Grains, that an address must contain in order to be eligible for a reward' }),
 
   // Audit services specific variables
   RMQ_PREFETCH_COUNT_AUDIT: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
