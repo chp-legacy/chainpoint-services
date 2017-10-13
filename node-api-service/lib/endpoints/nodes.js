@@ -26,6 +26,7 @@ const ip = require('ip')
 const utils = require('../utils.js')
 const semver = require('semver')
 const rp = require('request-promise-native')
+const tntUnits = require('../tntUnits.js')
 
 const env = require('../parse-env.js')('api')
 
@@ -268,7 +269,8 @@ async function postNodeV1Async (req, res, next) {
   try {
     let nodeBalance = await getTNTGrainsBalanceForAddressAsync(lowerCasedTntAddrParam)
     if (nodeBalance < minGrainsBalanceNeeded) {
-      return next(new restify.ForbiddenError(`TNT adresss ${lowerCasedTntAddrParam} does not have the minimum balance of ${minGrainsBalanceNeeded} TNT grains for Node operation`))
+      let minTNTBalanceNeeded = tntUnits.grainsToTNT(minGrainsBalanceNeeded)
+      return next(new restify.ForbiddenError(`TNT adresss ${lowerCasedTntAddrParam} does not have the minimum balance of ${minTNTBalanceNeeded} TNT for Node operation`))
     }
   } catch (error) {
     return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
@@ -410,7 +412,8 @@ async function putNodeV1Async (req, res, next) {
     try {
       let nodeBalance = await getTNTGrainsBalanceForAddressAsync(lowerCasedTntAddrParam)
       if (nodeBalance < minGrainsBalanceNeeded) {
-        return next(new restify.ForbiddenError(`TNT adresss ${lowerCasedTntAddrParam} does not have the minimum balance of ${minGrainsBalanceNeeded} TNT grains for Node operation`))
+        let minTNTBalanceNeeded = tntUnits.grainsToTNT(minGrainsBalanceNeeded)
+        return next(new restify.ForbiddenError(`TNT adresss ${lowerCasedTntAddrParam} does not have the minimum balance of ${minTNTBalanceNeeded} TNT for Node operation`))
       }
     } catch (error) {
       return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))

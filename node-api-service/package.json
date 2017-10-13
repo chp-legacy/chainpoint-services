@@ -12,6 +12,7 @@
   "dependencies": {
     "amqplib": "^0.5.1",
     "async": "^2.4.1",
+    "bignumber.js": "^4.1.0",
     "blake2s-js": "^1.2.2",
     "bluebird": "^3.5.0",
     "bunyan": "^1.8.12",
