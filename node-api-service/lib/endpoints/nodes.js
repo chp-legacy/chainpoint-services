@@ -431,13 +431,13 @@ async function putNodeV1Async (req, res, next) {
 
 function updateRegNodesLimit (count) {
   try {
-    let regNodesLimit = parseInt(count)
-    if (!(regNodesLimit >= 0) || regNodesLimit === null) throw new Error('Bad regNodesLimit value')
+    let newRegNodesLimit = parseInt(count)
+    if (!(newRegNodesLimit >= 0) || newRegNodesLimit === null) throw new Error('Bad regNodesLimit value')
+    regNodesLimit = newRegNodesLimit
     console.log(`Registered Nodes limit updated to ${count}`)
   } catch (error) {
     // the regNodesLimit value being set must be bad
     console.error(error.message)
-    regNodesLimit = 0
   }
 }
 
