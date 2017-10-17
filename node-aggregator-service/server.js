@@ -115,7 +115,6 @@ let aggregateAsync = async () => {
         let proofDataItem = {}
         proofDataItem.hash_id = hashesForTree[x].hash_id
         proofDataItem.hash = hashesForTree[x].hash
-        proofDataItem.hash_msg = hashesForTree[x].msg
         let proof = merkleTools.getProof(x)
         // only add the NIST item to the proof path if it was available and used in the tree calculation
         if (hashesForTree[x].nist) proof.unshift({ left: `nist:${hashesForTree[x].nist}` })
@@ -135,9 +134,9 @@ let aggregateAsync = async () => {
     } catch (error) {
       console.error(`Aggregation error: ${error.message}`)
       // nack consumption of all original hash messages part of this aggregation event
-      _.forEach(aggregationData.proofData, (proofDataItem) => {
-        if (proofDataItem && proofDataItem.hash_msg !== null) {
-          amqpChannel.nack(proofDataItem.hash_msg)
+      _.forEach(hashesForTree, (hashObj) => {
+        if (hashObj.msg !== null) {
+          amqpChannel.nack(hashObj.msg)
           console.error(env.RMQ_WORK_IN_AGG_QUEUE, 'consume message nacked')
         }
       })
@@ -146,9 +145,9 @@ let aggregateAsync = async () => {
 
     // The aggregation for this interval has completed sucessfully
     // ack consumption of all original hash messages part of this aggregation event
-    _.forEach(aggregationData.proofData, (proofDataItem) => {
-      if (proofDataItem && proofDataItem.hash_msg !== null) {
-        amqpChannel.ack(proofDataItem.hash_msg)
+    _.forEach(hashesForTree, (hashObj) => {
+      if (hashObj.msg !== null) {
+        amqpChannel.ack(hashObj.msg)
       }
     })
   }
