@@ -22,19 +22,11 @@ const utils = require('./lib/utils')
 const amqp = require('amqplib')
 const MerkleTools = require('merkle-tools')
 const crypto = require('crypto')
-const async = require('async')
 const uuidv1 = require('uuid/v1')
 
 // An array of all hashes needing to be processed.
 // Will be filled as new hashes arrive on the queue.
 let HASHES = []
-
-// An array of all tree data ready to be finalized.
-// Will be filled by the aggregation process as the
-// merkle trees are built. Each object in this array
-// contains the merkle root and the hash_id and proof
-// paths for each leaf of the tree.
-let TREES = []
 
 // The merkle tools object for building trees and generating proof paths
 const merkleTools = new MerkleTools()
@@ -47,7 +39,7 @@ function consumeHashMessage (msg) {
   if (msg !== null) {
     let hashObj = JSON.parse(msg.content.toString())
 
-    // add msg to the hash object so that we can ack it during the finalize process for this hash
+    // add msg to the hash object so that we can ack it during the aggregateAsync process
     hashObj.msg = msg
     HASHES.push(hashObj)
   }
@@ -78,148 +70,88 @@ function formatAsChainpointV3Ops (proof, op) {
 }
 
 // Take work off of the HASHES array and build Merkle tree
-let aggregate = () => {
+let aggregateAsync = async () => {
+  // if the amqp channel is null (closed), processing should not continue, defer to next aggregateAsync call
+  if (amqpChannel === null) return
+
   let hashesForTree = HASHES.splice(0, env.HASHES_PER_MERKLE_TREE)
 
   // create merkle tree only if there is at least one hash to process
   if (hashesForTree.length > 0) {
-    // clear the merkleTools instance to prepare for a new tree
-    merkleTools.resetTree()
+    // Collect and store the aggregation id, Merkle root, and proofs in a state object to send to state service
+    let aggregationData = {}
 
-    // concatenate and hash the hash ids and hash values into new array
-    let leaves = hashesForTree.map((hashObj) => {
-      let hashIdBuffer = Buffer.from(`core_id:${hashObj.hash_id}`, 'utf8')
-      let hashBuffer = Buffer.from(hashObj.hash, 'hex')
-      let concatAndHashBuffer = crypto.createHash('sha256').update(Buffer.concat([hashIdBuffer, hashBuffer])).digest()
+    try {
+      // clear the merkleTools instance to prepare for a new tree
+      merkleTools.resetTree()
 
-      if (hashObj.nist) { // add a concat and hash operation embedding NIST data into proof path
-        let nistDataString = (`nist:${hashObj.nist}`)
-        let nistDataBuffer = Buffer.from(nistDataString, 'utf8')
-        return crypto.createHash('sha256').update(Buffer.concat([nistDataBuffer, concatAndHashBuffer])).digest('hex')
-      } else { // no NIST data is available, return only the addition of the hashId
-        return concatAndHashBuffer
+      // concatenate and hash the hash ids and hash values into new array
+      let leaves = hashesForTree.map((hashObj) => {
+        let hashIdBuffer = Buffer.from(`core_id:${hashObj.hash_id}`, 'utf8')
+        let hashBuffer = Buffer.from(hashObj.hash, 'hex')
+        let concatAndHashBuffer = crypto.createHash('sha256').update(Buffer.concat([hashIdBuffer, hashBuffer])).digest()
+
+        if (hashObj.nist) { // add a concat and hash operation embedding NIST data into proof path
+          let nistDataString = (`nist:${hashObj.nist}`)
+          let nistDataBuffer = Buffer.from(nistDataString, 'utf8')
+          return crypto.createHash('sha256').update(Buffer.concat([nistDataBuffer, concatAndHashBuffer])).digest('hex')
+        } else { // no NIST data is available, return only the addition of the hashId
+          return concatAndHashBuffer
+        }
+      })
+
+      // Add every hash in hashesForTree to new Merkle tree
+      merkleTools.addLeaves(leaves)
+      merkleTools.makeTree()
+
+      let treeSize = merkleTools.getLeafCount()
+
+      aggregationData.agg_id = uuidv1()
+      aggregationData.agg_root = merkleTools.getMerkleRoot().toString('hex')
+
+      let proofData = []
+      for (let x = 0; x < treeSize; x++) {
+        // push the hash_id and corresponding proof onto the array, inserting the UUID concat/hash step at the beginning
+        let proofDataItem = {}
+        proofDataItem.hash_id = hashesForTree[x].hash_id
+        proofDataItem.hash = hashesForTree[x].hash
+        proofDataItem.hash_msg = hashesForTree[x].msg
+        let proof = merkleTools.getProof(x)
+        // only add the NIST item to the proof path if it was available and used in the tree calculation
+        if (hashesForTree[x].nist) proof.unshift({ left: `nist:${hashesForTree[x].nist}` })
+        proof.unshift({ left: `core_id:${hashesForTree[x].hash_id}` })
+        proofDataItem.proof = formatAsChainpointV3Ops(proof, 'sha-256')
+        proofData.push(proofDataItem)
       }
-    })
+      aggregationData.proofData = proofData
 
-    // Add every hash in hashesForTree to new Merkle tree
-    merkleTools.addLeaves(leaves)
-    merkleTools.makeTree()
-
-    let treeSize = merkleTools.getLeafCount()
-
-    // Collect and store the aggregation id, Merkle root, and proofs in an array where finalize() can find it
-    let treeData = {}
-    treeData.agg_id = uuidv1()
-    treeData.agg_root = merkleTools.getMerkleRoot().toString('hex')
-    treeData.agg_hash_count = treeSize
-
-    let proofData = []
-    for (let x = 0; x < treeSize; x++) {
-      // push the hash_id and corresponding proof onto the array, inserting the UUID concat/hash step at the beginning
-      let proofDataItem = {}
-      proofDataItem.hash_id = hashesForTree[x].hash_id
-      proofDataItem.hash = hashesForTree[x].hash
-      proofDataItem.hash_msg = hashesForTree[x].msg
-      let proof = merkleTools.getProof(x)
-      // only add the NIST item to the proof path if it was available and used in the tree calculation
-      if (hashesForTree[x].nist) proof.unshift({ left: `nist:${hashesForTree[x].nist}` })
-      proof.unshift({ left: `core_id:${hashesForTree[x].hash_id}` })
-      proofDataItem.proof = formatAsChainpointV3Ops(proof, 'sha-256')
-      proofData.push(proofDataItem)
+      // queue state message containing state data for all hashes for this aggregation interval
+      try {
+        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(aggregationData)), { persistent: true, type: 'aggregator' })
+      } catch (error) {
+        console.error(`${env.RMQ_WORK_OUT_STATE_QUEUE} publish message nacked`)
+        throw new Error(error.message)
+      }
+    } catch (error) {
+      console.error(`Aggregation error: ${error.message}`)
+      // nack consumption of all original hash messages part of this aggregation event
+      _.forEach(aggregationData.proofData, (proofDataItem) => {
+        if (proofDataItem && proofDataItem.hash_msg !== null) {
+          amqpChannel.nack(proofDataItem.hash_msg)
+          console.error(env.RMQ_WORK_IN_AGG_QUEUE, 'consume message nacked')
+        }
+      })
+      return
     }
-    treeData.proofData = proofData
 
-    TREES.push(treeData)
-  }
-}
-
-// Finalize already aggregated hash proofs by queuing state messages bound for proof state service,
-// queuing aggregation event message bound for the calendar service, and acking the original
-// hash object message for all messages in all trees ready for finalization
-let finalize = () => {
-  // if the amqp channel is null (closed), processing should not continue, defer to next finalize call
-  if (amqpChannel === null) return
-
-  // process each set of tree data
-  let treesToFinalize = TREES.splice(0)
-  _.forEach(treesToFinalize, (treeDataObj) => {
-    // queue state messages, and when complete, queue message for calendar service to continue processing
-    async.series([
-      (callback) => {
-        // for each hash, queue up message containing updated proof state bound for proof state service
-        async.each(treeDataObj.proofData, (proofDataItem, eachCallback) => {
-          let stateObj = {}
-          stateObj.hash_id = proofDataItem.hash_id
-          stateObj.hash = proofDataItem.hash
-          stateObj.agg_id = treeDataObj.agg_id
-          stateObj.agg_state = {}
-          stateObj.agg_state.ops = proofDataItem.proof
-
-          amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(stateObj)), { persistent: true, type: 'aggregator' },
-            (err) => {
-              if (err !== null) {
-                // An error as occurred publishing a message
-                // console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[aggregator] publish message nacked')
-                return eachCallback(err || 'write buffer full')
-              } else {
-                // New message has been published
-                // console.log(env.RMQ_WORK_OUT_STATE_QUEUE, '[aggregator] publish message acked')
-                return eachCallback(null)
-              }
-            })
-        }, (err) => {
-          if (err) {
-            console.error('Processing of tree', treesToFinalize.indexOf(treeDataObj) + 1, 'had errors')
-            return callback(err)
-          } else {
-            // pass all the hash_msg objects to the series() callback
-            let messages = treeDataObj.proofData.map((proofDataItem) => {
-              return proofDataItem.hash_msg
-            })
-            return callback(null, messages)
-          }
-        })
-      },
-      (callback) => {
-        let aggObj = {}
-        aggObj.agg_id = treeDataObj.agg_id
-        aggObj.agg_root = treeDataObj.agg_root
-        aggObj.agg_hash_count = treeDataObj.agg_hash_count
-
-        amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(aggObj)), { persistent: true, type: 'aggregator' },
-          (err) => {
-            if (err !== null) {
-              // An error as occurred publishing a message
-              console.error(env.RMQ_WORK_OUT_CAL_QUEUE, 'publish message nacked')
-              return callback(err || 'write buffer full')
-            } else {
-              // New message has been published
-              // console.log(env.RMQ_WORK_OUT_CAL_QUEUE, 'publish message acked')
-              return callback(null)
-            }
-          })
-      }
-    ], (err, results) => {
-      // results[0] contains an array of hash_msg objects from the first function in this series
-      if (err) {
-        _.forEach(results[0], (message) => {
-          // nack consumption of all original hash messages part of this aggregation event
-          if (message !== null) {
-            amqpChannel.nack(message)
-            console.error(env.RMQ_WORK_IN_AGG_QUEUE, 'consume message nacked')
-          }
-        })
-      } else {
-        _.forEach(results[0], (message) => {
-          if (message !== null) {
-            // ack consumption of all original hash messages part of this aggregation event
-            amqpChannel.ack(message)
-            // console.log(env.RMQ_WORK_IN_AGG_QUEUE, 'consume message acked')
-          }
-        })
+    // The aggregation for this interval has completed sucessfully
+    // ack consumption of all original hash messages part of this aggregation event
+    _.forEach(aggregationData.proofData, (proofDataItem) => {
+      if (proofDataItem && proofDataItem.hash_msg !== null) {
+        amqpChannel.ack(proofDataItem.hash_msg)
       }
     })
-  })
+  }
 }
 
 // This initalizes all the JS intervals that fire all aggregator events
@@ -228,9 +160,7 @@ function startIntervals () {
 
   // PERIODIC TIMERS
 
-  setInterval(() => finalize(), env.FINALIZATION_INTERVAL)
-
-  setInterval(() => aggregate(), env.AGGREGATION_INTERVAL)
+  setInterval(() => aggregateAsync(), env.AGGREGATION_INTERVAL)
 }
 
 /**
@@ -249,7 +179,6 @@ async function openRMQConnectionAsync (connectionString) {
       let chan = await conn.createConfirmChannel()
       // the connection and channel have been established
       chan.assertQueue(env.RMQ_WORK_IN_AGG_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_CAL_QUEUE, { durable: true })
       chan.assertQueue(env.RMQ_WORK_OUT_STATE_QUEUE, { durable: true })
       chan.prefetch(env.RMQ_PREFETCH_COUNT_AGG)
       // set 'amqpChannel' so that publishers have access to the channel
@@ -263,7 +192,7 @@ async function openRMQConnectionAsync (connectionString) {
         console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
         amqpChannel = null
         // un-acked messaged will be requeued, so clear all work in progress
-        HASHES = TREES = []
+        HASHES = []
         await utils.sleep(5000)
         await openRMQConnectionAsync(connectionString)
       })
@@ -299,12 +228,9 @@ start()
 module.exports = {
   getHASHES: function () { return HASHES },
   setHASHES: function (hashes) { HASHES = hashes },
-  getTREES: function () { return TREES },
-  setTREES: function (trees) { TREES = trees },
   getAMQPChannel: function () { return amqpChannel },
   setAMQPChannel: (chan) => { amqpChannel = chan },
   openRMQConnectionAsync: openRMQConnectionAsync,
   consumeHashMessage: consumeHashMessage,
-  aggregate: aggregate,
-  finalize: finalize
+  aggregateAsync: aggregateAsync
 }

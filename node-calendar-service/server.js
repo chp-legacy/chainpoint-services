@@ -274,7 +274,7 @@ function consumeAggRootMessage (msg) {
   if (msg !== null) {
     let rootObj = JSON.parse(msg.content.toString())
 
-    // add msg to the root object so that we can ack it during the finalize process for this root object
+    // add msg to the root object so that we can ack it during the persistCalendarTreeAsync process
     rootObj.msg = msg
     AGGREGATION_ROOTS.push(rootObj)
   }
@@ -410,8 +410,7 @@ let generateCalendarTree = () => {
     merkleTools.addLeaves(leaves)
     merkleTools.makeTree()
 
-    // Collect and store the Merkle root,
-    // and proofs in an array where finalize() can find it
+    // Collect and store the Merkle root and proofs in an object
     treeDataObj = {}
     treeDataObj.cal_root = merkleTools.getMerkleRoot()
 

@@ -20,10 +20,6 @@ const validateAggInterval = envalid.makeValidator(x => {
   if (x >= 250 && x <= 10000) return x
   else throw new Error('Value must be between 250 and 10000, inclusive')
 })
-const validateFinInterval = envalid.makeValidator(x => {
-  if (x >= 250 && x <= 10000) return x
-  else throw new Error('Value must be between 250 and 10000, inclusive')
-})
 const validateMaxHashes = envalid.makeValidator(x => {
   if (x >= 100 && x <= 25000) return x
   else throw new Error('Value must be between 100 and 25000, inclusive')
@@ -112,7 +108,6 @@ let envDefinitions = {
   RMQ_PREFETCH_COUNT_AGG: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
   RMQ_WORK_IN_AGG_QUEUE: envalid.str({ default: 'work.agg', desc: 'The queue name for message consumption originating from the api service' }),
   AGGREGATION_INTERVAL: validateAggInterval({ default: 1000, desc: 'The frequency of the aggregation process, in milliseconds' }),
-  FINALIZATION_INTERVAL: validateFinInterval({ default: 250, desc: 'The frequency of the finalization of trees and delivery to state service, in milliseconds' }),
   HASHES_PER_MERKLE_TREE: validateMaxHashes({ default: 25000, desc: 'The maximum number of hashes to be used when constructing an aggregation tree' }),
 
   // API service specific variables
