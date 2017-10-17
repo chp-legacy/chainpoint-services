@@ -397,12 +397,12 @@ async function logAggregatorEventsForHashIdsAsync (hashesInfo) {
   })
   // Bulk insert below would be ideal, but commented out due to failure recovery issues, will readdress
   // await sequelize.bulkInsert('hash_tracker_logs', newHashesInfo)
-  for (let x = 0; x < hashesInfo.length; x++) {
+  for (let x = 0; x < newHashesInfo.length; x++) {
     await sequelize.query(`INSERT INTO hash_tracker_logs (hash_id, hash, aggregator_at, steps_complete, created_at, updated_at)
-    VALUES ('${newHashesInfo[x].hashId}', '${newHashesInfo[x].hash}', clock_timestamp(), 1, clock_timestamp(), clock_timestamp())
+    VALUES ('${newHashesInfo[x].hash_id}', '${newHashesInfo[x].hash}', clock_timestamp(), 1, clock_timestamp(), clock_timestamp())
     ON CONFLICT (hash_id)
     DO UPDATE SET (hash, aggregator_at, steps_complete, updated_at) = ('${newHashesInfo[x].hash}', clock_timestamp(), hash_tracker_logs.steps_complete + 1, clock_timestamp())
-    WHERE hash_tracker_logs.hash_id = '${newHashesInfo[x].hashId}'`)
+    WHERE hash_tracker_logs.hash_id = '${newHashesInfo[x].hash_id}'`)
   }
   return true
 }
