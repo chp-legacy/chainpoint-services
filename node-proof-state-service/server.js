@@ -112,17 +112,8 @@ async function ConsumeCalendarMessageAsync (msg) {
   } catch (error) {
     console.error(`Unable to process calendar message: ${error.message}`)
     // An error as occurred publishing a message, nack consumption of original message
-    if (error.message === 'unable to read all hash data') {
-      // delay the nack for 1000ms to slightly delay requeuing to prevent a flood of retries
-      // until the data is read, in cases of hash data not being fully readable yet
-      setTimeout(() => {
-        amqpChannel.nack(msg)
-        console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message} for agg_id ${stateObj.agg_id}`)
-      }, 1000)
-    } else {
-      amqpChannel.nack(msg)
-      console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
-    }
+    amqpChannel.nack(msg)
+    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
   }
 }
 
