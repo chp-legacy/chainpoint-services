@@ -67,7 +67,6 @@ The following is an example of a treeData object sent to the proof state service
 {
   "agg_id": "0cdecc3e-2452-11e7-93ae-92361f002671", // a UUIDv1 for this aggregation event
   "agg_root": "419001851bcf08329f0c34bb89570028ff500fc85707caa53a3e5b8b2ecacf05",
-  "agg_hash_count": 100, // the number of hashes included in this aggregation event
   "proofData": [
     {
       "hash_id": "34712680-14bb-11e7-9598-0800200c9a66",

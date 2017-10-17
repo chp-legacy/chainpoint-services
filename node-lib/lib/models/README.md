@@ -9,7 +9,6 @@ The following is a description of methods that must be defined in a storage adap
 | Name           | Description  | Returns  |
 | :------------- |:-------------|:-------------|
 | openConnectionAsync()       | opens the connection to the underlying storage provider | boolean indicating success |
-| getHashIdCountByAggIdAsync(aggId)     | gets all count of hash objects for a given agg_id currently in the database | integer |
 | getHashIdsByAggIdAsync(aggId)     | gets all hash ids associated with an aggregation event | result array containing hash id objects |
 | getHashIdsByBtcTxIdAsync(btcTxId)     | gets all hash ids associated with a btcTxId | result array containing hash id objects |
 | getAggStateObjectByHashIdAsync(hashId)     | gets the agg state object for a given hash id | an agg state object |
@@ -23,6 +22,7 @@ The following is a description of methods that must be defined in a storage adap
 | getBTCTxStateObjectsByBTCTxIdAsync(btcTxId)     | gets all btctx state data for a given btctx id | result array containing btctx state objects |
 | getBTCHeadStateObjectsByBTCHeadIdAsync(btcHeadId)     | gets all btchead state data for a given btchead id | result array containing btchead state objects |
 | writeAggStateObjectAsync(stateObject)     | write the agg state object to storage | boolean indicating success |
+| writeAggStateObject2Async(stateObject2)     | write multiple agg state objects to storage | boolean indicating success |
 | writeCalStateObjectAsync(stateObject)     | write the cal state object to storage | boolean indicating success |
 | writeAnchorBTCAggStateObjectAsync(stateObject)     | write the anchor agg state object to storage | boolean indicating success |
 | writeBTCTxStateObjectAsync(stateObject)     | write the btctx state object to storage | boolean indicating success |

@@ -421,7 +421,6 @@ let generateCalendarTree = () => {
       let proofDataItem = {}
       proofDataItem.agg_id = rootsForTree[x].agg_id
       proofDataItem.agg_msg = rootsForTree[x].msg
-      proofDataItem.agg_hash_count = rootsForTree[x].agg_hash_count
       let proof = merkleTools.getProof(x)
       proofDataItem.proof = formatAsChainpointV3Ops(proof, 'sha-256')
       proofData.push(proofDataItem)
@@ -445,7 +444,6 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
       async.each(treeDataObj.proofData, (proofDataItem, eachCallback) => {
         let stateObj = {}
         stateObj.agg_id = proofDataItem.agg_id
-        stateObj.agg_hash_count = proofDataItem.agg_hash_count
         stateObj.cal_id = block.id
         stateObj.cal_state = {}
         // add ops connecting agg_root to cal_root

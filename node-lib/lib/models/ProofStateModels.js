@@ -191,11 +191,6 @@ async function assertDBTablesAsync () {
   await sequelize.sync()
 }
 
-async function getHashIdCountByAggIdAsync (aggId) {
-  let count = await AggStates.count({ where: { 'agg_id': aggId } })
-  return count
-}
-
 async function getHashIdsByAggIdAsync (aggId) {
   let results = await AggStates.findAll({
     attributes: ['hash_id'],
@@ -315,6 +310,30 @@ async function writeAggStateObjectAsync (stateObject) {
   return true
 }
 
+async function writeAggStateObjectsAsync (stateObjects) {
+  let writeTime = new Date()
+  let newStateObjects = stateObjects.map((stateObject) => {
+    return {
+      hash_id: stateObject.hash_id,
+      hash: stateObject.hash,
+      agg_id: stateObject.agg_id,
+      agg_state: JSON.stringify(stateObject.agg_state),
+      created_at: writeTime,
+      updated_at: writeTime
+    }
+  })
+  // Bulk insert below would be ideal, but commented out due to failure recovery issues, will readdress
+  // await sequelize.bulkInsert('agg_states', newStateObjects)
+  for (let x = 0; x < newStateObjects.length; x++) {
+    await sequelize.query(`INSERT INTO agg_states (hash_id, hash, agg_id, agg_state, created_at, updated_at)
+      VALUES ('${newStateObjects[x].hash_id}', '${newStateObjects[x].hash}', '${newStateObjects[x].agg_id}', '${newStateObjects[x].agg_state}', clock_timestamp(), clock_timestamp())
+      ON CONFLICT (hash_id)
+      DO UPDATE SET (hash, agg_id, agg_state, updated_at) = ('${newStateObjects[x].hash}', '${newStateObjects[x].agg_id}', '${newStateObjects[x].agg_state}', clock_timestamp())
+      WHERE agg_states.hash_id = '${newStateObjects[x].hash_id}'`)
+  }
+  return true
+}
+
 async function writeCalStateObjectAsync (stateObject) {
   let stateString = JSON.stringify(stateObject.cal_state)
   await sequelize.query(`INSERT INTO cal_states (agg_id, cal_id, cal_state, created_at, updated_at)
@@ -361,6 +380,30 @@ async function logAggregatorEventForHashIdAsync (hashId, hash) {
     ON CONFLICT (hash_id)
     DO UPDATE SET (hash, aggregator_at, steps_complete, updated_at) = ('${hash}', clock_timestamp(), hash_tracker_logs.steps_complete + 1, clock_timestamp())
     WHERE hash_tracker_logs.hash_id = '${hashId}'`)
+  return true
+}
+
+async function logAggregatorEventsForHashIdsAsync (hashesInfo) {
+  let writeTime = new Date()
+  let newHashesInfo = hashesInfo.map((hashInfo) => {
+    return {
+      hash_id: hashInfo.hash_id,
+      hash: hashInfo.hash,
+      aggregator_at: writeTime,
+      steps_complete: 1,
+      created_at: writeTime,
+      updated_at: writeTime
+    }
+  })
+  // Bulk insert below would be ideal, but commented out due to failure recovery issues, will readdress
+  // await sequelize.bulkInsert('hash_tracker_logs', newHashesInfo)
+  for (let x = 0; x < hashesInfo.length; x++) {
+    await sequelize.query(`INSERT INTO hash_tracker_logs (hash_id, hash, aggregator_at, steps_complete, created_at, updated_at)
+    VALUES ('${newHashesInfo[x].hashId}', '${newHashesInfo[x].hash}', clock_timestamp(), 1, clock_timestamp(), clock_timestamp())
+    ON CONFLICT (hash_id)
+    DO UPDATE SET (hash, aggregator_at, steps_complete, updated_at) = ('${newHashesInfo[x].hash}', clock_timestamp(), hash_tracker_logs.steps_complete + 1, clock_timestamp())
+    WHERE hash_tracker_logs.hash_id = '${newHashesInfo[x].hashId}'`)
+  }
   return true
 }
 
@@ -429,7 +472,6 @@ async function pruneBtcHeadStatesAsync () {
 
 module.exports = {
   openConnectionAsync: openConnectionAsync,
-  getHashIdCountByAggIdAsync: getHashIdCountByAggIdAsync,
   getHashIdsByAggIdAsync: getHashIdsByAggIdAsync,
   getHashIdsByBtcTxIdAsync: getHashIdsByBtcTxIdAsync,
   getAggStateObjectByHashIdAsync: getAggStateObjectByHashIdAsync,
@@ -443,11 +485,13 @@ module.exports = {
   getBTCTxStateObjectsByBTCTxIdAsync: getBTCTxStateObjectsByBTCTxIdAsync,
   getBTCHeadStateObjectsByBTCHeadIdAsync: getBTCHeadStateObjectsByBTCHeadIdAsync,
   writeAggStateObjectAsync: writeAggStateObjectAsync,
+  writeAggStateObjectsAsync: writeAggStateObjectsAsync,
   writeCalStateObjectAsync: writeCalStateObjectAsync,
   writeAnchorBTCAggStateObjectAsync: writeAnchorBTCAggStateObjectAsync,
   writeBTCTxStateObjectAsync: writeBTCTxStateObjectAsync,
   writeBTCHeadStateObjectAsync: writeBTCHeadStateObjectAsync,
   logAggregatorEventForHashIdAsync: logAggregatorEventForHashIdAsync,
+  logAggregatorEventsForHashIdsAsync: logAggregatorEventsForHashIdsAsync,
   logCalendarEventForHashIdAsync: logCalendarEventForHashIdAsync,
   logBtcEventForHashIdAsync: logBtcEventForHashIdAsync,
   logEthEventForHashIdAsync: logEthEventForHashIdAsync,

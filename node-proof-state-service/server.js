@@ -33,18 +33,42 @@ var amqpChannel = null
 */
 async function ConsumeAggregationMessageAsync (msg) {
   let messageObj = JSON.parse(msg.content.toString())
-  let stateObj = {}
-  stateObj.hash_id = messageObj.hash_id
-  stateObj.hash = messageObj.hash
-  stateObj.agg_id = messageObj.agg_id
-  stateObj.agg_state = messageObj.agg_state
+
+  let stateObjects = []
+  for (let x = 0; x < messageObj.proofData.length; x++) {
+    let stateObj = {}
+    stateObj.hash_id = messageObj.proofData[x].hash_id
+    stateObj.hash = messageObj.proofData[x].hash
+    stateObj.agg_id = messageObj.agg_id
+    stateObj.agg_state = {}
+    stateObj.agg_state.ops = messageObj.proofData[x].proof
+    stateObjects.push(stateObj)
+  }
 
   try {
     // Store this state information
-    await storageClient.writeAggStateObjectAsync(stateObj)
+    await storageClient.writeAggStateObjectsAsync(stateObjects)
     // logs the aggregation event
-    await storageClient.logAggregatorEventForHashIdAsync(stateObj.hash_id, stateObj.hash)
-    // New message has been published and event logged, ack consumption of original message
+    let hashesInfo = stateObjects.map((hashInfo) => {
+      return {
+        hash_id: hashInfo.hash_id,
+        hash: hashInfo.hash
+      }
+    })
+    await storageClient.logAggregatorEventsForHashIdsAsync(hashesInfo)
+
+    let aggObj = {}
+    aggObj.agg_id = messageObj.agg_id
+    aggObj.agg_root = messageObj.agg_root
+
+    try {
+      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(aggObj)), { persistent: true, type: 'aggregator' })
+    } catch (error) {
+      console.error(`${env.RMQ_WORK_OUT_CAL_QUEUE} publish message nacked`)
+      throw new Error(error.message)
+    }
+
+    // New states has been written, events logged, and cal message queued, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
   } catch (error) {
@@ -66,9 +90,6 @@ async function ConsumeCalendarMessageAsync (msg) {
   stateObj.cal_state = messageObj.cal_state
 
   try {
-    // get hash id count for a given agg_id
-    let count = await storageClient.getHashIdCountByAggIdAsync(stateObj.agg_id)
-    if (count < messageObj.agg_hash_count) throw new Error('unable to read all hash data')
     let rows = await storageClient.getHashIdsByAggIdAsync(stateObj.agg_id)
     await storageClient.writeCalStateObjectAsync(stateObj)
 

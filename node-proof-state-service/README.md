@@ -31,29 +31,35 @@ The proof state service serves as the a proof state storage mechanism for all ha
 
 
 #### Aggregator Message
-When an aggregation event occurs, the aggregation service will queue messages bound for the proof state service for each hash in that aggregation event.
+When an aggregation event occurs, the aggregation service will queue a message bound for the proof state service containing data for each hash in that aggregation event.
 The following is an example of state data published from the aggregator service: 
 ```json
 {
-  "hash_id": "34712680-14bb-11e7-9598-0800200c9a66",
-  "hash": "a0ec06301bf1814970a70f89d1d373afdff9a36d1ba6675fc02f8a975f4efaeb",
-  "agg_id": "0cdecc3e-2452-11e7-93ae-92361f002671",
-  "agg_state": {
-    "ops": [
-      { "l": "fab4a0b99def4631354ca8b3a7f7fe026623ade9c8c5b080b16b2c744d2b9c7d" },
-      { "op": "sha-256" },
-      { "r": "7fb6bb6387d1ffa74671ecf5d337f7a8881443e5b5532106f9bebb673dd72bc9" },
-      { "op": "sha-256" }
-    ]
-  }
+  "agg_id": "0cdecc3e-2452-11e7-93ae-92361f002671", // a UUIDv1 for this aggregation event
+  "agg_root": "419001851bcf08329f0c34bb89570028ff500fc85707caa53a3e5b8b2ecacf05",
+  "proofData": [
+    {
+      "hash_id": "34712680-14bb-11e7-9598-0800200c9a66",
+      "hash": "a0ec06301bf1814970a70f89d1d373afdff9a36d1ba6675fc02f8a975f4efaeb",
+      "proof": [ /* Chainpoint v3 ops list for leaf 0 ... */ ]
+    },
+    {
+      "hash_id": "6d627180-1883-11e7-a8f9-edb8c212ef23",
+      "hash": "2222d5f509d86e2627b1f498d7b44db1f8e70aae1528634580a9b68f05d57a9f",
+      "proof": [ /* Chainpoint v3 ops list for leaf 1 ... */ ]
+    },
+    { /* more ... */ },
+  ]
 }
 ```
 | Name             | Description                                                            |
 | :--------------- |:-----------------------------------------------------------------------|
-| hash_id          | The UUIDv1 unique identifier for a hash object with embedded timestamp |
-| hash          | A hex string representing the hash to be processed  |
-| agg_id          | The UUIDv1 unique identifier for the aggregation event with embedded timestamp |
-| agg_state  | The state data being stored, in this case, aggregation operations |
+| agg_id           | The UUIDv1 unique identifier for the aggregation event with embedded timestamp |
+| agg_root        | A hex string representing the merkle root for this aggregation tree |
+| proofData        | An array of hash state data |
+| proofData.hash_id          | The UUIDv1 unique identifier for a hash object with embedded timestamp |
+| proofData.hash          | A hex string representing the hash to be processed  |
+| proofData.agg_state  | The state data being stored, in this case, aggregation operations |
 
 
 #### Calendar Message
@@ -62,7 +68,6 @@ The following is an example of state data published in a calendar message:
 ```json
 {
   "agg_id": "0cdecc3e-2452-11e7-93ae-92361f002671",
-  "agg_hash_count": 100,
   "cal_id": "1027",
   "cal_state": {
     "ops": [
@@ -83,7 +88,6 @@ The following is an example of state data published in a calendar message:
 | Name             | Description                                                            |
 | :--------------- |:-----------------------------------------------------------------------|
 | agg_id          | The UUIDv1 unique identifier for the aggregation event with embedded timestamp |
-| agg\_hash\_count         | An integer representing the total hash count for the aggregation event  |
 | cal_id          | The block height for the calendar block |
 | cal_state  | The state data being stored, in this case, calendar aggregation operations and cal anchor information |
 
