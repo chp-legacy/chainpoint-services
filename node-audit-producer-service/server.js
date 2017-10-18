@@ -212,7 +212,7 @@ async function generateAuditChallengeAsync () {
       console.error('Cannot generate challenge, no genesis block found')
       return
     }
-    // calulcate min and max values with special exception for low block count
+    // calculate min and max values with special exception for low block count
     let challengeTime = Date.now()
     let challengeMaxBlockHeight = currentBlockHeight > 2000 ? currentBlockHeight - 1000 : currentBlockHeight
     let randomNum = await rnd(10, 1000)
@@ -275,7 +275,7 @@ async function pruneAuditDataAsync () {
   let totalPruned = 0
   let pruneCount = 0
   try {
-    // continually delete old audit log entries in batches of 1000 until all are gone
+    // continually delete old audit log entries in batches until all are gone
     do {
       pruneCount = await NodeAuditLog.destroy({ where: { audit_at: { $lt: cutoffTimestamp } }, limit: 500 })
       totalPruned += pruneCount
@@ -367,7 +367,7 @@ function setGenerateNewChallengeInterval () {
   let newChallengeMinutes = []
   let minuteOfHour = 0
   // offset interval to spread the work around the clock a little bit,
-  // to prevent everuything from happening at the top of the hour
+  // to prevent everything from happening at the top of the hour
   let offset = Math.floor((60 / env.NEW_AUDIT_CHALLENGES_PER_HOUR) / 2)
   while (minuteOfHour < 60) {
     let offsetMinutes = minuteOfHour + offset + ((minuteOfHour + offset) < 60 ? 0 : -60)
@@ -441,10 +441,10 @@ function setPerformCreditTopoffInterval () {
 }
 
 async function startWatchesAndIntervalsAsync () {
-  // Continuous watch on the consul key holding the NIST object.
+  // Continuous watch on the consul key
   var lastAuditWatch = consul.watch({ method: consul.kv.get, options: { key: env.LAST_AUDIT_KEY } })
 
-  // Store the updated nist object on change
+  // Store the updated object on change
   lastAuditWatch.on('change', async function (data, res) {
     // process only if a value has been returned and it is different than what is already stored
     if (data && data.Value && auditLatest !== data.Value) {
