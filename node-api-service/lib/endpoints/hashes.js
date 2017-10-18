@@ -212,7 +212,7 @@ async function postHashV1Async (req, res, next) {
     try {
       regNode = await redis.hgetallAsync(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`)
     } catch (error) {
-      console.log(error)
+      console.error(error.message)
     }
 
     // If Redis cache had no value, retrieve from CRDB instead
@@ -227,7 +227,7 @@ async function postHashV1Async (req, res, next) {
         await redis.hmsetAsync(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, {tntAddr: regNode.tntAddr, hmacKey: regNode.hmacKey, tntCredit: regNode.tntCredit})
         await redis.expire(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, 60 * 60 * 24)
       } catch (error) {
-        console.log(error)
+        console.error(error.message)
       }
     }
 
