@@ -22,7 +22,8 @@ const _ = require('lodash')
 const crypto = require('crypto')
 const registeredNode = require('../models/RegisteredNode.js')
 
-const TNT_CREDIT_COST_POST_HASH = 1
+// Disable temporarily
+// const TNT_CREDIT_COST_POST_HASH = 1
 
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
