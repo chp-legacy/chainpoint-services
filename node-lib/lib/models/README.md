@@ -22,15 +22,15 @@ The following is a description of methods that must be defined in a storage adap
 | getBTCTxStateObjectsByBTCTxIdAsync(btcTxId)     | gets all btctx state data for a given btctx id | result array containing btctx state objects |
 | getBTCHeadStateObjectsByBTCHeadIdAsync(btcHeadId)     | gets all btchead state data for a given btchead id | result array containing btchead state objects |
 | writeAggStateObjectAsync(stateObject)     | write the agg state object to storage | boolean indicating success |
-| writeAggStateObjectsAsync(stateObject2)     | write multiple agg state objects to storage individually within a loop| boolean indicating success |
-| writeAggStateObjectsBulkAsync(stateObject2)     | write multiple agg state objects to storage in one bulk insert | boolean indicating success |
+| writeAggStateObjectsAsync(stateObjects)     | write multiple agg state objects to storage individually within a loop| boolean indicating success |
+| writeAggStateObjectsBulkAsync(stateObjects, transaction)     | write multiple agg state objects to storage in one bulk insert | boolean indicating success |
 | writeCalStateObjectAsync(stateObject)     | write the cal state object to storage | boolean indicating success |
 | writeAnchorBTCAggStateObjectAsync(stateObject)     | write the anchor agg state object to storage | boolean indicating success |
 | writeBTCTxStateObjectAsync(stateObject)     | write the btctx state object to storage | boolean indicating success |
 | writeBTCHeadStateObjectAsync(stateObject)     | write the btchead state object to storage | boolean indicating success |
-| logAggregationEventForHashIdAsync(hashId)     | log an aggregation event for the given hash id to the hash tracker | boolean indicating success |
-| logAggregationEventForHashIdsAsync(hashId)     | log multiple aggregation events for the given hash ids to the hash tracker individually within a loop| boolean indicating success |
-| logAggregationEventForHashIdsBulkAsync(hashId)     | log multiple aggregation events for the given hash ids to the hash tracker in one bulk insert | boolean indicating success |
+| logAggregationEventForHashIdAsync(hashId, hash)     | log an aggregation event for the given hash id to the hash tracker | boolean indicating success |
+| logAggregationEventForHashIdsAsync(hashesInfo)     | log multiple aggregation events for the given hash ids to the hash tracker individually within a loop| boolean indicating success |
+| logAggregationEventForHashIdsBulkAsync(hashesInfo, transaction)     | log multiple aggregation events for the given hash ids to the hash tracker in one bulk insert | boolean indicating success |
 | logCalendarEventForHashIdAsync(hashId)     | log a calendar event for the given hash id to the hash tracker | boolean indicating success |
 | logEthEventForHashIdAsync(hashId)     | log an eth event for the given hash id to the hash tracker | boolean indicating success |
 | logBtcEventForHashIdAsync(hashId)     | log a btc event for the given hash id to the hash tracker | boolean indicating success |

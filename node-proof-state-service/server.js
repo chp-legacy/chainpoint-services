@@ -48,7 +48,7 @@ async function ConsumeAggregationMessageAsync (msg) {
   let transaction = await storageClient.sequelize.transaction()
   try {
     // Store this state information
-    await storageClient.writeAggStateObjectsBulkAsync(stateObjects)
+    await storageClient.writeAggStateObjectsBulkAsync(stateObjects, transaction)
     // logs the aggregation event
     let hashesInfo = stateObjects.map((hashInfo) => {
       return {
@@ -56,7 +56,7 @@ async function ConsumeAggregationMessageAsync (msg) {
         hash: hashInfo.hash
       }
     })
-    await storageClient.logAggregatorEventsForHashIdsBulkAsync(hashesInfo)
+    await storageClient.logAggregatorEventsForHashIdsBulkAsync(hashesInfo, transaction)
 
     let aggObj = {}
     aggObj.agg_id = messageObj.agg_id

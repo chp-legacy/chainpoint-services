@@ -332,19 +332,16 @@ async function writeAggStateObjectsAsync (stateObjects) {
   return true
 }
 
-async function writeAggStateObjectsBulkAsync (stateObjects) {
-  let writeTime = new Date()
-  let newStateObjects = stateObjects.map((stateObject) => {
+async function writeAggStateObjectsBulkAsync (stateObjects, transaction) {
+  let newAggStates = stateObjects.map((stateObject) => {
     return {
       hash_id: stateObject.hash_id,
       hash: stateObject.hash,
       agg_id: stateObject.agg_id,
-      agg_state: JSON.stringify(stateObject.agg_state),
-      created_at: writeTime,
-      updated_at: writeTime
+      agg_state: JSON.stringify(stateObject.agg_state)
     }
   })
-  await sequelize.getQueryInterface().bulkInsert('agg_states', newStateObjects)
+  await AggStates.bulkCreate(newAggStates, { transaction: transaction })
   return true
 }
 
@@ -419,19 +416,20 @@ async function logAggregatorEventsForHashIdsAsync (hashesInfo) {
   return true
 }
 
-async function logAggregatorEventsForHashIdsBulkAsync (hashesInfo) {
+async function logAggregatorEventsForHashIdsBulkAsync (hashesInfo, transaction) {
   let writeTime = new Date()
-  let newHashesInfo = hashesInfo.map((hashInfo) => {
+  let newHashTrackerLogs = hashesInfo.map((hashInfo) => {
     return {
       hash_id: hashInfo.hash_id,
       hash: hashInfo.hash,
       aggregator_at: writeTime,
-      steps_complete: 1,
-      created_at: writeTime,
-      updated_at: writeTime
+      calendar_at: null,
+      btc_at: null,
+      eth_at: null,
+      steps_complete: 1
     }
   })
-  await sequelize.getQueryInterface().bulkInsert('hash_tracker_logs', newHashesInfo)
+  await HashTrackerLog.bulkCreate(newHashTrackerLogs, { transaction: transaction })
   return true
 }
 
