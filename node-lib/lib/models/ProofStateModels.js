@@ -322,8 +322,6 @@ async function writeAggStateObjectsAsync (stateObjects) {
       updated_at: writeTime
     }
   })
-  // Bulk insert below would be ideal, but commented out due to failure recovery issues, will readdress
-  // await sequelize.bulkInsert('agg_states', newStateObjects)
   for (let x = 0; x < newStateObjects.length; x++) {
     await sequelize.query(`INSERT INTO agg_states (hash_id, hash, agg_id, agg_state, created_at, updated_at)
       VALUES ('${newStateObjects[x].hash_id}', '${newStateObjects[x].hash}', '${newStateObjects[x].agg_id}', '${newStateObjects[x].agg_state}', clock_timestamp(), clock_timestamp())
@@ -331,6 +329,22 @@ async function writeAggStateObjectsAsync (stateObjects) {
       DO UPDATE SET (hash, agg_id, agg_state, updated_at) = ('${newStateObjects[x].hash}', '${newStateObjects[x].agg_id}', '${newStateObjects[x].agg_state}', clock_timestamp())
       WHERE agg_states.hash_id = '${newStateObjects[x].hash_id}'`)
   }
+  return true
+}
+
+async function writeAggStateObjectsBulkAsync (stateObjects) {
+  let writeTime = new Date()
+  let newStateObjects = stateObjects.map((stateObject) => {
+    return {
+      hash_id: stateObject.hash_id,
+      hash: stateObject.hash,
+      agg_id: stateObject.agg_id,
+      agg_state: JSON.stringify(stateObject.agg_state),
+      created_at: writeTime,
+      updated_at: writeTime
+    }
+  })
+  await sequelize.getQueryInterface().bulkInsert('agg_states', newStateObjects)
   return true
 }
 
@@ -395,8 +409,6 @@ async function logAggregatorEventsForHashIdsAsync (hashesInfo) {
       updated_at: writeTime
     }
   })
-  // Bulk insert below would be ideal, but commented out due to failure recovery issues, will readdress
-  // await sequelize.bulkInsert('hash_tracker_logs', newHashesInfo)
   for (let x = 0; x < newHashesInfo.length; x++) {
     await sequelize.query(`INSERT INTO hash_tracker_logs (hash_id, hash, aggregator_at, steps_complete, created_at, updated_at)
     VALUES ('${newHashesInfo[x].hash_id}', '${newHashesInfo[x].hash}', clock_timestamp(), 1, clock_timestamp(), clock_timestamp())
@@ -404,6 +416,22 @@ async function logAggregatorEventsForHashIdsAsync (hashesInfo) {
     DO UPDATE SET (hash, aggregator_at, steps_complete, updated_at) = ('${newHashesInfo[x].hash}', clock_timestamp(), hash_tracker_logs.steps_complete + 1, clock_timestamp())
     WHERE hash_tracker_logs.hash_id = '${newHashesInfo[x].hash_id}'`)
   }
+  return true
+}
+
+async function logAggregatorEventsForHashIdsBulkAsync (hashesInfo) {
+  let writeTime = new Date()
+  let newHashesInfo = hashesInfo.map((hashInfo) => {
+    return {
+      hash_id: hashInfo.hash_id,
+      hash: hashInfo.hash,
+      aggregator_at: writeTime,
+      steps_complete: 1,
+      created_at: writeTime,
+      updated_at: writeTime
+    }
+  })
+  await sequelize.getQueryInterface().bulkInsert('hash_tracker_logs', newHashesInfo)
   return true
 }
 
@@ -485,12 +513,14 @@ module.exports = {
   getBTCTxStateObjectsByBTCTxIdAsync: getBTCTxStateObjectsByBTCTxIdAsync,
   getBTCHeadStateObjectsByBTCHeadIdAsync: getBTCHeadStateObjectsByBTCHeadIdAsync,
   writeAggStateObjectAsync: writeAggStateObjectAsync,
+  writeAggStateObjectsBulkAsync: writeAggStateObjectsBulkAsync,
   writeAggStateObjectsAsync: writeAggStateObjectsAsync,
   writeCalStateObjectAsync: writeCalStateObjectAsync,
   writeAnchorBTCAggStateObjectAsync: writeAnchorBTCAggStateObjectAsync,
   writeBTCTxStateObjectAsync: writeBTCTxStateObjectAsync,
   writeBTCHeadStateObjectAsync: writeBTCHeadStateObjectAsync,
   logAggregatorEventForHashIdAsync: logAggregatorEventForHashIdAsync,
+  logAggregatorEventsForHashIdsBulkAsync: logAggregatorEventsForHashIdsBulkAsync,
   logAggregatorEventsForHashIdsAsync: logAggregatorEventsForHashIdsAsync,
   logCalendarEventForHashIdAsync: logCalendarEventForHashIdAsync,
   logBtcEventForHashIdAsync: logBtcEventForHashIdAsync,
@@ -500,5 +530,6 @@ module.exports = {
   pruneCalStatesAsync: pruneCalStatesAsync,
   pruneAnchorBTCAggStatesAsync: pruneAnchorBTCAggStatesAsync,
   pruneBtcTxStatesAsync: pruneBtcTxStatesAsync,
-  pruneBtcHeadStatesAsync: pruneBtcHeadStatesAsync
+  pruneBtcHeadStatesAsync: pruneBtcHeadStatesAsync,
+  sequelize: sequelize
 }

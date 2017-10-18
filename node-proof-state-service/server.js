@@ -45,9 +45,10 @@ async function ConsumeAggregationMessageAsync (msg) {
     stateObjects.push(stateObj)
   }
 
+  let transaction = await storageClient.sequelize.transaction()
   try {
     // Store this state information
-    await storageClient.writeAggStateObjectsAsync(stateObjects)
+    await storageClient.writeAggStateObjectsBulkAsync(stateObjects)
     // logs the aggregation event
     let hashesInfo = stateObjects.map((hashInfo) => {
       return {
@@ -55,7 +56,7 @@ async function ConsumeAggregationMessageAsync (msg) {
         hash: hashInfo.hash
       }
     })
-    await storageClient.logAggregatorEventsForHashIdsAsync(hashesInfo)
+    await storageClient.logAggregatorEventsForHashIdsBulkAsync(hashesInfo)
 
     let aggObj = {}
     aggObj.agg_id = messageObj.agg_id
@@ -68,10 +69,13 @@ async function ConsumeAggregationMessageAsync (msg) {
       throw new Error(error.message)
     }
 
+    await transaction.commit()
+
     // New states has been written, events logged, and cal message queued, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
   } catch (error) {
+    await transaction.rollback()
     amqpChannel.nack(msg)
     console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
   }
