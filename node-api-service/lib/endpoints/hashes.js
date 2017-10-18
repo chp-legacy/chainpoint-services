@@ -24,6 +24,10 @@ const registeredNode = require('../models/RegisteredNode.js')
 
 const TNT_CREDIT_COST_POST_HASH = 1
 
+// The redis connection used for all redis communication
+// This value is set once the connection has been established
+let redis = null
+
 // Generate a v1 UUID (time-based)
 // see: https://github.com/broofa/node-uuid
 const uuidv1 = require('uuid/v1')
@@ -200,21 +204,44 @@ async function postHashV1Async (req, res, next) {
     return next(new restify.InternalServerError('Message could not be delivered'))
   }
 
-  // validate the calculated hmac
+  // Validate the calculated HMAC
   let regNode = null
   try {
-    regNode = await RegisteredNode.findOne({ where: { tntAddr: tntAddrHeaderParam }, attributes: ['tntAddr', 'hmacKey', 'tntCredit'] })
-    if (!regNode) {
-      return next(new restify.InvalidCredentialsError('authorization denied: unknown tnt-address'))
+    // Try to retrieve from Redis cache first
+    try {
+      regNode = await redis.hgetallAsync(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`)
+    } catch (error) {
+      console.log(error)
     }
+
+    // If Redis cache had no value, retrieve from CRDB instead
+    if (_.isEmpty(regNode)) {
+      regNode = await RegisteredNode.findOne({ where: { tntAddr: tntAddrHeaderParam }, attributes: ['tntAddr', 'hmacKey', 'tntCredit'] })
+      if (_.isEmpty(regNode)) {
+        return next(new restify.InvalidCredentialsError('authorization denied: unknown tnt-address'))
+      }
+
+      // Set the found Node in cache, expiring in 24 hours, for next time
+      try {
+        await redis.hmsetAsync(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, {tntAddr: regNode.tntAddr, hmacKey: regNode.hmacKey, tntCredit: regNode.tntCredit})
+        await redis.expire(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, 60 * 60 * 24)
+      } catch (error) {
+        console.log(error)
+      }
+    }
+
     let hash = crypto.createHmac('sha256', regNode.hmacKey)
     let hmac = hash.update(regNode.tntAddr).digest('hex')
     if (authValueSegments[1] !== hmac) {
       return next(new restify.InvalidCredentialsError('authorization denied: bad hmac value'))
     }
-    if (regNode.tntCredit < TNT_CREDIT_COST_POST_HASH) {
-      return next(new restify.NotAuthorizedError(`insufficient tntCredit remaining: ${regNode.tntCredit}`))
-    }
+
+    // Disable temporarily
+    // if (regNode.tntCredit < TNT_CREDIT_COST_POST_HASH) {
+    //   return next(new restify.NotAuthorizedError(`insufficient tntCredit remaining: ${regNode.tntCredit}`))
+    // }
+
+    // Disable temporarily
     // decrement tntCredit by TNT_CREDIT_COST_POST_HASH
     // await regNode.decrement({ tntCredit: TNT_CREDIT_COST_POST_HASH })
   } catch (error) {
@@ -263,5 +290,6 @@ module.exports = {
   setAMQPChannel: (chan) => { amqpChannel = chan },
   getNistLatest: () => { return nistLatest },
   setNistLatest: (val) => { updateNistVars(val) },
-  setHashesRegisteredNode: (regNode) => { RegisteredNode = regNode }
+  setHashesRegisteredNode: (regNode) => { RegisteredNode = regNode },
+  setRedis: (redisClient) => { redis = redisClient }
 }

@@ -297,6 +297,7 @@ function openRedisConnection (redisURI) {
     bluebird.promisifyAll(redis)
     proofs.setRedis(redis)
     subscribe.setRedis(redis)
+    hashes.setRedis(redis)
     console.log('Redis connection established')
   })
   redis.on('error', async (err) => {
@@ -305,7 +306,8 @@ function openRedisConnection (redisURI) {
     redis = null
     proofs.setRedis(null)
     subscribe.setRedis(null)
-    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
+    hashes.setRedis(null)
+    console.error('Cannot establish Redis connection. Retrying...')
     await utils.sleep(5000)
     openRedisConnection(redisURI)
   })

@@ -468,45 +468,46 @@ describe('Hashes Controller', () => {
         })
     })
 
-    it('should return proper error with zero balance', (done) => {
-      app.setAMQPChannel({
-        sendToQueue: function () { }
-      })
+    // TEMP DISABLE WHILE CREDIT CHECK TURNED OFF
+    // it('should return proper error with zero balance', (done) => {
+    //   app.setAMQPChannel({
+    //     sendToQueue: function () { }
+    //   })
 
-      let tntAddr = '0x1234567890123456789012345678901234567890'
+    //   let tntAddr = '0x1234567890123456789012345678901234567890'
 
-      let hmacKey = crypto.randomBytes(32).toString('hex')
-      let hash = crypto.createHmac('sha256', hmacKey)
-      let hmac = hash.update(tntAddr).digest('hex')
+    //   let hmacKey = crypto.randomBytes(32).toString('hex')
+    //   let hash = crypto.createHmac('sha256', hmacKey)
+    //   let hmac = hash.update(tntAddr).digest('hex')
 
-      app.setNistLatest('1400585240:8E00C0AF2B68E33CC453BF45A1689A6804700C083478FEB34E4694422999B6F745C2F837D7BA983F9D7BA52F7CC62965B8E1B7384CD8177003B5D3A0D099D93C')
-      app.setHashesRegisteredNode({
-        findOne: (params) => {
-          return {
-            tntAddr: tntAddr,
-            hmacKey: hmacKey,
-            tntCredit: 0
-          }
-        }
-      })
-      request(server)
-        .post('/hashes')
-        .set('Authorization', `bearer ${hmac}`)
-        .set('tnt-address', tntAddr)
-        .send({ hash: 'ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12' })
-        .expect('Content-type', /json/)
-        .expect(403)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('NotAuthorized')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('insufficient tntCredit remaining: 0')
-          done()
-        })
-    })
+    //   app.setNistLatest('1400585240:8E00C0AF2B68E33CC453BF45A1689A6804700C083478FEB34E4694422999B6F745C2F837D7BA983F9D7BA52F7CC62965B8E1B7384CD8177003B5D3A0D099D93C')
+    //   app.setHashesRegisteredNode({
+    //     findOne: (params) => {
+    //       return {
+    //         tntAddr: tntAddr,
+    //         hmacKey: hmacKey,
+    //         tntCredit: 0
+    //       }
+    //     }
+    //   })
+    //   request(server)
+    //     .post('/hashes')
+    //     .set('Authorization', `bearer ${hmac}`)
+    //     .set('tnt-address', tntAddr)
+    //     .send({ hash: 'ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12' })
+    //     .expect('Content-type', /json/)
+    //     .expect(403)
+    //     .end((err, res) => {
+    //       expect(err).to.equal(null)
+    //       expect(res.body).to.have.property('code')
+    //         .and.to.be.a('string')
+    //         .and.to.equal('NotAuthorized')
+    //       expect(res.body).to.have.property('message')
+    //         .and.to.be.a('string')
+    //         .and.to.equal('insufficient tntCredit remaining: 0')
+    //       done()
+    //     })
+    // })
 
     it('should return a matched set of metadata and UUID embedded timestamps', (done) => {
       app.setAMQPChannel({
@@ -902,7 +903,6 @@ describe('Config Controller', () => {
           expect(res.body).to.have.property('get_proofs_max_rest')
           expect(res.body).to.have.property('get_proofs_max_ws')
           expect(res.body).to.have.property('post_verify_proofs_max')
-          expect(res.body).to.have.property('time')
           expect(res.body).to.have.property('public_keys')
           expect(res.body).to.have.property('calendar')
           expect(res.body.calendar).to.have.property('height')
