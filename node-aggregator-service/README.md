@@ -20,7 +20,7 @@ The following are the types, defaults, and acceptable ranges of the configuratio
 | :------------- |:-------------|:-------------|:----|:--------|
 | RMQ\_PREFETCH\_COUNT      | integer      | 0 | 0 | - | 
 | RMQ\_WORK\_IN\_QUEUE      | string      | 'work.agg' |  |  | 
-| RMQ\_WORK\_OUT\_STATE\_QUEUE       | string      | 'work.state' |  |  | 
+| RMQ\_WORK\_OUT\_STATE\_QUEUE       | string      | 'work.proofstate' |  |  | 
 | AGGREGATION_INTERVAL       | integer       | 1,000 | 250 | 10,000 | 
 | HASHES\_PER\_MERKLE_TREE     | integer       | 1,000 | 100 | 25,000 | 
 | RABBITMQ\_CONNECT\_URI       | string      | 'amqp://chainpoint:chainpoint@rabbitmq' |  |  |

@@ -19,9 +19,9 @@ The following are the types, defaults, and acceptable ranges of the configuratio
 | Name           | Type         | Default | 
 | :------------- |:-------------|:-------------|
 | RMQ\_PREFETCH\_COUNT      | integer      | 10 | 0 | - | 
-| RMQ\_WORK\_IN\_QUEUE      | string      | 'work.state' |  |  | 
+| RMQ\_WORK\_IN\_QUEUE      | string      | 'work.proofstate' |  |  | 
 | RMQ\_WORK\_OUT\_GEN\_QUEUE       | string      | 'work.gen' |  |  | 
-| RMQ\_WORK\_OUT\_STATE\_QUEUE       | string      | 'work.state' |  |  |   
+| RMQ\_WORK\_OUT\_STATE\_QUEUE       | string      | 'work.proofstate' |  |  |   
 | RABBITMQ\_CONNECT\_URI       | string      | 'amqp://chainpoint:chainpoint@rabbitmq' | 
 | PRUNE\_FREQUENCY\_MINUTES       | integer      | 1 | 
 
