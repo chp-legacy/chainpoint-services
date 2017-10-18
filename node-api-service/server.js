@@ -402,7 +402,12 @@ start()
 
 // export these functions for testing purposes
 module.exports = {
-  setRedis: (redisClient) => { redis = redisClient },
+  setRedis: (redisClient) => {
+    redis = redisClient
+    proofs.setRedis(redis)
+    subscribe.setRedis(redis)
+    hashes.setRedis(redis)
+  },
   setAMQPChannel: (chan) => {
     amqpChannel = chan
     hashes.setAMQPChannel(chan)

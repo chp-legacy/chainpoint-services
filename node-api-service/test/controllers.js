@@ -403,6 +403,12 @@ describe('Hashes Controller', () => {
         sendToQueue: function () { }
       })
 
+      app.setRedis({
+        hgetallAsync: (key) => { return null },
+        hmsetAsync: (key, value) => { return null },
+        expire: (key, ms) => { return null }
+      })
+
       app.setNistLatest('1400585240:8E00C0AF2B68E33CC453BF45A1689A6804700C083478FEB34E4694422999B6F745C2F837D7BA983F9D7BA52F7CC62965B8E1B7384CD8177003B5D3A0D099D93C')
       app.setHashesRegisteredNode({
         findOne: (params) => {
@@ -431,6 +437,12 @@ describe('Hashes Controller', () => {
     it('should return proper error with bad hmac value', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
+      })
+
+      app.setRedis({
+        hgetallAsync: (key) => { return null },
+        hmsetAsync: (key, value) => { return null },
+        expire: (key, ms) => { return null }
       })
 
       let tntAddr = '0x1234567890123456789012345678901234567890'
@@ -514,6 +526,12 @@ describe('Hashes Controller', () => {
         sendToQueue: function () { }
       })
 
+      app.setRedis({
+        hgetallAsync: (key) => { return null },
+        hmsetAsync: (key, value) => { return null },
+        expire: (key, ms) => { return null }
+      })
+
       let tntAddr = '0x1234567890123456789012345678901234567890'
 
       let hmacKey = crypto.randomBytes(32).toString('hex')
@@ -552,6 +570,12 @@ describe('Hashes Controller', () => {
     it('should return a v1 UUID node embedded with a partial SHA256 over timestamp and hash', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
+      })
+
+      app.setRedis({
+        hgetallAsync: (key) => { return null },
+        hmsetAsync: (key, value) => { return null },
+        expire: (key, ms) => { return null }
       })
 
       let tntAddr = '0x1234567890123456789012345678901234567890'
@@ -610,6 +634,12 @@ describe('Hashes Controller', () => {
     it('should return proper result with valid call', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
+      })
+
+      app.setRedis({
+        hgetallAsync: (key) => { return null },
+        hmsetAsync: (key, value) => { return null },
+        expire: (key, ms) => { return null }
       })
 
       let tntAddr = '0x1234567890123456789012345678901234567890'
