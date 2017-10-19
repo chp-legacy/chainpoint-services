@@ -137,7 +137,11 @@ registerLockEvents(challengeLock, 'challengeLock', async () => {
     console.error(`Unable to generate audit challenge: ${error.message}`)
   } finally {
     // always release lock
-    challengeLock.release()
+    try {
+      challengeLock.release()
+    } catch (error) {
+      console.error(`challengeLock.release(): caught err: ${error.message}`)
+    }
   }
 })
 
@@ -149,7 +153,11 @@ registerLockEvents(auditLock, 'auditLock', async () => {
     console.error(`Unable to perform node audits: ${error.message}`)
   } finally {
     // always release lock
-    auditLock.release()
+    try {
+      auditLock.release()
+    } catch (error) {
+      console.error(`auditLock.release(): caught err: ${error.message}`)
+    }
   }
 })
 

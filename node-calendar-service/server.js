@@ -696,7 +696,11 @@ registerLockEvents(genesisLock, 'genesisLock', async () => {
     console.error(error.message)
   } finally {
     // always release lock
-    genesisLock.release()
+    try {
+      genesisLock.release()
+    } catch (error) {
+      console.error(`genesisLock.release(): caught err: ${error.message}`)
+    }
   }
 })
 
@@ -715,7 +719,11 @@ registerLockEvents(calendarLock, 'calendarLock', async () => {
     console.error(`Unable to create calendar block: ${error.message}`)
   } finally {
     // always release lock
-    calendarLock.release()
+    try {
+      calendarLock.release()
+    } catch (error) {
+      console.error(`calendarLock.release(): caught err: ${error.message}`)
+    }
   }
 })
 
@@ -748,7 +756,11 @@ registerLockEvents(nistLock, 'nistLock', async () => {
     console.error(`Unable to create NIST block: ${error.message}`)
   } finally {
     // always release lock
-    nistLock.release()
+    try {
+      nistLock.release()
+    } catch (error) {
+      console.error(`nistLock.release(): caught err: ${error.message}`)
+    }
   }
 })
 
@@ -787,7 +799,11 @@ registerLockEvents(btcAnchorLock, 'btcAnchorLock', async () => {
     console.error(error.message)
   } finally {
     // always release lock
-    btcAnchorLock.release()
+    try {
+      btcAnchorLock.release()
+    } catch (error) {
+      console.error(`btcAnchorLock.release(): caught err: ${error.message}`)
+    }
   }
 })
 
@@ -851,7 +867,11 @@ registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
     console.error(error.message)
   } finally {
     // always release lock
-    btcConfirmLock.release()
+    try {
+      btcConfirmLock.release()
+    } catch (error) {
+      console.error(`btcConfirmLock.release(): caught err: ${error.message}`)
+    }
   }
 })
 
@@ -891,7 +911,11 @@ registerLockEvents(ethAnchorLock, 'ethAnchorLock', async () => {
     console.error(error.message)
   } finally {
     // always release lock
-    ethAnchorLock.release()
+    try {
+      ethAnchorLock.release()
+    } catch (error) {
+      console.error(`ethAnchorLock.release(): caught err: ${error.message}`)
+    }
   }
 })
 
@@ -903,7 +927,11 @@ registerLockEvents(ethConfirmLock, 'ethConfirmLock', () => {
 
   } finally {
     // always release lock
-    ethConfirmLock.release()
+    try {
+      ethConfirmLock.release()
+    } catch (error) {
+      console.error(`ethConfirmLock.release(): caught err: ${error.message}`)
+    }
   }
 })
 
@@ -1030,7 +1058,11 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
     console.error(error.message)
   } finally {
     // always release lock
-    rewardLock.release()
+    try {
+      rewardLock.release()
+    } catch (error) {
+      console.error(`rewardLock.release(): caught err: ${error.message}`)
+    }
   }
 })
 
