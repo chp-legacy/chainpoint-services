@@ -374,12 +374,8 @@ function setGenerateNewChallengeInterval () {
   // determine the minutes of the hour to run process based on NEW_AUDIT_CHALLENGES_PER_HOUR
   let newChallengeMinutes = []
   let minuteOfHour = 0
-  // offset interval to spread the work around the clock a little bit,
-  // to prevent everything from happening at the top of the hour
-  let offset = Math.floor((60 / env.NEW_AUDIT_CHALLENGES_PER_HOUR) / 2)
   while (minuteOfHour < 60) {
-    let offsetMinutes = minuteOfHour + offset + ((minuteOfHour + offset) < 60 ? 0 : -60)
-    newChallengeMinutes.push(offsetMinutes)
+    newChallengeMinutes.push(minuteOfHour)
     minuteOfHour += (60 / env.NEW_AUDIT_CHALLENGES_PER_HOUR)
   }
 
@@ -409,8 +405,12 @@ function setPerformNodeAuditInterval () {
   // determine the minutes of the hour to run process based on NODE_AUDIT_ROUNDS_PER_HOUR
   let nodeAuditRoundsMinutes = []
   let minuteOfHour = 0
+  // offset interval to spread the work around the clock a little bit,
+  // to prevent everything from happening at the top of the hour
+  let offset = Math.floor((60 / env.NODE_AUDIT_ROUNDS_PER_HOUR) / 2)
   while (minuteOfHour < 60) {
-    nodeAuditRoundsMinutes.push(minuteOfHour)
+    let offsetMinutes = minuteOfHour + offset + ((minuteOfHour + offset) < 60 ? 0 : -60)
+    nodeAuditRoundsMinutes.push(offsetMinutes)
     minuteOfHour += (60 / env.NODE_AUDIT_ROUNDS_PER_HOUR)
   }
 
