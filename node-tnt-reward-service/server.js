@@ -338,7 +338,7 @@ async function performLeaderElection () {
     IS_LEADER = true
   })
   .on('error', function () {
-    console.error('An error has occurred with leader election')
+    console.error('This lock session has been invalidated, new lock session will be created')
     IS_LEADER = false
   })
 }
