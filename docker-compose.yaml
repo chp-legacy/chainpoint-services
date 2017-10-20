@@ -488,6 +488,7 @@ services:
     depends_on:
       - eth-tnt-tx-service
       - rabbitmq
+      - consul
     networks:
       - chainpoint
     environment:

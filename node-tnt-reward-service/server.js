@@ -26,13 +26,14 @@ const calendarBlock = require('./lib/models/CalendarBlock.js')
 const registeredCore = require('./lib/models/RegisteredCore.js')
 const csprng = require('random-number-csprng')
 const heartbeats = require('heartbeats')
+const leaderElection = require('exp-leader-election')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
-var amqpChannel = null
+let amqpChannel = null
 
-// the fuzz factor for anchor interval meant to give each core instance a random chance of being first
-const maxFuzzyMS = 1000
+// The leadership status for this instance of the reward service
+let IS_LEADER = false
 
 // create a heartbeat for every 200ms
 // 1 second heartbeats had a drift that caused occasional skipping of a whole second
@@ -319,6 +320,29 @@ async function openRMQConnectionAsync (connectionString) {
   }
 }
 
+async function performLeaderElection () {
+  IS_LEADER = false
+  let leaderElectionConfig = {
+    key: env.REWARDS_LEADER_KEY,
+    consul: {
+      host: env.CONSUL_HOST,
+      port: env.CONSUL_PORT,
+      ttl: 15,
+      lockDelay: 1
+    }
+  }
+
+  leaderElection(leaderElectionConfig)
+  .on('gainedLeadership', function () {
+    console.log('This service instance has been chosen to be leader')
+    IS_LEADER = true
+  })
+  .on('error', function () {
+    console.error('An error has occurred with leader election')
+    IS_LEADER = false
+  })
+}
+
 /**
  * Opens a storage connection
  **/
@@ -396,9 +420,8 @@ function setTNTRewardInterval () {
     // if we are on a new minute
     if (now.getUTCMinutes() !== currentMinute) {
       currentMinute = now.getUTCMinutes()
-      if (rewardMinutes.includes(currentMinute)) {
-        let randomFuzzyMS = await csprng(0, maxFuzzyMS)
-        setTimeout(() => performRewardAsync(), randomFuzzyMS)
+      if (rewardMinutes.includes(currentMinute) && IS_LEADER) {
+        performRewardAsync()
       }
     }
   })
@@ -410,6 +433,8 @@ async function start () {
   try {
     // init rabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
+    // init consul and perform leader election
+    performLeaderElection()
     // init DB
     await openStorageConnectionAsync()
     // Check Core registration

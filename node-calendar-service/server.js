@@ -939,33 +939,8 @@ registerLockEvents(ethConfirmLock, 'ethConfirmLock', () => {
 registerLockEvents(rewardLock, 'rewardLock', async () => {
   let msg = rewardLatest
   let rewardMsgObj = JSON.parse(msg.content.toString())
-  let rewardIntervalMinutes = 60 / env.REWARDS_PER_HOUR
 
   try {
-    let lastRewardBlock
-    try {
-      lastRewardBlock = await CalendarBlock.findOne({ where: { type: 'reward' }, attributes: ['id', 'hash', 'time', 'stackId'], order: [['id', 'DESC']] })
-    } catch (error) {
-      // nack consumption of all original message
-      amqpChannel.nack(msg)
-      console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[reward] consume message nacked')
-      throw new Error(`Unable to retrieve recent reward block: ${error.message}`)
-    }
-    if (lastRewardBlock) {
-      // checks if the last reward block is at least rewardIntervalMinutes - oneMinuteMS old
-      // Only if so, we distribute rewards and write a new reward block. Otherwise, another process
-      // has performed these tasks for this interval already, so we do nothing.
-      let oneMinuteMS = 60000
-      let lastRewardMS = lastRewardBlock.time * 1000
-      let currentMS = Date.now()
-      let ageMS = currentMS - lastRewardMS
-      if (ageMS < (rewardIntervalMinutes * 60 * 1000 - oneMinuteMS)) {
-        let ageSec = Math.round(ageMS / 1000)
-        console.log(`No work: ${rewardIntervalMinutes} minutes must elapse between each new reward block. The last one was generated ${ageSec} seconds ago by Core ${lastRewardBlock.stackId}.`)
-        return
-      }
-    }
-
     // transfer TNT according to random reward message selection
     let nodeRewardTxId = ''
     let coreRewardTxId = ''

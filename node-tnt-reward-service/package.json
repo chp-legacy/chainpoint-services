@@ -12,6 +12,7 @@
     "amqplib": "^0.5.1",
     "bignumber.js": "^4.0.3",
     "envalid": "^3.1.1",
+    "exp-leader-election": "^0.2.2",
     "heartbeats": "^5.0.1",
     "random-number-csprng": "^1.0.2",
     "request": "^2.81.0",
