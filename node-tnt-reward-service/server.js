@@ -66,9 +66,13 @@ async function performRewardAsync () {
   let minAuditPasses = env.MIN_CONSECUTIVE_AUDIT_PASSES_FOR_REWARD
   let minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
   let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
+  let auditsPerHour = env.NODE_AUDIT_ROUNDS_PER_HOUR
 
   // find all audit qualifying registered Nodes
-  let auditCheckRangeMS = minAuditPasses * 30 * 60 * 1000 // minAuditPasses * 30 minute audit interval
+  let auditIntervalMinutes = (60 / auditsPerHour)
+  // look back enough time to see last {minAuditPasses} audits, looking back extra time without including {minAuditPasses + 1} audits ago
+  let auditCheckRangeMinutes = (minAuditPasses * auditIntervalMinutes) + (2 / 3 * auditIntervalMinutes)
+  let auditCheckRangeMS = auditCheckRangeMinutes * 60 * 1000 // convert minutes to MS
   let auditsFromDateMS = Date.now() - auditCheckRangeMS
   let qualifiedNodes
   try {
@@ -333,14 +337,14 @@ async function performLeaderElection () {
   }
 
   leaderElection(leaderElectionConfig)
-  .on('gainedLeadership', function () {
-    console.log('This service instance has been chosen to be leader')
-    IS_LEADER = true
-  })
-  .on('error', function () {
-    console.error('This lock session has been invalidated, new lock session will be created')
-    IS_LEADER = false
-  })
+    .on('gainedLeadership', function () {
+      console.log('This service instance has been chosen to be leader')
+      IS_LEADER = true
+    })
+    .on('error', function () {
+      console.error('This lock session has been invalidated, new lock session will be created')
+      IS_LEADER = false
+    })
 }
 
 /**
