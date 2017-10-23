@@ -29,6 +29,7 @@ const utils = require('./lib/utils.js')
 const heartbeats = require('heartbeats')
 const rand = require('random-number-csprng')
 const rp = require('request-promise-native')
+const leaderElection = require('exp-leader-election')
 
 var debug = {
   general: require('debug')('calendar:general'),
@@ -45,6 +46,9 @@ var debug = {
 // see: https://github.com/dchest/tweetnacl-js#signatures
 const nacl = require('tweetnacl')
 nacl.util = require('tweetnacl-util')
+
+// The leadership status for this instance of the calendar service
+let IS_LEADER = false
 
 // Pass SIGNING_SECRET_KEY as Base64 encoded bytes
 const signingSecretKeyBytes = nacl.util.decodeBase64(env.SIGNING_SECRET_KEY)
@@ -735,27 +739,6 @@ registerLockEvents(calendarLock, 'calendarLock', async () => {
 // LOCK HANDLERS : nist
 registerLockEvents(nistLock, 'nistLock', async () => {
   try {
-    let nistBlockIntervalMinutes = 60 / env.NIST_BLOCKS_PER_HOUR
-    let lastNistBlock
-    try {
-      lastNistBlock = await CalendarBlock.findOne({ where: { type: 'nist' }, attributes: ['time', 'stackId'], order: [['id', 'DESC']] })
-    } catch (error) {
-      throw new Error(`unable to retrieve most recent NIST block: ${error.message}`)
-    }
-    if (lastNistBlock) {
-      // checks if the last NIST block is at least nistBlockIntervalMinutes - oneMinuteMS old
-      // Only if so, we write a new anchor and do the work of that function. Otherwise immediate release lock.
-      let oneMinuteMS = 60000
-      let lastNistBlockMS = lastNistBlock.time * 1000
-      let currentMS = Date.now()
-      let ageMS = currentMS - lastNistBlockMS
-      let lastNISTTooRecent = (ageMS < (nistBlockIntervalMinutes * 60 * 1000 - oneMinuteMS))
-      if (lastNISTTooRecent) {
-        let ageSec = Math.round(ageMS / 1000)
-        debug.nist(`registerLockEvents : nistLock : no work: ${nistBlockIntervalMinutes} minutes must elapse between each new nist block. The last one was generated ${ageSec} seconds ago by Core ${lastNistBlock.stackId}.`)
-        return
-      }
-    }
     await createNistBlockAsync(nistLatest)
   } catch (error) {
     console.error(`registerLockEvents : nistLock : unable to create NIST block: ${error.message}`)
@@ -1042,17 +1025,12 @@ let setNISTBlockInterval = () => {
     // if we are on a new minute
     if (now.getUTCMinutes() !== currentMinute) {
       currentMinute = now.getUTCMinutes()
-      if (nistBlockMinutes.includes(currentMinute)) {
-        // if the nistLatest is null, processing should not continue, defer to next interval
-        if (nistLatest === null) return
-        let randomFuzzyMS = await rand(0, maxFuzzyMS)
-        setTimeout(() => {
-          try {
-            nistLock.acquire()
-          } catch (error) {
-            console.error(`setNISTBlockInterval : acquire : ${error.message}`)
-          }
-        }, randomFuzzyMS)
+      if (nistBlockMinutes.includes(currentMinute) && IS_LEADER) {
+        try {
+          nistLock.acquire()
+        } catch (error) {
+          console.error('setNISTBlockInterval : acquire : %o', error.message)
+        }
       }
     }
   })
@@ -1126,6 +1104,29 @@ async function openRMQConnectionAsync (connectionString) {
   debug.general('openRMQConnectionAsync : end')
 }
 
+async function performLeaderElection () {
+  IS_LEADER = false
+  let leaderElectionConfig = {
+    key: env.CALENDAR_LEADER_KEY,
+    consul: {
+      host: env.CONSUL_HOST,
+      port: env.CONSUL_PORT,
+      ttl: 15,
+      lockDelay: 1
+    }
+  }
+
+  leaderElection(leaderElectionConfig)
+    .on('gainedLeadership', function () {
+      console.log('This service instance has been chosen to be leader')
+      IS_LEADER = true
+    })
+    .on('error', function () {
+      console.error('This lock session has been invalidated, new lock session will be created')
+      IS_LEADER = false
+    })
+}
+
 // This initalizes all the consul watches and JS intervals that fire all calendar events
 function startWatchesAndIntervals () {
   debug.general('startWatchesAndIntervals : begin')
@@ -1186,6 +1187,8 @@ async function start () {
   try {
     debug.general('start : init Sequelize connection')
     await openStorageConnectionAsync()
+    debug.general('start : init consul and perform leader election')
+    performLeaderElection()
     debug.general('start : init RabbitMQ connection')
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     debug.general('start : init watches and intervals')

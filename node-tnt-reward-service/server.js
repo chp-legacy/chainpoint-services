@@ -425,7 +425,11 @@ function setTNTRewardInterval () {
     if (now.getUTCMinutes() !== currentMinute) {
       currentMinute = now.getUTCMinutes()
       if (rewardMinutes.includes(currentMinute) && IS_LEADER) {
-        performRewardAsync()
+        try {
+          await performRewardAsync()
+        } catch (error) {
+          console.error('performRewardAsync err: ', error.message)
+        }
       }
     }
   })

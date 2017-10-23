@@ -81,9 +81,6 @@ let envDefinitions = {
   NIST_KEY: envalid.str({ default: 'service/nist/latest', desc: 'The consul key to write to, watch to receive updated NIST object' }),
   REG_NODES_LIMIT_KEY: envalid.str({ default: 'service/api/nodelimit', desc: 'The consul key to write to, watch to receive updated registered Nodes limit' }),
   CALENDAR_LOCK_KEY: envalid.str({ default: 'service/calendar/blockchain/lock', desc: 'Key used for acquiring calendar write locks' }),
-  CHALLENGE_LOCK_KEY: envalid.str({ default: 'service/audit/challenge/lock', desc: 'Key used for acquiring challenge generation locks' }),
-  LAST_AUDIT_KEY: envalid.str({ default: 'service/audit/last', desc: 'The consul key to write to, watch to receive updated last audit performed time' }),
-  AUDIT_LOCK_KEY: envalid.str({ default: 'service/audit/audit/lock', desc: 'Key used for acquiring audit processing locks' }),
 
   // RabbitMQ related variables
   RABBITMQ_CONNECT_URI: envalid.url({ default: 'amqp://chainpoint:chainpoint@rabbitmq', desc: 'Connection string w/ credentials for RabbitMQ' }),
@@ -143,6 +140,7 @@ let envDefinitions = {
   CALENDAR_INTERVAL_MS: envalid.num({ default: 10000, desc: 'The frequency to generate new calendar blocks, defaults to 10 seconds' }),
   ANCHOR_BTC_PER_HOUR: validateFactorOfSixty({ default: 2, desc: 'The number of times per hour to generate new btc-a blocks and btc anchoring, defaults to 2, must be a factor of 60, no greater than 20' }),
   NIST_BLOCKS_PER_HOUR: validateFactorOfSixty({ default: 2, desc: 'The number of NIST blocks to generate per hour, defaults to 2, must be a factor of 60, no greater than 20' }),
+  CALENDAR_LEADER_KEY: envalid.str({ default: 'service/calendar/leader/lock', desc: 'Key used for acquiring audit calendar process leadership locks' }),
 
   // NIST beacon service specific variables
   NIST_INTERVAL_MS: envalid.num({ default: 60000, desc: 'The frequency to get latest NIST beacon data, in milliseconds' }),
@@ -175,7 +173,8 @@ let envDefinitions = {
   RMQ_PREFETCH_COUNT_AUDIT: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
   NEW_AUDIT_CHALLENGES_PER_HOUR: validateFactorOfSixty({ default: 2, desc: 'The number of times per hour to generate new audit challenges, defaults to 2, must be a factor of 60, no greater than 20' }),
   NODE_AUDIT_ROUNDS_PER_HOUR: validateFactorOfSixtyUpToSixty({ default: 2, desc: 'The number of times per hour to perform Node audit rounds, defaults to 60, must be a factor of 60' }),
-  RMQ_WORK_IN_AUDIT_QUEUE: envalid.str({ default: 'work.audit', desc: 'The queue name for message consumption originating from the audit producer service' })
+  RMQ_WORK_IN_AUDIT_QUEUE: envalid.str({ default: 'work.audit', desc: 'The queue name for message consumption originating from the audit producer service' }),
+  AUDIT_PRODUDER_LEADER_KEY: envalid.str({ default: 'service/audit-producer/leader/lock', desc: 'Key used for acquiring audit producer process leadership locks' })
 }
 
 module.exports = (service) => {

@@ -25,22 +25,16 @@ const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
 const crypto = require('crypto')
 const rnd = require('random-number-csprng')
 const MerkleTools = require('merkle-tools')
-const cnsl = require('consul')
-const _ = require('lodash')
 const heartbeats = require('heartbeats')
 const amqp = require('amqplib')
-const bluebird = require('bluebird')
+const leaderElection = require('exp-leader-election')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
 let amqpChannel = null
 
-// Time of the last performed round of auditing
-// This value is updated from consul events as changes are detected
-let auditLatest = null
-
-// the fuzz factor for anchor interval meant to give each core instance a random chance of being first
-const maxFuzzyMS = 1000
+// The leadership status for this instance of the audit producer service
+let IS_LEADER = false
 
 // the amount of credits to top off all Nodes with daily
 const creditTopoffAmount = 86400
@@ -49,10 +43,6 @@ const creditTopoffAmount = 86400
 // 1 second heartbeats had a drift that caused occasional skipping of a whole second
 // decreasing the interval of the heartbeat and checking current time resolves this
 let heart = heartbeats.createHeart(200)
-
-let consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
-bluebird.promisifyAll(consul.kv)
-console.log('Consul connection established')
 
 // The merkle tools object for building trees and generating proof paths
 const merkleTools = new MerkleTools()
@@ -67,145 +57,34 @@ let AuditChallenge = auditChallenge.AuditChallenge
 let nodeAuditSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
 
-let challengeLockOpts = {
-  key: env.CHALLENGE_LOCK_KEY,
-  lockwaittime: '60s',
-  lockwaittimeout: '60s',
-  lockretrytime: '100ms',
-  session: {
-    behavior: 'delete',
-    checks: ['serfHealth'],
-    lockdelay: '1ms',
-    name: 'challenge-lock',
-    ttl: '30s'
-  }
-}
-
-let challengeLock = consul.lock(_.merge({}, challengeLockOpts, { value: 'challenge' }))
-
-let auditLockOpts = {
-  key: env.AUDIT_LOCK_KEY,
-  lockwaittime: '120s',
-  lockwaittimeout: '120s',
-  lockretrytime: '100ms',
-  session: {
-    behavior: 'delete',
-    checks: ['serfHealth'],
-    lockdelay: '1ms',
-    name: 'audit-lock',
-    ttl: '60s' // at 30s, the lock was deleting before large audit processes would complete
-  }
-}
-
-let auditLock = consul.lock(_.merge({}, auditLockOpts, { value: 'audit' }))
-
-function registerLockEvents (lock, lockName, acquireFunction) {
-  lock.on('acquire', () => {
-    console.log(`${lockName} acquired`)
-    acquireFunction()
-  })
-
-  lock.on('error', (err) => {
-    console.error(`${lockName} error - ${err}`)
-  })
-
-  lock.on('release', () => {
-    console.log(`${lockName} release`)
-  })
-}
-
-// LOCK HANDLERS : challenge
-registerLockEvents(challengeLock, 'challengeLock', async () => {
-  try {
-    let newChallengeIntervalMinutes = 60 / env.NEW_AUDIT_CHALLENGES_PER_HOUR
-    // check if the last challenge is at least newChallengeIntervalMinutes - oneMinuteMS old
-    // if not, return and release lock
-    let mostRecentChallenge = await AuditChallenge.findOne({ order: [['time', 'DESC']] })
-    if (mostRecentChallenge) {
-      let oneMinuteMS = 60000
-      let currentMS = Date.now()
-      let ageMS = currentMS - mostRecentChallenge.time
-      let lastChallengeTooRecent = (ageMS < (newChallengeIntervalMinutes * 60 * 1000 - oneMinuteMS))
-      if (lastChallengeTooRecent) {
-        let ageSec = Math.round(ageMS / 1000)
-        console.log(`No work: ${newChallengeIntervalMinutes} minutes must elapse between each new audit challenge. The last one was generated ${ageSec} seconds ago.`)
-        return
-      }
-    }
-    await generateAuditChallengeAsync()
-  } catch (error) {
-    console.error(`Unable to generate audit challenge: ${error.message}`)
-  } finally {
-    // always release lock
-    try {
-      challengeLock.release()
-    } catch (error) {
-      console.error(`challengeLock.release(): caught err: ${error.message}`)
-    }
-  }
-})
-
-// LOCK HANDLERS : challenge
-registerLockEvents(auditLock, 'auditLock', async () => {
-  try {
-    await auditNodesAsync()
-  } catch (error) {
-    console.error(`Unable to perform node audits: ${error.message}`)
-  } finally {
-    // always release lock
-    try {
-      auditLock.release()
-    } catch (error) {
-      console.error(`auditLock.release(): caught err: ${error.message}`)
-    }
-  }
-})
-
 // Retrieve all registered Nodes with public_uris for auditing.
 async function auditNodesAsync () {
-  // only perform these steps if the lastest audit round was at least 10 minutes ago
-  // to account for multiple Cores trying to process this interval at once
-  let auditDate = Date.now()
-  let maxPreviousAuditDate = auditDate - (10 * 60 * 1000)
-  let readyForNextAuditRound = parseInt(auditLatest || 0) < maxPreviousAuditDate
-  if (readyForNextAuditRound) {
-    // update auditLatest
-    try {
-      await consul.kv.setAsync(env.LAST_AUDIT_KEY, auditDate.toString())
-    } catch (error) {
-      console.error(`Unable to update consul LAST_AUDIT_KEY: ${error.message}`)
-      return
-    }
-
-    // get list of all Registered Nodes to audit
-    let nodesReadyForAudit = []
-    try {
-      nodesReadyForAudit = await RegisteredNode.findAll({ attributes: ['tntAddr', 'publicUri', 'tntCredit'] })
-      console.log(`${nodesReadyForAudit.length} public Nodes ready for audit were found`)
-    } catch (error) {
-      console.error(`Could not retrieve public Node list: ${error.message}`)
-    }
-
-    // iterate through each Registered Node, queue up an audit task for audit consumer
-    for (let x = 0; x < nodesReadyForAudit.length; x++) {
-      let auditTaskObj = {
-        tntAddr: nodesReadyForAudit[x].tntAddr,
-        publicUri: nodesReadyForAudit[x].publicUri,
-        tntCredit: nodesReadyForAudit[x].tntCredit
-      }
-      try {
-        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_AUDIT_QUEUE, Buffer.from(JSON.stringify(auditTaskObj)), { persistent: true })
-      } catch (error) {
-        console.error(env.RMQ_WORK_OUT_AGG_QUEUE, 'publish message nacked')
-      }
-    }
-    console.log(`Audit tasks queued for audit-consumer`)
-
-    // wait 1 minute and then prune any old data from the table
-    setTimeout(() => { pruneAuditDataAsync() }, 60000)
-  } else {
-    console.log(`Audit tasks have already been queued for this audit interval`)
+  // get list of all Registered Nodes to audit
+  let nodesReadyForAudit = []
+  try {
+    nodesReadyForAudit = await RegisteredNode.findAll({ attributes: ['tntAddr', 'publicUri', 'tntCredit'] })
+    console.log(`${nodesReadyForAudit.length} public Nodes ready for audit were found`)
+  } catch (error) {
+    console.error(`Could not retrieve public Node list: ${error.message}`)
   }
+
+  // iterate through each Registered Node, queue up an audit task for audit consumer
+  for (let x = 0; x < nodesReadyForAudit.length; x++) {
+    let auditTaskObj = {
+      tntAddr: nodesReadyForAudit[x].tntAddr,
+      publicUri: nodesReadyForAudit[x].publicUri,
+      tntCredit: nodesReadyForAudit[x].tntCredit
+    }
+    try {
+      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_AUDIT_QUEUE, Buffer.from(JSON.stringify(auditTaskObj)), { persistent: true })
+    } catch (error) {
+      console.error(env.RMQ_WORK_OUT_AGG_QUEUE, 'publish message nacked')
+    }
+  }
+  console.log(`Audit tasks queued for audit-consumer`)
+
+  // wait 1 minute and then prune any old data from the table
+  setTimeout(() => { pruneAuditDataAsync() }, 60000)
 }
 
 // Generate a new audit challenge for the Nodes. Audit challenges should be refreshed hourly.
@@ -353,6 +232,29 @@ async function openRMQConnectionAsync (connectionString) {
   }
 }
 
+async function performLeaderElection () {
+  IS_LEADER = false
+  let leaderElectionConfig = {
+    key: env.AUDIT_PRODUDER_LEADER_KEY,
+    consul: {
+      host: env.CONSUL_HOST,
+      port: env.CONSUL_PORT,
+      ttl: 15,
+      lockDelay: 1
+    }
+  }
+
+  leaderElection(leaderElectionConfig)
+    .on('gainedLeadership', function () {
+      console.log('This service instance has been chosen to be leader')
+      IS_LEADER = true
+    })
+    .on('error', function () {
+      console.error('This lock session has been invalidated, new lock session will be created')
+      IS_LEADER = false
+    })
+}
+
 async function checkForGenesisBlockAsync () {
   let genesisBlock
   while (!genesisBlock) {
@@ -385,15 +287,12 @@ function setGenerateNewChallengeInterval () {
     // if we are on a new minute
     if (now.getUTCMinutes() !== currentMinute) {
       currentMinute = now.getUTCMinutes()
-      if (newChallengeMinutes.includes(currentMinute)) {
-        let randomFuzzyMS = await rnd(0, maxFuzzyMS)
-        setTimeout(() => {
-          try {
-            challengeLock.acquire()
-          } catch (error) {
-            console.error('challengeLock.acquire(): caught err: ', error.message)
-          }
-        }, randomFuzzyMS)
+      if (newChallengeMinutes.includes(currentMinute) && IS_LEADER) {
+        try {
+          await generateAuditChallengeAsync()
+        } catch (error) {
+          console.error('generateAuditChallengeAsync err: ', error.message)
+        }
       }
     }
   })
@@ -420,15 +319,12 @@ function setPerformNodeAuditInterval () {
     // if we are on a new minute
     if (now.getUTCMinutes() !== currentMinute) {
       currentMinute = now.getUTCMinutes()
-      if (nodeAuditRoundsMinutes.includes(currentMinute)) {
-        let randomFuzzyMS = await rnd(0, maxFuzzyMS)
-        setTimeout(() => {
-          try {
-            auditLock.acquire()
-          } catch (error) {
-            console.error('auditLock.acquire(): caught err: ', error.message)
-          }
-        }, randomFuzzyMS)
+      if (nodeAuditRoundsMinutes.includes(currentMinute) && IS_LEADER) {
+        try {
+          await auditNodesAsync()
+        } catch (error) {
+          console.error('auditNodesAsync err: ', error.message)
+        }
       }
     }
   })
@@ -449,30 +345,14 @@ function setPerformCreditTopoffInterval () {
 }
 
 async function startWatchesAndIntervalsAsync () {
-  // Continuous watch on the consul key
-  var lastAuditWatch = consul.watch({ method: consul.kv.get, options: { key: env.LAST_AUDIT_KEY } })
-
-  // Store the updated object on change
-  lastAuditWatch.on('change', async function (data, res) {
-    // process only if a value has been returned and it is different than what is already stored
-    if (data && data.Value && auditLatest !== data.Value) {
-      auditLatest = data.Value
-    }
-  })
-
-  lastAuditWatch.on('error', function (err) {
-    console.error('lastAuditWatch error: ', err)
-  })
-
-  // attempt to generate a new audit chalenge on startup
-  let randomFuzzyMS = await rnd(0, maxFuzzyMS)
-  setTimeout(() => {
+  // attempt to generate a new audit challenge on startup
+  if (IS_LEADER) {
     try {
-      challengeLock.acquire()
+      await generateAuditChallengeAsync()
     } catch (error) {
-      console.error('challengeLock.acquire(): caught err: ', error.message)
+      console.error('generateAuditChallengeAsync err: ', error.message)
     }
-  }, randomFuzzyMS)
+  }
 
   setGenerateNewChallengeInterval()
   setPerformNodeAuditInterval()
@@ -485,6 +365,8 @@ async function start () {
   try {
     // init DB
     await openStorageConnectionAsync()
+    // init consul and perform leader election
+    performLeaderElection()
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // ensure at least 1 calendar block exist

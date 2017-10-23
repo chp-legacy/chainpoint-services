@@ -143,6 +143,12 @@ combined-stream@^1.0.5, combined-stream@~1.0.5:
   dependencies:
     delayed-stream "~1.0.0"
 
+consul@^0.25.0:
+  version "0.25.0"
+  resolved "https://registry.yarnpkg.com/consul/-/consul-0.25.0.tgz#05c06a667689220427055de92c6458ded79ff2ed"
+  dependencies:
+    papi "^0.25.0"
+
 consul@^0.30.0:
   version "0.30.0"
   resolved "https://registry.yarnpkg.com/consul/-/consul-0.30.0.tgz#8ae6719b46674dd15a95b7614881bfc5b9e4eac3"
@@ -236,6 +242,13 @@ envalid@^4.1.1:
 escape-string-regexp@^1.0.5:
   version "1.0.5"
   resolved "https://registry.yarnpkg.com/escape-string-regexp/-/escape-string-regexp-1.0.5.tgz#1b61c0562190a8dff6ae3bb2cf0200ca130b86d4"
+
+exp-leader-election@^0.2.2:
+  version "0.2.2"
+  resolved "https://registry.yarnpkg.com/exp-leader-election/-/exp-leader-election-0.2.2.tgz#8e03ecf30436e51c0019121c84c8b72a3b832e85"
+  dependencies:
+    consul "^0.25.0"
+    lodash "^4.5.1"
 
 extend@~3.0.1:
   version "3.0.1"
@@ -396,7 +409,7 @@ jsprim@^1.2.2:
     json-schema "0.2.3"
     verror "1.10.0"
 
-lodash@^4.13.1, lodash@^4.14.0, lodash@^4.17.1, lodash@^4.17.4:
+lodash@^4.13.1, lodash@^4.14.0, lodash@^4.17.1, lodash@^4.17.4, lodash@^4.5.1:
   version "4.17.4"
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.4.tgz#78203a4d1c328ae1d86dca6460e369b57f4055ae"
 
@@ -452,6 +465,10 @@ object-assign@4.1.0:
 packet-reader@0.3.1:
   version "0.3.1"
   resolved "https://registry.yarnpkg.com/packet-reader/-/packet-reader-0.3.1.tgz#cd62e60af8d7fea8a705ec4ff990871c46871f27"
+
+papi@^0.25.0:
+  version "0.25.1"
+  resolved "https://registry.yarnpkg.com/papi/-/papi-0.25.1.tgz#a54c022b1780f9240fae6aa1e861b21c9f8f12d9"
 
 papi@^0.27.0:
   version "0.27.0"
