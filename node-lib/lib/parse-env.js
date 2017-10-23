@@ -154,7 +154,7 @@ let envDefinitions = {
   RMQ_OUTGOING_EXCHANGE: envalid.str({ default: 'exchange.headers', desc: 'The exchange for publishing messages bound for API Service instances' }),
 
   // Proof State service specific variables
-  RMQ_PREFETCH_COUNT_STATE: envalid.num({ default: 10, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
+  RMQ_PREFETCH_COUNT_STATE: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
   RMQ_WORK_IN_STATE_QUEUE: envalid.str({ default: 'work.proofstate', desc: 'The queue name for message consumption originating from the aggregator, calendar, and proof state services' }),
   PRUNE_FREQUENCY_MINUTES: envalid.num({ default: 1, desc: 'The frequency that the proof state and hash tracker log tables have their old, unneeded data pruned, in minutes' }),
 

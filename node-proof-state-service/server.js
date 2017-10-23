@@ -64,8 +64,9 @@ async function ConsumeAggregationMessageAsync (msg) {
 
     try {
       await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(aggObj)), { persistent: true, type: 'aggregator' })
+      console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[aggregator] publish message acked', aggObj.agg_id)
     } catch (error) {
-      console.error(`${env.RMQ_WORK_OUT_CAL_QUEUE} publish message nacked`)
+      console.error(`${env.RMQ_WORK_OUT_CAL_QUEUE} [aggregator] publish message nacked ${aggObj.agg_id}`)
       throw new Error(error.message)
     }
 
@@ -315,6 +316,7 @@ async function openRMQConnectionAsync (connectionString) {
       // the connection and channel have been established
       chan.assertQueue(env.RMQ_WORK_IN_STATE_QUEUE, { durable: true })
       chan.assertQueue(env.RMQ_WORK_OUT_GEN_QUEUE, { durable: true })
+      chan.assertQueue(env.RMQ_WORK_OUT_CAL_QUEUE, { durable: true })
       chan.prefetch(env.RMQ_PREFETCH_COUNT_STATE)
       amqpChannel = chan
       // Continuously load the HASHES from RMQ with hash objects to process

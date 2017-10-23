@@ -246,6 +246,7 @@ function processMessage (msg) {
           consumeBtcTxMessageAsync(msg)
         } else {
           // BTC anchoring has been disabled, ack message and do nothing
+          console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] publish message acked : btc disabled', msg.btctx_id)
           amqpChannel.ack(msg)
         }
         break
@@ -255,6 +256,7 @@ function processMessage (msg) {
           consumeBtcMonMessage(msg)
         } else {
           // BTC anchoring has been disabled, ack message and do nothing
+          console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] publish message acked : eth disabled', msg.ethtx_id)
           amqpChannel.ack(msg)
         }
         break
@@ -336,10 +338,10 @@ async function consumeBtcTxMessageAsync (msg) {
     ], (err, results) => {
       if (err) {
         amqpChannel.nack(msg)
-        console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] consume message nacked')
+        console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] consume message nacked', btcTxObj.btctx_id)
       } else {
         amqpChannel.ack(msg)
-        // console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] consume message acked')
+        console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] consume message acked', btcTxObj.btctx_id)
       }
     })
   }
@@ -492,7 +494,8 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
         // nack consumption of all original hash messages part of this aggregation event
         if (message !== null) {
           amqpChannel.nack(message)
-          console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[aggregator] consume message nacked')
+          let rootObj = JSON.parse(message.content.toString())
+          console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[aggregator] consume message nacked', rootObj.agg_id)
         }
       })
       throw new Error(err)
@@ -500,8 +503,9 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
       _.forEach(messages, (message) => {
         if (message !== null) {
           // ack consumption of all original hash messages part of this aggregation event
+          let rootObj = JSON.parse(message.content.toString())
           amqpChannel.ack(message)
-          // console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[aggregator] consume message acked')
+          console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[aggregator] consume message acked', rootObj.agg_id)
         }
       })
     }
@@ -855,13 +859,13 @@ registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
         // An error as occurred publishing a message
         console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[btcmon] publish message nacked')
         amqpChannel.nack(msg)
-        console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[btcmon] consume message nacked')
+        console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[btcmon] consume message nacked', stateObj.btctx_id)
         throw new Error(`Unable to publish state message: ${error.message}`)
       }
 
       // ack consumption of all original hash messages part of this aggregation event
       amqpChannel.ack(msg)
-      // console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btcmon] consume message acked')
+      console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btcmon] consume message acked', stateObj.btctx_id)
     }
   } catch (error) {
     console.error(error.message)
@@ -1021,12 +1025,12 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
       await createRewardBlockAsync(dataId, dataVal)
       // ack consumption of all original hash messages part of this aggregation event
       amqpChannel.ack(msg)
-      // console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[reward] consume message acked')
+      console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[reward] consume message acked', rewardMsgObj.node.address)
     } catch (error) {
       // ack consumption of all original message
       // this message must be acked to avoid reward distribution to node from occuring again
       amqpChannel.ack(msg)
-      console.error(env.RMQ_WORK_IN_CAL_QUEUE, `[reward] consume message acked with error: ${error.message}`)
+      console.error(env.RMQ_WORK_IN_CAL_QUEUE, `[reward] consume message acked with error: ${error.message} ${rewardMsgObj.node.address}`)
       throw new Error(`Unable to create reward block: ${error.message}`)
     }
   } catch (error) {

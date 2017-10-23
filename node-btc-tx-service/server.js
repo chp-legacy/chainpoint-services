@@ -133,11 +133,11 @@ async function processIncomingAnchorBTCJobAsync (msg) {
       messageObj.btctx_body = txResult.rawTx
       try {
         await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(messageObj)), { persistent: true, type: 'btctx' })
+        console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[btctx] publish message acked', messageObj.btctx_id)
       } catch (error) {
-        console.error(env.RMQ_WORK_OUT_CAL_QUEUE, '[calendar] publish message nacked')
+        console.error(env.RMQ_WORK_OUT_CAL_QUEUE, '[btctx] publish message nacked', messageObj.btctx_id)
         throw new Error(`Unable to publish to RMQ_WORK_OUT_CAL_QUEUE: ${error.message}`)
       }
-      // console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[calendar] publish message acked')
       amqpChannel.ack(msg)
     } catch (error) {
       // An error has occurred publishing the transaction, nack consumption of message
