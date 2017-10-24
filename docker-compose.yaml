@@ -1,4 +1,4 @@
-version: '2'
+version: '2.1'
 
 networks:
   chainpoint:
@@ -377,8 +377,8 @@ services:
     networks:
       - chainpoint
 
-# Testing Ethereum blockchain service
-#
+  # Testing Ethereum blockchain service
+  #
   testrpc:
     image: quay.io/chainpoint/testrpc:${DOCKER_TAG}
     build:
