@@ -435,81 +435,70 @@ let generateCalendarTree = () => {
 
 // Write tree to calendar block DB and also to proof state service via RMQ
 let persistCalendarTreeAsync = async (treeDataObj) => {
-  // Store Merkle root of calendar in DB and chain to previous calendar entries
-  let block = await createCalendarBlockAsync(treeDataObj.cal_root.toString('hex'))
-  async.waterfall([
-    async.constant(block),
-    // queue proof state messages for each aggregation root in the tree
-    (block, callback) => {
-      // for each aggregation root, queue up message containing
-      // updated proof state bound for proof state service
-      async.each(treeDataObj.proofData, (proofDataItem, eachCallback) => {
-        let stateObj = {}
-        stateObj.agg_id = proofDataItem.agg_id
-        stateObj.cal_id = block.id
-        stateObj.cal_state = {}
-        // add ops connecting agg_root to cal_root
-        stateObj.cal_state.ops = proofDataItem.proof
-        // add ops extending proof path beyond cal_root to calendar block's block_hash
-        stateObj.cal_state.ops.push({ l: `${block.id}:${block.time}:${block.version}:${block.stackId}:${block.type}:${block.dataId}` })
-        stateObj.cal_state.ops.push({ r: block.prevHash })
-        stateObj.cal_state.ops.push({ op: 'sha-256' })
-
-        // Build the anchors uris using the locations configured in CHAINPOINT_CORE_BASE_URI
-        let BASE_URIS = [env.CHAINPOINT_CORE_BASE_URI]
-        let uris = []
-        for (let x = 0; x < BASE_URIS.length; x++) uris.push(`${BASE_URIS[x]}/calendar/${block.id}/hash`)
-        stateObj.cal_state.anchor = {
-          anchor_id: block.id,
-          uris: uris
-        }
-
-        amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(stateObj)), { persistent: true, type: 'cal' },
-          (err, ok) => {
-            if (err !== null) {
-              // An error as occurred publishing a message
-              console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[cal] publish message nacked')
-              return eachCallback(err)
-            } else {
-              // New message has been published
-              // console.log(env.RMQ_WORK_OUT_STATE_QUEUE, '[cal] publish message acked')
-              return eachCallback(null)
-            }
-          })
-      }, (err) => {
-        if (err) {
-          return callback(err)
-        } else {
-          let messages = treeDataObj.proofData.map((proofDataItem) => {
-            return proofDataItem.agg_msg
-          })
-          return callback(null, messages)
-        }
-      })
-    }
-  ], (err, messages) => {
-    // messages contains an array of agg_msg objects
-    if (err) {
-      _.forEach(messages, (message) => {
-        // nack consumption of all original hash messages part of this aggregation event
-        if (message !== null) {
-          amqpChannel.nack(message)
-          let rootObj = JSON.parse(message.content.toString())
-          console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[aggregator] consume message nacked', rootObj.agg_id)
-        }
-      })
-      throw new Error(err)
-    } else {
-      _.forEach(messages, (message) => {
-        if (message !== null) {
-          // ack consumption of all original hash messages part of this aggregation event
-          let rootObj = JSON.parse(message.content.toString())
-          amqpChannel.ack(message)
-          console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[aggregator] consume message acked', rootObj.agg_id)
-        }
-      })
-    }
+  // get an array of messages to be acked or nacked in this process
+  let messages = treeDataObj.proofData.map((proofDataItem) => {
+    return proofDataItem.agg_msg
   })
+
+  try {
+    // Store Merkle root of calendar in DB and chain to previous calendar entries
+    let block = await createCalendarBlockAsync(treeDataObj.cal_root.toString('hex'))
+
+    // queue proof state messages for each aggregation root in the tree
+    // for each aggregation root, queue up message containing
+    // updated proof state bound for proof state service
+    for (let x = 0; x < treeDataObj.proofData.length; x++) {
+      let proofDataItem = treeDataObj.proofData[x]
+      let stateObj = {}
+      stateObj.agg_id = proofDataItem.agg_id
+      stateObj.cal_id = block.id
+      stateObj.cal_state = {}
+      // add ops connecting agg_root to cal_root
+      stateObj.cal_state.ops = proofDataItem.proof
+      // add ops extending proof path beyond cal_root to calendar block's block_hash
+      stateObj.cal_state.ops.push({ l: `${block.id}:${block.time}:${block.version}:${block.stackId}:${block.type}:${block.dataId}` })
+      stateObj.cal_state.ops.push({ r: block.prevHash })
+      stateObj.cal_state.ops.push({ op: 'sha-256' })
+
+      // Build the anchors uris using the locations configured in CHAINPOINT_CORE_BASE_URI
+      let BASE_URIS = [env.CHAINPOINT_CORE_BASE_URI]
+      let uris = []
+      for (let x = 0; x < BASE_URIS.length; x++) uris.push(`${BASE_URIS[x]}/calendar/${block.id}/hash`)
+      stateObj.cal_state.anchor = {
+        anchor_id: block.id,
+        uris: uris
+      }
+
+      try {
+        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(stateObj)), { persistent: true, type: 'cal' })
+        // New message has been published
+        // console.log(env.RMQ_WORK_OUT_STATE_QUEUE, '[cal] publish message acked')
+      } catch (error) {
+        // An error as occurred publishing a message
+        console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[cal] publish message nacked')
+        throw new Error(`Unable to publish state message: ${error.message}`)
+      }
+    }
+
+    _.forEach(messages, (message) => {
+      if (message !== null) {
+        // ack consumption of all original messages part of this aggregation event
+        let rootObj = JSON.parse(message.content.toString())
+        amqpChannel.ack(message)
+        console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[aggregator] consume message acked', rootObj.agg_id)
+      }
+    })
+  } catch (error) {
+    _.forEach(messages, (message) => {
+      // nack consumption of all original messages part of this aggregation event
+      if (message !== null) {
+        amqpChannel.nack(message)
+        let rootObj = JSON.parse(message.content.toString())
+        console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[aggregator] consume message nacked', rootObj.agg_id)
+      }
+    })
+    throw new Error(error.message)
+  }
 }
 
 // Aggregate all block hashes on chain since last BTC anchor block, add new
