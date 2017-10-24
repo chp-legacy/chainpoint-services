@@ -1,12 +1,11 @@
-# chainpoint-services
+# Chainpoint Services
 
 [![JavaScript Style Guide](https://cdn.rawgit.com/feross/standard/master/badge.svg)](https://github.com/feross/standard)
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-Chainpoint Services is the Core of the Tierion Network and
-a modern [microservices architecture](https://martinfowler.com/articles/microservices.html)
-that implements the [Chainpoint](https://chainpoint.org) API.
+Chainpoint Services is at the Core of the Tierion Network and
+built as a modern [microservices architecture](https://martinfowler.com/articles/microservices.html).
 
 The services provided are generally composed of Node.js applications
 running within Alpine Linux Docker containers. These containers,
@@ -26,8 +25,8 @@ This software is intended to be run as the Core of the Tierion Network. It is no
 
 ## TL;DR
 
-Build and start the whole system locally. After the first run of `make` try `make help`
-to see additional helper commands available. Shut it all down with `make down`.
+Build and start the whole system locally with `make up`. Running `make help`
+will display additional `Makefile` commands that are available.
 
 ```
 git clone https://github.com/chainpoint/chainpoint-services
@@ -50,37 +49,6 @@ installation package which can be found [here](https://www.docker.com/docker-mac
 On Linux systems you may need to [install](https://docs.docker.com/compose/install/) `docker-compose`
 separately in addition to Docker.
 
-### Setup PATH
-
-For your convenience we provide most of the other dependencies you might need
-as shell script wrappers that let you use containerized applications
-with no need to install them locally.
-
-These wrappers are provided in the `./bin` directory.
-
-You can execute them by calling them directly:
-
-```
-./bin/yarn -h
-```
-
-Or by adding the `./bin` directory to the beginning of your `$PATH`
-environment variable. This will ensure that these packaged commands,
-which will be locked to the same versions we developed with, will
-be available to you as well.
-
-```
-export PATH="$PWD/bin:$PATH"
-```
-
-You'll need to apply that `export` statement to
-every open terminal shell you intend to use, or
-you can add it to a config file like `~/.bash_profile`.
-
-If you do add that directory to your path any
-references to `./bin/COMMAND` that you see below
-can be shorted to just the command name.
-
 ### Setup Environment Variables
 
 You will need to set up environment variables before building.
@@ -91,7 +59,7 @@ You can modify the `.env` as needed, any changes will be ignored by Git.
 
 ## Startup
 
-Running `make` should build and start all services for you.
+Running `make up` should build and start all services for you.
 
 ## License
 
