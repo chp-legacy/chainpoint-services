@@ -33,9 +33,10 @@ build-config:
 ## build                     : Build all
 .PHONY : build
 build:
-	./bin/docker-make --no-push
+	docker run --rm -w /usr/src/app -v ~/.docker:/root/.docker -v /var/run/docker.sock:/var/run/docker.sock -v "$(PWD)":/usr/src/app jizhilong/docker-make:latest docker-make --no-push
 	docker container prune -f
 	docker-compose build
+
 
 ## pull                      : Pull Docker images
 .PHONY : pull
@@ -45,7 +46,7 @@ pull:
 ## push                      : Push Docker images using docker-make
 .PHONY : push
 push:
-	./bin/docker-make
+	docker run --rm -w /usr/src/app -v ~/.docker:/root/.docker -v /var/run/docker.sock:/var/run/docker.sock -v "$(PWD)":/usr/src/app jizhilong/docker-make:latest docker-make
 
 ## test-api                  : Run API test suite with Mocha
 .PHONY : test-api
@@ -101,13 +102,6 @@ prune: down
 	docker volume prune -f
 	docker network prune -f
 
-## prune-oldskool            : Shutdown and destroy all docker assets using the older method
-.PHONY : prune-oldskool
-prune-oldskool: down
-	docker rm $(docker ps -a -f status=exited -q)
-	docker rmi $(docker images -f dangling=true -q)
-	docker volume rm $(docker volume ls -f dangling=true -q)
-
 ## burn                      : Burn it all down and destroy the data. Start it again yourself!
 .PHONY : burn
 burn: clean prune
@@ -116,15 +110,21 @@ burn: clean prune
 	@echo "Services stopped, and data pruned. Run 'make up' or 'make up-no-build' now."
 	@echo "****************************************************************************"
 
+## yarn            : Install Node Javascript dependencies
+.PHONY : yarn
+yarn:
+	docker run -it --rm --volume "$(PWD)":/usr/src/app --volume /var/run/docker.sock:/var/run/docker.sock --volume ~/.docker:/root/.docker --volume "$(PWD)":/wd --workdir /wd quay.io/chainpoint/node-base:latest yarn
+
 ## postgres                  : Connect to the local PostgreSQL with `psql`
 .PHONY : postgres
 postgres:
 	@docker-compose up -d postgres
-	@sleep 4
-	@./bin/psql
+	@sleep 6
+	@docker exec -it postgres-core psql -U chainpoint
 
 ## redis                     : Connect to the local Redis with `redis-cli`
 .PHONY : redis
 redis:
 	@docker-compose up -d redis
-	@./bin/redis-cli
+	@sleep 2
+	@docker exec -it redis-core redis-cli
