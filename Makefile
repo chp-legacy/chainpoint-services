@@ -13,7 +13,12 @@ $(foreach bin,$(REQUIRED_BINS),\
 help : Makefile
 	@sed -n 's/^##//p' $<
 
-## cockroachdb-reset         : Bring the system down, delete CDB data, setup DB as needed, and start cluster
+## cockroach                 : Local CockroachDB console
+.PHONY : cockroachdb
+cockroach:
+	./bin/cockroach --insecure -d chainpoint sql
+
+## cockroachdb-reset         : Bring the system down, delete CockroachDB data, setup DB as needed, and start cluster
 .PHONY : cockroachdb-reset
 cockroachdb-reset: down
 	./bin/cockroach-setup -d
@@ -110,7 +115,7 @@ burn: clean prune
 	@echo "Services stopped, and data pruned. Run 'make up' or 'make up-no-build' now."
 	@echo "****************************************************************************"
 
-## yarn            : Install Node Javascript dependencies
+## yarn                      : Install Node Javascript dependencies
 .PHONY : yarn
 yarn:
 	docker run -it --rm --volume "$(PWD)":/usr/src/app --volume /var/run/docker.sock:/var/run/docker.sock --volume ~/.docker:/root/.docker --volume "$(PWD)":/wd --workdir /wd quay.io/chainpoint/node-base:latest yarn
