@@ -42,7 +42,6 @@ build:
 	docker container prune -f
 	docker-compose build
 
-
 ## pull                      : Pull Docker images
 .PHONY : pull
 pull:
