@@ -18,7 +18,7 @@
     "bunyan": "^1.8.12",
     "chainpoint-binary": "^4.0.0",
     "chainpoint-parse": "^2.0.2",
-    "consul": "^0.29.0",
+    "consul": "^0.30.0",
     "envalid": "^3.1.1",
     "ip": "^1.1.5",
     "lodash": "^4.17.4",
