@@ -1178,7 +1178,7 @@ async function openRMQConnectionAsync (connectionString) {
       chan.assertQueue(env.RMQ_WORK_OUT_STATE_QUEUE, { durable: true })
       chan.assertQueue(env.RMQ_WORK_OUT_BTCTX_QUEUE, { durable: true })
       chan.assertQueue(env.RMQ_WORK_OUT_BTCMON_QUEUE, { durable: true })
-      chan.prefetch(env.RMQ_PREFETCH_COUNT)
+      chan.prefetch(env.RMQ_PREFETCH_COUNT_CAL)
       // set 'amqpChannel' so that publishers have access to the channel
       amqpChannel = chan
       chan.consume(env.RMQ_WORK_IN_CAL_QUEUE, (msg) => {
