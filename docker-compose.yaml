@@ -362,6 +362,9 @@ services:
   #
   # CockroachDB Admin UI: http://127.0.0.1:8080
   #
+  # Enable slow query logging with COCKROACH_TRACE_SQL and:
+  #   SET CLUSTER SETTING sql.trace.log_statement_execute = true;
+  #
   roach1:
     restart: always
     image: cockroachdb/cockroach:v1.1.1
@@ -376,6 +379,8 @@ services:
       - --insecure
     networks:
       - chainpoint
+    environment:
+      COCKROACH_TRACE_SQL: "1000ms"
 
   # Testing Ethereum blockchain service
   #
