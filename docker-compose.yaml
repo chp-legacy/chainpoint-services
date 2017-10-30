@@ -172,6 +172,11 @@ services:
       ANCHOR_BTC: ${ANCHOR_BTC}
       ANCHOR_ETH: ${ANCHOR_ETH}
       SIGNING_SECRET_KEY: ${SIGNING_SECRET_KEY}
+      DEBUG: "calendar:*"
+      DEBUG_HIDE_DATE: "false"
+      # DEBUG_COLORS: "true"
+      DEBUG_DEPTH: 10
+      DEBUG_SHOW_HIDDEN: "enabled"
 
   # Bitcoin Transmit
   # Send Calendar Block Merkle roots to be embedded in a BTC transaction.

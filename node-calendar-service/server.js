@@ -30,6 +30,16 @@ const heartbeats = require('heartbeats')
 const rand = require('random-number-csprng')
 const rp = require('request-promise-native')
 
+var debug = {
+  general: require('debug')('calendar:general'),
+  genesis: require('debug')('calendar:block:genesis'),
+  calendar: require('debug')('calendar:block:calendar'),
+  btcAnchor: require('debug')('calendar:block:btcAnchor'),
+  btcConfirm: require('debug')('calendar:block:btcConfirm'),
+  reward: require('debug')('calendar:block:reward'),
+  nist: require('debug')('calendar:block:nist')
+}
+
 // TweetNaCl.js
 // see: http://ed25519.cr.yp.to
 // see: https://github.com/dchest/tweetnacl-js#signatures
@@ -79,7 +89,7 @@ let sequelize = calendarBlock.sequelize
 let CalendarBlock = calendarBlock.CalendarBlock
 
 let consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
-console.log('Consul connection established')
+debug.general('consul connection established')
 
 // Calculate the hash of the signing public key bytes
 // to allow lookup of which pubkey was used to sign
@@ -114,6 +124,7 @@ let calcBlockHashSigB64 = (blockHashHex) => {
 
 // The write function used by all block creation functions to write to calendar blockchain
 let writeBlockAsync = async (height, type, dataId, dataVal, prevHash, friendlyName) => {
+  debug.general(`writeBlockAsync : begin : ${friendlyName}`)
   let b = {}
   b.id = height
   b.time = Math.trunc(Date.now() / 1000)
@@ -133,98 +144,97 @@ let writeBlockAsync = async (height, type, dataId, dataVal, prevHash, friendlyNa
 
   try {
     let block = await CalendarBlock.create(b)
-    console.log(`${friendlyName} BLOCK: id: ${block.get({ plain: true }).id}`)
+    debug.general(`writeBlockAsync : wrote ${friendlyName} block : id : ${block.get({ plain: true }).id}`)
     return block.get({ plain: true })
   } catch (error) {
-    throw new Error(`${friendlyName} BLOCK create error: ${error.message}: ${error.stack}`)
+    throw new Error(`writeBlockAsync : ${friendlyName} error : ${error.message}: ${error.stack}`)
   }
 }
 
 let createGenesisBlockAsync = async () => {
-  let writeResult = await writeBlockAsync(0, 'gen', '0', zeroStr, zeroStr, 'GENESIS')
-  return writeResult
+  debug.genesis(`createGenesisBlockAsync : begin`)
+  await writeBlockAsync(0, 'gen', '0', zeroStr, zeroStr, 'GENESIS')
 }
 
 let createCalendarBlockAsync = async (root) => {
-  // Find the last block written so we can incorporate its hash as prevHash
-  // in the new block and increment its block ID by 1.
+  debug.calendar(`createCalendarBlockAsync : begin`)
   try {
     let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
     if (prevBlock) {
       let newId = parseInt(prevBlock.id, 10) + 1
+      debug.calendar(`createCalendarBlockAsync : prevBlock found : ${newId}`)
       return await writeBlockAsync(newId, 'cal', newId.toString(), root.toString(), prevBlock.hash, 'CAL')
     } else {
-      throw new Error('no genesis block found')
+      throw new Error('no calendar block found')
     }
   } catch (error) {
-    throw new Error(`Could not write calendar block: ${error.message}`)
+    throw new Error(`createCalendarBlockAsync : could not write calendar block: ${error.message}`)
   }
 }
 
 let createNistBlockAsync = async (nistDataObj) => {
-  // Find the last block written so we can incorporate its hash as prevHash
-  // in the new block and increment its block ID by 1.
+  debug.nist(`createNistBlockAsync : begin`)
   try {
     let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
     if (prevBlock) {
       let newId = parseInt(prevBlock.id, 10) + 1
+      debug.nist(`createNistBlockAsync : prevBlock found : ${newId}`)
       let dataId = nistDataObj.split(':')[0].toString() // the epoch timestamp for this NIST entry
       let dataVal = nistDataObj.split(':')[1].toString()  // the hex value for this NIST entry
       return await writeBlockAsync(newId, 'nist', dataId, dataVal, prevBlock.hash, 'NIST')
     } else {
-      throw new Error('no genesis block found')
+      throw new Error('no NIST block found')
     }
   } catch (error) {
-    throw new Error(`Could not write NIST block: ${error.message}`)
+    throw new Error(`createNistBlockAsync : could not write NIST block: ${error.message}`)
   }
 }
 
 let createBtcAnchorBlockAsync = async (root) => {
-  // Find the last block written so we can incorporate its hash as prevHash
-  // in the new block and increment its block ID by 1.
+  debug.btcAnchor(`createBtcAnchorBlockAsync : begin`)
   try {
     let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
     if (prevBlock) {
       let newId = parseInt(prevBlock.id, 10) + 1
-      console.log(newId, 'btc-a', '', root.toString(), prevBlock.hash, 'BTC-ANCHOR')
+      debug.btcAnchor(`createBtcAnchorBlockAsync : prevBlock found : ${newId} : btc-a : '' : ${root.toString()} : ${prevBlock.hash} : 'BTC-ANCHOR'`)
       return await writeBlockAsync(newId, 'btc-a', '', root.toString(), prevBlock.hash, 'BTC-ANCHOR')
     } else {
-      throw new Error('no genesis block found')
+      throw new Error('no BTC anchor block found')
     }
   } catch (error) {
-    throw new Error(`Could not write btc anchor block: ${error.message}`)
+    throw new Error(`createBtcAnchorBlockAsync : could not write BTC anchor block: ${error.message}`)
   }
 }
 
 let createBtcConfirmBlockAsync = async (height, root) => {
-  // Find the last block written so we can incorporate its hash as prevHash
-  // in the new block and increment its block ID by 1.
+  debug.btcConfirm(`createBtcConfirmBlockAsync : begin`)
   try {
     let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
     if (prevBlock) {
       let newId = parseInt(prevBlock.id, 10) + 1
+      debug.btcConfirm(`createBtcConfirmBlockAsync : prevBlock found : ${newId}`)
       return await writeBlockAsync(newId, 'btc-c', height.toString(), root.toString(), prevBlock.hash, 'BTC-CONFIRM')
     } else {
-      throw new Error('no genesis block found')
+      throw new Error('no BTC confirm block found')
     }
   } catch (error) {
-    throw new Error(`Could not write btc confirm block: ${error.message}`)
+    throw new Error(`could not write BTC confirm block: ${error.message}`)
   }
 }
 
 let createRewardBlockAsync = async (dataId, dataVal) => {
-  // Find the last block written so we can incorporate its hash as prevHash
-  // in the new block and increment its block ID by 1.
+  debug.reward(`createRewardBlockAsync : begin`)
   try {
     let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
     if (prevBlock) {
       let newId = parseInt(prevBlock.id, 10) + 1
+      debug.reward(`createRewardBlockAsync : prevBlock found : ${newId}`)
       return await writeBlockAsync(newId, 'reward', dataId.toString(), dataVal.toString(), prevBlock.hash, 'REWARD')
     } else {
-      throw new Error('no genesis block found')
+      throw new Error('no reward block found')
     }
   } catch (error) {
-    throw new Error(`Could not write reward block: ${error.message}`)
+    throw new Error(`could not write reward block: ${error.message}`)
   }
 }
 
@@ -246,7 +256,7 @@ function processMessage (msg) {
           consumeBtcTxMessageAsync(msg)
         } else {
           // BTC anchoring has been disabled, ack message and do nothing
-          console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] publish message acked : btc disabled', msg.btctx_id)
+          debug.general(`processMessage : [btctx] publish message acked : btc disabled : ${msg.btctx_id}`)
           amqpChannel.ack(msg)
         }
         break
@@ -256,7 +266,7 @@ function processMessage (msg) {
           consumeBtcMonMessage(msg)
         } else {
           // BTC anchoring has been disabled, ack message and do nothing
-          console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btcmon] publish message acked : btc disabled', msg.btctx_id)
+          debug.general(`processMessage : [btcmon] publish message acked : btc disabled : ${msg.btctx_id}`)
           amqpChannel.ack(msg)
         }
         break
@@ -283,6 +293,7 @@ function consumeAggRootMessage (msg) {
 }
 
 async function consumeBtcTxMessageAsync (msg) {
+  debug.general(`consumeBtcTxMessageAsync : begin`)
   if (msg !== null) {
     let btcTxObj = JSON.parse(msg.content.toString())
 
@@ -315,7 +326,7 @@ async function consumeBtcTxMessageAsync (msg) {
               return callback(err)
             } else {
               // New message has been published
-              // console.log(env.RMQ_WORK_OUT_STATE_QUEUE, '[btctx] publish message acked')
+              // debug.general(env.RMQ_WORK_OUT_STATE_QUEUE, '[btctx] publish message acked')
               return callback(null)
             }
           })
@@ -330,7 +341,7 @@ async function consumeBtcTxMessageAsync (msg) {
               return callback(err)
             } else {
               // New message has been published
-              // console.log(env.RMQ_WORK_OUT_BTCMON_QUEUE, 'publish message acked')
+              // debug.general(env.RMQ_WORK_OUT_BTCMON_QUEUE, 'publish message acked')
               return callback(null)
             }
           })
@@ -341,10 +352,11 @@ async function consumeBtcTxMessageAsync (msg) {
         console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] consume message nacked', btcTxObj.btctx_id)
       } else {
         amqpChannel.ack(msg)
-        console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] consume message acked', btcTxObj.btctx_id)
+        debug.general(`consumeBtcTxMessageAsync : [btctx] consume message acked : ${btcTxObj.btctx_id}`)
       }
     })
   }
+  debug.general(`consumeBtcTxMessageAsync : end`)
 }
 
 function consumeBtcMonMessage (msg) {
@@ -395,6 +407,7 @@ function formatAsChainpointV3Ops (proof, op) {
 
 // Take work off of the AGGREGATION_ROOTS array and build Merkle tree
 let generateCalendarTree = () => {
+  debug.general(`generateCalendarTree : begin`)
   let rootsForTree = AGGREGATION_ROOTS.splice(0)
 
   let treeDataObj = null
@@ -428,13 +441,15 @@ let generateCalendarTree = () => {
       proofData.push(proofDataItem)
     }
     treeDataObj.proofData = proofData
-    console.log('rootsForTree length : %s', rootsForTree.length)
+    debug.general(`generateCalendarTree : rootsForTree length : ${rootsForTree.length}`)
   }
+  debug.general(`generateCalendarTree : end`)
   return treeDataObj
 }
 
 // Write tree to calendar block DB and also to proof state service via RMQ
 let persistCalendarTreeAsync = async (treeDataObj) => {
+  debug.general(`persistCalendarTreeAsync : begin`)
   // get an array of messages to be acked or nacked in this process
   let messages = treeDataObj.proofData.map((proofDataItem) => {
     return proofDataItem.agg_msg
@@ -472,7 +487,7 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
       try {
         await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(stateObj)), { persistent: true, type: 'cal' })
         // New message has been published
-        // console.log(env.RMQ_WORK_OUT_STATE_QUEUE, '[cal] publish message acked')
+        // debug.general(env.RMQ_WORK_OUT_STATE_QUEUE, '[cal] publish message acked')
       } catch (error) {
         // An error as occurred publishing a message
         console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[cal] publish message nacked')
@@ -485,7 +500,7 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
         // ack consumption of all original messages part of this aggregation event
         let rootObj = JSON.parse(message.content.toString())
         amqpChannel.ack(message)
-        console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[aggregator] consume message acked', rootObj.agg_id)
+        debug.general(`persistCalendarTreeAsync : [aggregator] consume message acked : ${rootObj.agg_id}`)
       }
     })
   } catch (error) {
@@ -499,11 +514,13 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
     })
     throw new Error(error.message)
   }
+  debug.general(`persistCalendarTreeAsync : end`)
 }
 
 // Aggregate all block hashes on chain since last BTC anchor block, add new
 // BTC anchor block to calendar, add new proof state entries, anchor root
 let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
+  debug.general(`aggregateAndAnchorBTCAsync : begin`)
   try {
     // Retrieve calendar blocks since last anchor block
     if (!lastBtcAnchorBlockId) lastBtcAnchorBlockId = -1
@@ -543,7 +560,7 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
     }
     treeData.proofData = proofData
 
-    console.log('blocks length : %s', blocks.length)
+    debug.general(`aggregateAndAnchorBTCAsync : blocks.length : ${blocks.length}`)
 
     // if the amqp channel is null (closed), processing should not continue, defer to next interval
     if (amqpChannel === null) return
@@ -572,7 +589,7 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
                 return eachCallback(err)
               } else {
                 // New message has been published
-                // console.log(env.RMQ_WORK_OUT_STATE_QUEUE, '[anchor_btc_agg] publish message acked')
+                // debug.general(env.RMQ_WORK_OUT_STATE_QUEUE, '[anchor_btc_agg] publish message acked')
                 return eachCallback(null)
               }
             })
@@ -581,7 +598,7 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
             console.error('Anchor aggregation had errors')
             return seriesCallback(err)
           } else {
-            console.log('Anchor aggregation complete')
+            debug.general(`aggregateAndAnchorBTCAsync : anchor aggregation complete`)
             return seriesCallback(null)
           }
         })
@@ -600,18 +617,19 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
               console.error(env.RMQ_WORK_OUT_BTCTX_QUEUE, 'publish message nacked')
               return seriesCallback(err)
             } else {
-              // console.log(env.RMQ_WORK_OUT_BTCTX_QUEUE, 'publish message acked')
+              // debug.general(env.RMQ_WORK_OUT_BTCTX_QUEUE, 'publish message acked')
               return seriesCallback(null)
             }
           })
       }
     ], (err) => {
       if (err) throw new Error(err)
-      console.log('aggregateAndAnchorBTCAsync process complete.')
+      debug.general(`aggregateAndAnchorBTCAsync : complete`)
     })
   } catch (error) {
     throw new Error(`aggregateAndAnchorBTCAsync error: ${error.message}`)
   }
+  debug.general(`aggregateAndAnchorBTCAsync : end`)
 }
 
 // Each of these locks must be defined up front since event handlers
@@ -644,17 +662,18 @@ let btcConfirmLock = consul.lock(_.merge({}, lockOpts, { value: 'btc-confirm' })
 let rewardLock = consul.lock(_.merge({}, lockOpts, { value: 'reward' }))
 
 function registerLockEvents (lock, lockName, acquireFunction) {
+  debug.general(`registerLockEvents : ${lockName} : begin`)
   lock.on('acquire', () => {
-    console.log(`${lockName} acquired`)
+    debug.general(`registerLockEvents : ${lockName} : acquired`)
     acquireFunction()
   })
 
   lock.on('error', (err) => {
-    console.error(`${lockName} error - ${err}`)
+    console.error(`registerLockEvents : ${lockName} : ${err}`)
   })
 
   lock.on('release', () => {
-    console.log(`${lockName} release`)
+    debug.general(`registerLockEvents : ${lockName} : released`)
   })
 }
 
@@ -667,25 +686,25 @@ registerLockEvents(genesisLock, 'genesisLock', async () => {
     try {
       blockCount = await CalendarBlock.count()
     } catch (error) {
-      throw new Error(`Unable to count calendar blocks: ${error.message}`)
+      throw new Error(`unable to count calendar blocks: ${error.message}`)
     }
     if (blockCount === 0) {
       try {
         await createGenesisBlockAsync()
       } catch (error) {
-        throw new Error(`Unable to create genesis block: ${error.message}`)
+        throw new Error(`unable to create genesis block: ${error.message}`)
       }
     } else {
-      console.log(`No genesis block needed: ${blockCount} block(s) found`)
+      debug.general(`registerLockEvents : genesisLock : no genesis block needed: ${blockCount} block(s) found`)
     }
   } catch (error) {
-    console.error(error.message)
+    console.error(`registerLockEvents : genesisLock : unable to create genesis block: ${error.message}`)
   } finally {
     // always release lock
     try {
       genesisLock.release()
     } catch (error) {
-      console.error(`genesisLock.release(): caught err: ${error.message}`)
+      console.error(`registerLockEvents : genesisLock : release : ${error.message}`)
     }
   }
 })
@@ -699,16 +718,16 @@ registerLockEvents(calendarLock, 'calendarLock', async () => {
       await persistCalendarTreeAsync(treeDataObj)
     } else {
       // there is nothing to process in this calendar interval, write nothing, release lock
-      console.log('no hashes for this calendar interval')
+      debug.general('registerLockEvents : calendarLock : no hashes for this calendar interval')
     }
   } catch (error) {
-    console.error(`Unable to create calendar block: ${error.message}`)
+    console.error(`registerLockEvents : calendarLock : unable to create calendar block: ${error.message}`)
   } finally {
     // always release lock
     try {
       calendarLock.release()
     } catch (error) {
-      console.error(`calendarLock.release(): caught err: ${error.message}`)
+      console.error(`registerLockEvents : calendarLock : release : ${error.message}`)
     }
   }
 })
@@ -721,7 +740,7 @@ registerLockEvents(nistLock, 'nistLock', async () => {
     try {
       lastNistBlock = await CalendarBlock.findOne({ where: { type: 'nist' }, attributes: ['time', 'stackId'], order: [['id', 'DESC']] })
     } catch (error) {
-      throw new Error(`Unable to retrieve most recent nist block: ${error.message}`)
+      throw new Error(`unable to retrieve most recent NIST block: ${error.message}`)
     }
     if (lastNistBlock) {
       // checks if the last NIST block is at least nistBlockIntervalMinutes - oneMinuteMS old
@@ -733,19 +752,19 @@ registerLockEvents(nistLock, 'nistLock', async () => {
       let lastNISTTooRecent = (ageMS < (nistBlockIntervalMinutes * 60 * 1000 - oneMinuteMS))
       if (lastNISTTooRecent) {
         let ageSec = Math.round(ageMS / 1000)
-        console.log(`No work: ${nistBlockIntervalMinutes} minutes must elapse between each new nist block. The last one was generated ${ageSec} seconds ago by Core ${lastNistBlock.stackId}.`)
+        debug.nist(`registerLockEvents : nistLock : no work: ${nistBlockIntervalMinutes} minutes must elapse between each new nist block. The last one was generated ${ageSec} seconds ago by Core ${lastNistBlock.stackId}.`)
         return
       }
     }
     await createNistBlockAsync(nistLatest)
   } catch (error) {
-    console.error(`Unable to create NIST block: ${error.message}`)
+    console.error(`registerLockEvents : nistLock : unable to create NIST block: ${error.message}`)
   } finally {
     // always release lock
     try {
       nistLock.release()
     } catch (error) {
-      console.error(`nistLock.release(): caught err: ${error.message}`)
+      console.error(`registerLockEvents : nistLock : release : ${error.message}`)
     }
   }
 })
@@ -758,7 +777,7 @@ registerLockEvents(btcAnchorLock, 'btcAnchorLock', async () => {
     try {
       lastBtcAnchorBlock = await CalendarBlock.findOne({ where: { type: 'btc-a', stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'hash', 'time', 'stackId'], order: [['id', 'DESC']] })
     } catch (error) {
-      throw new Error(`Unable to retrieve most recent btc anchor block: ${error.message}`)
+      throw new Error(`unable to retrieve most recent btc anchor block: ${error.message}`)
     }
 
     if (lastBtcAnchorBlock) {
@@ -771,7 +790,7 @@ registerLockEvents(btcAnchorLock, 'btcAnchorLock', async () => {
       let lastAnchorTooRecent = (ageMS < (btcAnchorIntervalMinutes * 60 * 1000 - oneMinuteMS))
       if (lastAnchorTooRecent) {
         let ageSec = Math.round(ageMS / 1000)
-        console.log(`No work: ${btcAnchorIntervalMinutes} minutes must elapse between each new btc-a block. The last one was generated ${ageSec} seconds ago by Core ${lastBtcAnchorBlock.stackId}.`)
+        debug.btcAnchor(`registerLockEvents : btcAnchorLock : no work: ${btcAnchorIntervalMinutes} minutes must elapse between each new btc-a block. The last one was generated ${ageSec} seconds ago by Core ${lastBtcAnchorBlock.stackId}.`)
         return
       }
     }
@@ -779,16 +798,16 @@ registerLockEvents(btcAnchorLock, 'btcAnchorLock', async () => {
       let lastBtcAnchorBlockId = lastBtcAnchorBlock ? parseInt(lastBtcAnchorBlock.id, 10) : null
       await aggregateAndAnchorBTCAsync(lastBtcAnchorBlockId)
     } catch (error) {
-      throw new Error(`Unable to aggregate and create btc anchor block: ${error.message}`)
+      throw new Error(`unable to aggregate and create btc anchor block: ${error.message}`)
     }
   } catch (error) {
-    console.error(error.message)
+    console.error(`registerLockEvents : btcAnchorLock : ${error.message}`)
   } finally {
     // always release lock
     try {
       btcAnchorLock.release()
     } catch (error) {
-      console.error(`btcAnchorLock.release(): caught err: ${error.message}`)
+      console.error(`registerLockEvents : btcAnchorLock : release : ${error.message}`)
     }
   }
 })
@@ -814,7 +833,7 @@ registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
       try {
         block = await createBtcConfirmBlockAsync(btcheadHeight, btcheadRoot)
       } catch (error) {
-        throw new Error(`Unable to create btc confirm block: ${error.message}`)
+        throw new Error(`unable to create btc-c block : ${error.message}`)
       }
 
       // queue up message containing updated proof state bound for proof state service
@@ -836,27 +855,25 @@ registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
       try {
         await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(stateObj)), { persistent: true, type: 'btcmon' })
         // New message has been published
-        // console.log(env.RMQ_WORK_OUT_STATE_QUEUE, '[btcmon] publish message acked')
+        // debug.general(env.RMQ_WORK_OUT_STATE_QUEUE, '[btcmon] publish message acked')
       } catch (error) {
-        // An error as occurred publishing a message
-        console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[btcmon] publish message nacked')
         amqpChannel.nack(msg)
-        console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[btcmon] consume message nacked', stateObj.btctx_id)
-        throw new Error(`Unable to publish state message: ${error.message}`)
+        console.error('registerLockEvents : btcConfirmLock : [btcmon] consume message nacked', stateObj.btctx_id)
+        throw new Error(`unable to publish state message: ${error.message}`)
       }
 
       // ack consumption of all original hash messages part of this aggregation event
       amqpChannel.ack(msg)
-      console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btcmon] consume message acked', stateObj.btctx_id)
+      debug.btcConfirm('registerLockEvents : btcConfirmLock : [btcmon] consume message acked', stateObj.btctx_id)
     }
   } catch (error) {
-    console.error(error.message)
+    console.error(`registerLockEvents : btcConfirmLock : ${error.message}`)
   } finally {
     // always release lock
     try {
       btcConfirmLock.release()
     } catch (error) {
-      console.error(`btcConfirmLock.release(): caught err: ${error.message}`)
+      console.error(`registerLockEvents : btcConfirmLock : release : ${error.message}`)
     }
   }
 })
@@ -899,9 +916,9 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
     try {
       let rewardResponse = await rp(options)
       nodeRewardTxId = rewardResponse.body.trx_id
-      console.log(`${nodeTNTGrainsRewardShare} grains (${nodeTNTGrainsRewardShare / 10 ** 8} TNT) transferred to Node using ETH address ${nodeRewardETHAddr} in transaction ${nodeRewardTxId}`)
+      debug.reward(`registerLockEvents : rewardLock : ${nodeTNTGrainsRewardShare} grains (${nodeTNTGrainsRewardShare / 10 ** 8} TNT) transferred to Node using ETH address ${nodeRewardETHAddr} in transaction ${nodeRewardTxId}`)
     } catch (error) {
-      console.error(`${nodeTNTGrainsRewardShare} grains (${nodeTNTGrainsRewardShare / 10 ** 8} TNT) failed to be transferred to Node using ETH address ${nodeRewardETHAddr}: ${error.message}`)
+      console.error(`registerLockEvents : rewardLock : ${nodeTNTGrainsRewardShare} grains (${nodeTNTGrainsRewardShare / 10 ** 8} TNT) failed to be transferred to Node using ETH address ${nodeRewardETHAddr}: ${error.message}`)
     }
 
     // reward TNT to Core operator according to random reward message selection (if applicable)
@@ -929,9 +946,9 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
       try {
         let rewardResponse = await rp(options)
         coreRewardTxId = rewardResponse.body.trx_id
-        console.log(`${coreTNTGrainsRewardShare} grains (${coreTNTGrainsRewardShare / 10 ** 8} TNT) transferred to Core using ETH address ${coreRewardEthAddr} in transaction ${coreRewardTxId}`)
+        debug.reward(`registerLockEvents : rewardLock : ${coreTNTGrainsRewardShare} grains (${coreTNTGrainsRewardShare / 10 ** 8} TNT) transferred to Core using ETH address ${coreRewardEthAddr} in transaction ${coreRewardTxId}`)
       } catch (error) {
-        console.error(`${coreTNTGrainsRewardShare} grains (${coreTNTGrainsRewardShare / 10 ** 8} TNT) failed to be transferred to Core using ETH address ${coreRewardEthAddr}: ${error.message}`)
+        console.error(`registerLockEvents : rewardLock : ${coreTNTGrainsRewardShare} grains (${coreTNTGrainsRewardShare / 10 ** 8} TNT) failed to be transferred to Core using ETH address ${coreRewardEthAddr}: ${error.message}`)
       }
     }
 
@@ -947,28 +964,29 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
       await createRewardBlockAsync(dataId, dataVal)
       // ack consumption of all original hash messages part of this aggregation event
       amqpChannel.ack(msg)
-      console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[reward] consume message acked', rewardMsgObj.node.address)
+      debug.reward(`registerLockEvents : rewardLock : [reward] consume message acked ${rewardMsgObj.node.address}`)
     } catch (error) {
       // ack consumption of all original message
       // this message must be acked to avoid reward distribution to node from occuring again
       amqpChannel.ack(msg)
-      console.error(env.RMQ_WORK_IN_CAL_QUEUE, `[reward] consume message acked with error: ${error.message} ${rewardMsgObj.node.address}`)
-      throw new Error(`Unable to create reward block: ${error.message}`)
+      console.error(`registerLockEvents : rewardLock : [reward] consume message acked with error: ${error.message} ${rewardMsgObj.node.address}`)
+      throw new Error(`unable to create reward block: ${error.message}`)
     }
   } catch (error) {
-    console.error(error.message)
+    console.error(`registerLockEvents : rewardLock : ${error.message}`)
   } finally {
     // always release lock
     try {
       rewardLock.release()
     } catch (error) {
-      console.error(`rewardLock.release(): caught err: ${error.message}`)
+      console.error(`registerLockEvents : rewardLock : release : ${error.message}`)
     }
   }
 })
 
 // Set the BTC anchor interval
 let setBtcInterval = () => {
+  debug.general('setBtcInterval : begin')
   let currentMinute = new Date().getUTCMinutes()
 
   // determine the minutes of the hour to run process based on ANCHOR_BTC_PER_HOUR
@@ -993,16 +1011,18 @@ let setBtcInterval = () => {
           try {
             btcAnchorLock.acquire()
           } catch (error) {
-            console.error('btcAnchorLock.acquire(): caught err: ', error.message)
+            console.error(`setBtcInterval : acquire : ${error.message}`)
           }
         }, randomFuzzyMS)
       }
     }
   })
+  debug.general('setBtcInterval : end')
 }
 
 // Set the NIST block interval
 let setNISTBlockInterval = () => {
+  debug.general('setNISTBlockInterval : begin')
   let currentMinute = new Date().getUTCMinutes()
 
   // determine the minutes of the hour to run process based on NIST_BLOCKS_PER_HOUR
@@ -1030,32 +1050,34 @@ let setNISTBlockInterval = () => {
           try {
             nistLock.acquire()
           } catch (error) {
-            console.error('nistLock.acquire(): caught err: ', error.message)
+            console.error(`setNISTBlockInterval : acquire : ${error.message}`)
           }
         }, randomFuzzyMS)
       }
     }
   })
+  debug.general('setNISTBlockInterval : end')
 }
 
 /**
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
+  debug.general('openStorageConnectionAsync : begin')
   let dbConnected = false
   while (!dbConnected) {
     try {
       await sequelize.sync({ logging: false })
-      console.log('Sequelize connection established')
+      debug.general('openStorageConnectionAsync : connection established')
       dbConnected = true
     } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
+      console.error('openStorageConnectionAsync : cannot establish Sequelize connection. Attempting in 5 seconds...')
       await utils.sleep(5000)
     }
   }
   // trigger creation of the genesis block
   genesisLock.acquire()
+  debug.general('openStorageConnectionAsync : end')
 }
 
 /**
@@ -1065,6 +1087,7 @@ async function openStorageConnectionAsync () {
  * @param {string} connectionString - The connection string for the RabbitMQ instance, an AMQP URI
  */
 async function openRMQConnectionAsync (connectionString) {
+  debug.general('openRMQConnectionAsync : begin')
   let rmqConnected = false
   while (!rmqConnected) {
     try {
@@ -1085,26 +1108,27 @@ async function openRMQConnectionAsync (connectionString) {
       })
       // if the channel closes for any reason, attempt to reconnect
       conn.on('close', async () => {
-        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
+        console.error('openRMQConnectionAsync : connection to RMQ closed.  Reconnecting in 5 seconds...')
         amqpChannel = null
         // un-acked messaged will be requeued, so clear all work in progress
         AGGREGATION_ROOTS = []
         await utils.sleep(5000)
         await openRMQConnectionAsync(connectionString)
       })
-      console.log('RabbitMQ connection established')
+      debug.general('openRMQConnectionAsync : connection established')
       rmqConnected = true
     } catch (error) {
       // catch errors when attempting to establish connection
-      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
+      console.error('openRMQConnectionAsync : cannot establish RabbitMQ connection. Attempting in 5 seconds...')
       await utils.sleep(5000)
     }
   }
+  debug.general('openRMQConnectionAsync : end')
 }
 
 // This initalizes all the consul watches and JS intervals that fire all calendar events
 function startWatchesAndIntervals () {
-  console.log('starting watches and intervals')
+  debug.general('startWatchesAndIntervals : begin')
 
   // Continuous watch on the consul key holding the NIST object.
   var nistWatch = consul.watch({ method: consul.kv.get, options: { key: env.NIST_KEY } })
@@ -1135,32 +1159,40 @@ function startWatchesAndIntervals () {
         calendarLock.acquire()
       }
     } catch (error) {
-      console.error('calendarLock.acquire(): caught err: ', error.message)
+      console.error(`startWatchesAndIntervals : calendarLock.acquire : ${error.message}`)
     }
   }, env.CALENDAR_INTERVAL_MS)
 
   // Add all block hashes back to the previous BTC anchor to a Merkle tree and send to BTC TX
   if (env.ANCHOR_BTC === 'enabled') { // Do this only if BTC anchoring is enabled
     setBtcInterval()
-    console.log('BTC anchoring enabled')
+    debug.general('startWatchesAndIntervals : ANCHOR_BTC enabled')
   } else {
-    console.log('BTC anchoring disabled')
+    debug.general('startWatchesAndIntervals : ANCHOR_BTC disabled')
   }
+
+  debug.general('startWatchesAndIntervals : end')
 }
 
 // process all steps need to start the application
 async function start () {
-  if (env.NODE_ENV === 'test') return
+  debug.general('start : begin')
+
+  if (env.NODE_ENV === 'test') {
+    debug.general('start : NODE_ENV === test : return')
+    return
+  }
+
   try {
-    // init DB
+    debug.general('start : init Sequelize connection')
     await openStorageConnectionAsync()
-    // init RabbitMQ
+    debug.general('start : init RabbitMQ connection')
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    // Init intervals and watches
+    debug.general('start : init watches and intervals')
     startWatchesAndIntervals()
-    console.log('startup completed successfully')
+    debug.general('start : complete')
   } catch (error) {
-    console.error(`An error has occurred on startup: ${error.message}`)
+    console.error(`start : An error has occurred on startup: ${error.message}`)
     process.exit(1)
   }
 }
