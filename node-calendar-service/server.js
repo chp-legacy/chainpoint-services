@@ -614,11 +614,6 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
   }
 }
 
-let aggregateAndAnchorETHAsync = async (lastEthAnchorBlockId, anchorCallback) => {
-  console.log('TODO aggregateAndAnchorETH()')
-  return anchorCallback(null)
-}
-
 // Each of these locks must be defined up front since event handlers
 // need to be registered for each. They are all effectively locking the same
 // resource since they share the same CALENDAR_LOCK_KEY. The value is
@@ -646,8 +641,6 @@ let calendarLock = consul.lock(_.merge({}, lockOpts, { value: 'calendar' }))
 let nistLock = consul.lock(_.merge({}, lockOpts, { value: 'nist' }))
 let btcAnchorLock = consul.lock(_.merge({}, lockOpts, { value: 'btc-anchor' }))
 let btcConfirmLock = consul.lock(_.merge({}, lockOpts, { value: 'btc-confirm' }))
-let ethAnchorLock = consul.lock(_.merge({}, lockOpts, { value: 'eth-anchor' }))
-let ethConfirmLock = consul.lock(_.merge({}, lockOpts, { value: 'eth-confirm' }))
 let rewardLock = consul.lock(_.merge({}, lockOpts, { value: 'reward' }))
 
 function registerLockEvents (lock, lockName, acquireFunction) {
@@ -868,66 +861,6 @@ registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
   }
 })
 
-// LOCK HANDLERS : eth-anchor
-registerLockEvents(ethAnchorLock, 'ethAnchorLock', async () => {
-  try {
-    let ethAnchorIntervalMinutes = 60 / env.ANCHOR_ETH_PER_HOUR
-    let lastEthAnchorBlock
-    try {
-      lastEthAnchorBlock = await CalendarBlock.findOne({ where: { type: 'eth-a', stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'hash', 'time', 'stackId'], order: [['id', 'DESC']] })
-    } catch (error) {
-      throw new Error(`Unable to retrieve most recent eth anchor block: ${error.message}`)
-    }
-    // add a small delay to prevent simultaneous ETH transactions while anchoring with all cores
-    await utils.sleep(5000)
-    if (lastEthAnchorBlock) {
-      // checks if the last eth anchor block is at least ethAnchorIntervalMinutes - oneMinuteMS old
-      // Only if so, we write a new anchor and do the work of that function. Otherwise immediate release lock.
-      let oneMinuteMS = 60000
-      let lastEthAnchorMS = lastEthAnchorBlock.time * 1000
-      let currentMS = Date.now()
-      let ageMS = currentMS - lastEthAnchorMS
-      let lastAnchorTooRecent = (ageMS < (ethAnchorIntervalMinutes * 60 * 1000 - oneMinuteMS))
-      if (lastAnchorTooRecent) {
-        let ageSec = Math.round(ageMS / 1000)
-        console.log(`No work: ${ethAnchorIntervalMinutes} minutes must elapse between each new eth-a block. The last one was generated ${ageSec} seconds ago by Core ${lastEthAnchorBlock.stackId}.`)
-        return
-      }
-    }
-    try {
-      let lastEthAnchorBlockId = lastEthAnchorBlock ? parseInt(lastEthAnchorBlock.id, 10) : null
-      await aggregateAndAnchorETHAsync(lastEthAnchorBlockId)
-    } catch (error) {
-      throw new Error(`Unable to aggregate and create eth anchor block: ${error.message}`)
-    }
-  } catch (error) {
-    console.error(error.message)
-  } finally {
-    // always release lock
-    try {
-      ethAnchorLock.release()
-    } catch (error) {
-      console.error(`ethAnchorLock.release(): caught err: ${error.message}`)
-    }
-  }
-})
-
-// LOCK HANDLERS : eth-confirm
-registerLockEvents(ethConfirmLock, 'ethConfirmLock', () => {
-  try {
-
-  } catch (error) {
-
-  } finally {
-    // always release lock
-    try {
-      ethConfirmLock.release()
-    } catch (error) {
-      console.error(`ethConfirmLock.release(): caught err: ${error.message}`)
-    }
-  }
-})
-
 // LOCK HANDLERS : reward
 registerLockEvents(rewardLock, 'rewardLock', async () => {
   let msg = rewardLatest
@@ -1061,40 +994,6 @@ let setBtcInterval = () => {
             btcAnchorLock.acquire()
           } catch (error) {
             console.error('btcAnchorLock.acquire(): caught err: ', error.message)
-          }
-        }, randomFuzzyMS)
-      }
-    }
-  })
-}
-
-// Set the ETH anchor interval
-let setEthInterval = () => {
-  let currentMinute = new Date().getUTCMinutes()
-
-  // determine the minutes of the hour to run process based on ANCHOR_ETH_PER_HOUR
-  let ethAnchorMinutes = []
-  let minuteOfHour = 0
-  while (minuteOfHour < 60) {
-    ethAnchorMinutes.push(minuteOfHour)
-    minuteOfHour += (60 / env.ANCHOR_ETH_PER_HOUR)
-  }
-
-  heart.createEvent(1, async function (count, last) {
-    let now = new Date()
-
-    // if we are on a new minute
-    if (now.getUTCMinutes() !== currentMinute) {
-      currentMinute = now.getUTCMinutes()
-      if (ethAnchorMinutes.includes(currentMinute)) {
-        // if the amqp channel is null (closed), processing should not continue, defer to next interval
-        if (amqpChannel === null) return
-        let randomFuzzyMS = await rand(0, maxFuzzyMS)
-        setTimeout(() => {
-          try {
-            ethAnchorLock.acquire()
-          } catch (error) {
-            console.error('ethAnchorLock.acquire(): caught err: ', error.message)
           }
         }, randomFuzzyMS)
       }
@@ -1246,14 +1145,6 @@ function startWatchesAndIntervals () {
     console.log('BTC anchoring enabled')
   } else {
     console.log('BTC anchoring disabled')
-  }
-
-  // Add all block hashes back to the previous ETH anchor to a Merkle tree and send to ETH TX
-  if (env.ANCHOR_ETH === 'enabled') { // Do this only if ETH anchoring is enabled
-    setEthInterval()
-    console.log('ETH anchoring enabled')
-  } else {
-    console.log('ETH anchoring disabled')
   }
 }
 
