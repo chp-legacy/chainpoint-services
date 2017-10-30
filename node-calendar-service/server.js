@@ -252,11 +252,11 @@ function processMessage (msg) {
         break
       case 'btcmon':
         if (env.ANCHOR_BTC === 'enabled') {
-          // Consumes a tx message from the btctx service
+          // Consumes a mon message from the btcmon service
           consumeBtcMonMessage(msg)
         } else {
           // BTC anchoring has been disabled, ack message and do nothing
-          console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] publish message acked : eth disabled', msg.ethtx_id)
+          console.log(env.RMQ_WORK_IN_CAL_QUEUE, '[btcmon] publish message acked : btc disabled', msg.btctx_id)
           amqpChannel.ack(msg)
         }
         break
