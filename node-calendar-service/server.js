@@ -1029,8 +1029,22 @@ async function openStorageConnectionAsync () {
       await utils.sleep(5000)
     }
   }
-  // trigger creation of the genesis block
-  genesisLock.acquire()
+
+  // Pre-check the current Calendar block count.
+  // Trigger creation of the genesis block if needed and
+  // don't consume a lock on every service restart if not.
+  try {
+    let blockCount = await CalendarBlock.count()
+    if (blockCount === 0) {
+      debug.general('openStorageConnectionAsync : trigger genesisLock')
+      genesisLock.acquire()
+    } else {
+      debug.general('openStorageConnectionAsync : skip genesisLock : CalendarBlock.count : %d', blockCount)
+    }
+  } catch (error) {
+    throw new Error(`openStorageConnectionAsync : unable to count calendar blocks: ${error.message}`)
+  }
+
   debug.general('openStorageConnectionAsync : end')
 }
 
