@@ -32,6 +32,9 @@ const rp = require('request-promise-native')
 const leaderElection = require('exp-leader-election')
 const schedule = require('node-schedule')
 
+// See : https://github.com/zeit/async-retry
+const retry = require('async-retry')
+
 var debug = {
   general: require('debug')('calendar:general'),
   genesis: require('debug')('calendar:block:genesis'),
@@ -654,7 +657,7 @@ var lockOpts = {
     checks: ['serfHealth'],
     lockdelay: '1ms',
     name: 'calendar-blockchain-lock',
-    ttl: '30s'
+    ttl: '60s'
   }
 }
 
@@ -739,7 +742,14 @@ registerLockEvents(calendarLock, 'calendarLock', async () => {
 // LOCK HANDLERS : nist
 registerLockEvents(nistLock, 'nistLock', async () => {
   try {
-    await createNistBlockAsync(nistLatest)
+    await retry(async bail => {
+      await createNistBlockAsync(nistLatest)
+    }, {
+      retries: 15,        // The maximum amount of times to retry the operation. Default is 10
+      factor: 1.2,        // The exponential factor to use. Default is 2
+      minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
+      onRetry: (error) => { console.error(`registerLockEvents : nistLock : retrying : ${error.message}`) }
+    })
   } catch (error) {
     console.error(`registerLockEvents : nistLock : unable to create NIST block: ${error.message}`)
   } finally {
