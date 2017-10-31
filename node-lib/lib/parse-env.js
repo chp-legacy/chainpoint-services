@@ -139,7 +139,6 @@ let envDefinitions = {
   RMQ_WORK_IN_CAL_QUEUE: envalid.str({ default: 'work.cal', desc: 'The queue name for message consumption originating from the aggregator, btc-tx, and btc-mon services' }),
   CALENDAR_INTERVAL_MS: envalid.num({ default: 10000, desc: 'The frequency to generate new calendar blocks, defaults to 10 seconds' }),
   ANCHOR_BTC_PER_HOUR: validateFactorOfSixty({ default: 2, desc: 'The number of times per hour to generate new btc-a blocks and btc anchoring, defaults to 2, must be a factor of 60, no greater than 20' }),
-  NIST_BLOCKS_PER_HOUR: validateFactorOfSixty({ default: 2, desc: 'The number of NIST blocks to generate per hour, defaults to 2, must be a factor of 60, no greater than 20' }),
   CALENDAR_LEADER_KEY: envalid.str({ default: 'service/calendar/leader/lock', desc: 'Key used for acquiring audit calendar process leadership locks' }),
 
   // NIST beacon service specific variables

@@ -30,6 +30,7 @@ const heartbeats = require('heartbeats')
 const rand = require('random-number-csprng')
 const rp = require('request-promise-native')
 const leaderElection = require('exp-leader-election')
+const schedule = require('node-schedule')
 
 var debug = {
   general: require('debug')('calendar:general'),
@@ -1002,40 +1003,6 @@ let setBtcInterval = () => {
   debug.general('setBtcInterval : end')
 }
 
-// Set the NIST block interval
-let setNISTBlockInterval = () => {
-  debug.general('setNISTBlockInterval : begin')
-  let currentMinute = new Date().getUTCMinutes()
-
-  // determine the minutes of the hour to run process based on NIST_BLOCKS_PER_HOUR
-  let nistBlockMinutes = []
-  let minuteOfHour = 0
-  // offset interval to minimize occurances of nist block at the same time as other blocks
-  let offset = Math.floor((60 / env.NIST_BLOCKS_PER_HOUR) / 2)
-  while (minuteOfHour < 60) {
-    let offsetMinutes = minuteOfHour + offset + ((minuteOfHour + offset) < 60 ? 0 : -60)
-    nistBlockMinutes.push(offsetMinutes)
-    minuteOfHour += (60 / env.NIST_BLOCKS_PER_HOUR)
-  }
-
-  heart.createEvent(1, async function (count, last) {
-    let now = new Date()
-
-    // if we are on a new minute
-    if (now.getUTCMinutes() !== currentMinute) {
-      currentMinute = now.getUTCMinutes()
-      if (nistBlockMinutes.includes(currentMinute) && IS_LEADER) {
-        try {
-          nistLock.acquire()
-        } catch (error) {
-          console.error('setNISTBlockInterval : acquire : %o', error.message)
-        }
-      }
-    }
-  })
-  debug.general('setNISTBlockInterval : end')
-}
-
 /**
  * Opens a storage connection
  **/
@@ -1148,9 +1115,6 @@ function startWatchesAndIntervals () {
 
   // PERIODIC TIMERS
 
-  // Init heartbeat process for NIST blocks
-  setNISTBlockInterval()
-
   // Write a new calendar block
   setInterval(() => {
     try {
@@ -1202,3 +1166,20 @@ async function start () {
 
 // get the whole show started
 start()
+
+// Cron like scheduler. Params are:
+// sec min hour day_of_month month day_of_week
+// Run every 30 min at the top and bottom of the hour
+schedule.scheduleJob('0 */30 * * * *', () => {
+  debug.nist(`scheduleJob : nistLock.acquire : leader? : ${IS_LEADER}`)
+
+  // Don't consume a lock unless this Calendar is the zone leader
+  // and there is NIST data available.
+  if (IS_LEADER && !_.isEmpty(nistLatest)) {
+    try {
+      nistLock.acquire()
+    } catch (error) {
+      console.error('scheduleJob : nistLock.acquire : %s', error.message)
+    }
+  }
+})
