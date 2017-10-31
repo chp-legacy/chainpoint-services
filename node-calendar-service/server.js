@@ -173,7 +173,7 @@ let createCalendarBlockAsync = async (root) => {
       debug.calendar(`createCalendarBlockAsync : prevBlock found : ${newId}`)
       return await writeBlockAsync(newId, 'cal', newId.toString(), root.toString(), prevBlock.hash, 'CAL')
     } else {
-      throw new Error('no calendar block found')
+      throw new Error('no previous block found')
     }
   } catch (error) {
     throw new Error(`createCalendarBlockAsync : could not write calendar block: ${error.message}`)
@@ -191,7 +191,7 @@ let createNistBlockAsync = async (nistDataObj) => {
       let dataVal = nistDataObj.split(':')[1].toString()  // the hex value for this NIST entry
       return await writeBlockAsync(newId, 'nist', dataId, dataVal, prevBlock.hash, 'NIST')
     } else {
-      throw new Error('no NIST block found')
+      throw new Error('no previous block found')
     }
   } catch (error) {
     throw new Error(`createNistBlockAsync : could not write NIST block: ${error.message}`)
@@ -207,7 +207,7 @@ let createBtcAnchorBlockAsync = async (root) => {
       debug.btcAnchor(`createBtcAnchorBlockAsync : prevBlock found : ${newId} : btc-a : '' : ${root.toString()} : ${prevBlock.hash} : 'BTC-ANCHOR'`)
       return await writeBlockAsync(newId, 'btc-a', '', root.toString(), prevBlock.hash, 'BTC-ANCHOR')
     } else {
-      throw new Error('no BTC anchor block found')
+      throw new Error('no previous block found')
     }
   } catch (error) {
     throw new Error(`createBtcAnchorBlockAsync : could not write BTC anchor block: ${error.message}`)
@@ -223,7 +223,7 @@ let createBtcConfirmBlockAsync = async (height, root) => {
       debug.btcConfirm(`createBtcConfirmBlockAsync : prevBlock found : ${newId}`)
       return await writeBlockAsync(newId, 'btc-c', height.toString(), root.toString(), prevBlock.hash, 'BTC-CONFIRM')
     } else {
-      throw new Error('no BTC confirm block found')
+      throw new Error('no previous block found')
     }
   } catch (error) {
     throw new Error(`could not write BTC confirm block: ${error.message}`)
@@ -239,7 +239,7 @@ let createRewardBlockAsync = async (dataId, dataVal) => {
       debug.reward(`createRewardBlockAsync : prevBlock found : ${newId}`)
       return await writeBlockAsync(newId, 'reward', dataId.toString(), dataVal.toString(), prevBlock.hash, 'REWARD')
     } else {
-      throw new Error('no reward block found')
+      throw new Error('no previous block found')
     }
   } catch (error) {
     throw new Error(`could not write reward block: ${error.message}`)
@@ -711,7 +711,7 @@ registerLockEvents(genesisLock, 'genesisLock', async () => {
     try {
       genesisLock.release()
     } catch (error) {
-      console.error(`registerLockEvents : genesisLock : release : ${error.message}`)
+      console.error(`registerLockEvents : genesisLock : finally release : ${error.message}`)
     }
   }
 })
@@ -734,7 +734,7 @@ registerLockEvents(calendarLock, 'calendarLock', async () => {
     try {
       calendarLock.release()
     } catch (error) {
-      console.error(`registerLockEvents : calendarLock : release : ${error.message}`)
+      console.error(`registerLockEvents : calendarLock : finally release : ${error.message}`)
     }
   }
 })
@@ -757,7 +757,7 @@ registerLockEvents(nistLock, 'nistLock', async () => {
     try {
       nistLock.release()
     } catch (error) {
-      console.error(`registerLockEvents : nistLock : release : ${error.message}`)
+      console.error(`registerLockEvents : nistLock : finally release : ${error.message}`)
     }
   }
 })
@@ -800,7 +800,7 @@ registerLockEvents(btcAnchorLock, 'btcAnchorLock', async () => {
     try {
       btcAnchorLock.release()
     } catch (error) {
-      console.error(`registerLockEvents : btcAnchorLock : release : ${error.message}`)
+      console.error(`registerLockEvents : btcAnchorLock : finally release : ${error.message}`)
     }
   }
 })
@@ -866,7 +866,7 @@ registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
     try {
       btcConfirmLock.release()
     } catch (error) {
-      console.error(`registerLockEvents : btcConfirmLock : release : ${error.message}`)
+      console.error(`registerLockEvents : btcConfirmLock : finally release : ${error.message}`)
     }
   }
 })
@@ -972,7 +972,7 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
     try {
       rewardLock.release()
     } catch (error) {
-      console.error(`registerLockEvents : rewardLock : release : ${error.message}`)
+      console.error(`registerLockEvents : rewardLock : finally release : ${error.message}`)
     }
   }
 })
@@ -1094,11 +1094,11 @@ async function performLeaderElection () {
 
   leaderElection(leaderElectionConfig)
     .on('gainedLeadership', function () {
-      debug.general('leaderElection : This service instance has been chosen to be leader : %s', env.CHAINPOINT_CORE_BASE_URI)
+      debug.general('leaderElection : elected! : %s', env.CHAINPOINT_CORE_BASE_URI)
       IS_LEADER = true
     })
     .on('error', function () {
-      console.error('This lock session has been invalidated, new lock session will be created')
+      console.error('leaderElection : on error : lock session invalidated')
       IS_LEADER = false
     })
 }
