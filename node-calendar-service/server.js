@@ -278,8 +278,7 @@ function processMessage (msg) {
         consumeRewardMessage(msg)
         break
       default:
-        // This is an unknown message type
-        console.error('Unknown message type', msg.properties.type)
+        console.error('processMessage : unknown message type', msg.properties.type)
         // cannot handle unknown type messages, ack message and do nothing
         amqpChannel.ack(msg)
     }
@@ -369,7 +368,7 @@ function consumeBtcMonMessage (msg) {
     try {
       btcConfirmLock.acquire()
     } catch (error) {
-      console.error('btcConfirmLock.acquire(): caught err: ', error.message)
+      console.error('consumeBtcMonMessage : acquire : ', error.message)
     }
   }
 }
@@ -380,7 +379,7 @@ function consumeRewardMessage (msg) {
     try {
       rewardLock.acquire()
     } catch (error) {
-      console.error('rewardLock.acquire(): caught err : ', error.message)
+      console.error('consumeRewardMessage : acquire : ', error.message)
     }
   }
 }
@@ -589,17 +588,17 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
             (err, ok) => {
               if (err !== null) {
                 // An error as occurred publishing a message
-                console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[anchor_btc_agg] publish message nacked')
+                console.error('aggregateAndAnchorBTCAsync : [anchor_btc_agg] publish message nacked')
                 return eachCallback(err)
               } else {
                 // New message has been published
-                // debug.general(env.RMQ_WORK_OUT_STATE_QUEUE, '[anchor_btc_agg] publish message acked')
+                // debug.general('aggregateAndAnchorBTCAsync : [anchor_btc_agg] publish message acked')
                 return eachCallback(null)
               }
             })
         }, (err) => {
           if (err) {
-            console.error('Anchor aggregation had errors')
+            console.error('aggregateAndAnchorBTCAsync : anchor aggregation had errors ', err.message)
             return seriesCallback(err)
           } else {
             debug.general(`aggregateAndAnchorBTCAsync : anchor aggregation complete`)
@@ -673,7 +672,7 @@ function registerLockEvents (lock, lockName, acquireFunction) {
   })
 
   lock.on('error', (err) => {
-    console.error(`registerLockEvents : ${lockName} : ${err}`)
+    console.error(`registerLockEvents : ${lockName} : ${err.message}`)
   })
 
   lock.on('release', () => {
@@ -1118,7 +1117,7 @@ async function performLeaderElection () {
 
   leaderElection(leaderElectionConfig)
     .on('gainedLeadership', function () {
-      console.log('This service instance has been chosen to be leader')
+      debug.general('leaderElection : This service instance has been chosen to be leader : %s', env.CHAINPOINT_CORE_BASE_URI)
       IS_LEADER = true
     })
     .on('error', function () {
@@ -1138,12 +1137,13 @@ function startWatchesAndIntervals () {
   nistWatch.on('change', async function (data, res) {
     // process only if a value has been returned and it is different than what is already stored
     if (data && data.Value && nistLatest !== data.Value) {
+      debug.general('startWatchesAndIntervals : nistLatest : %s', data.Value)
       nistLatest = data.Value
     }
   })
 
   nistWatch.on('error', function (err) {
-    console.error('nistWatch error: ', err)
+    console.error('startWatchesAndIntervals : nistWatch : ', err)
   })
 
   // PERIODIC TIMERS
