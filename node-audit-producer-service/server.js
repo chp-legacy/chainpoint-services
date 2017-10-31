@@ -235,7 +235,7 @@ async function openRMQConnectionAsync (connectionString) {
 async function performLeaderElection () {
   IS_LEADER = false
   let leaderElectionConfig = {
-    key: env.AUDIT_PRODUDER_LEADER_KEY,
+    key: env.AUDIT_PRODUCER_LEADER_KEY,
     consul: {
       host: env.CONSUL_HOST,
       port: env.CONSUL_PORT,
