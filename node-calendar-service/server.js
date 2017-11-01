@@ -1088,7 +1088,7 @@ async function performLeaderElection () {
     })
 }
 
-// This initalizes all the consul watches and JS intervals that fire all calendar events
+// Initalizes all the consul watches
 function startWatches () {
   debug.general(' startWatches : begin')
 
