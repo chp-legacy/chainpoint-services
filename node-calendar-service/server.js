@@ -816,8 +816,11 @@ registerLockEvents(btcAnchorLock, 'btcAnchorLock', async () => {
 registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
   try {
     let monMessagesToProcess = BTC_MON_MESSAGES.splice(0)
-    // if there are no messages left to process, release lock and return
-    if (monMessagesToProcess.length === 0) return
+
+    if (monMessagesToProcess.length === 0) {
+      debug.btcConfirm('registerLockEvents : btcConfirmLock : no messages to process : returning')
+      return
+    }
 
     for (let x = 0; x < monMessagesToProcess.length; x++) {
       let msg = monMessagesToProcess[x]
@@ -831,7 +834,14 @@ registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
       // Store Merkle root of BTC block in chain
       let block
       try {
-        block = await createBtcConfirmBlockAsync(btcheadHeight, btcheadRoot)
+        await retry(async bail => {
+          block = await createBtcConfirmBlockAsync(btcheadHeight, btcheadRoot)
+        }, {
+          retries: 15,        // The maximum amount of times to retry the operation. Default is 10
+          factor: 1.2,        // The exponential factor to use. Default is 2
+          minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
+          onRetry: (error) => { console.error(`registerLockEvents : btcConfirmLock : retrying : ${error.message}`) }
+        })
       } catch (error) {
         throw new Error(`unable to create btc-c block : ${error.message}`)
       }
@@ -853,18 +863,17 @@ registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
       }
 
       try {
+        // Publish new message
         await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(stateObj)), { persistent: true, type: 'btcmon' })
-        // New message has been published
-        // debug.general(env.RMQ_WORK_OUT_STATE_QUEUE, '[btcmon] publish message acked')
+        // debug.btcConfirm(env.RMQ_WORK_OUT_STATE_QUEUE, '[btcmon] publish message acked')
       } catch (error) {
         amqpChannel.nack(msg)
         console.error('registerLockEvents : btcConfirmLock : [btcmon] consume message nacked', stateObj.btctx_id)
         throw new Error(`unable to publish state message: ${error.message}`)
       }
 
-      // ack consumption of all original hash messages part of this aggregation event
       amqpChannel.ack(msg)
-      debug.btcConfirm('registerLockEvents : btcConfirmLock : [btcmon] consume message acked', stateObj.btctx_id)
+      debug.btcConfirm('registerLockEvents : btcConfirmLock : consume message acked', stateObj.btctx_id)
     }
   } catch (error) {
     console.error(`registerLockEvents : btcConfirmLock : ${error.message}`)
