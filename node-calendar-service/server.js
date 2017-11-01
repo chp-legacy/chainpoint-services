@@ -970,8 +970,15 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
     }
 
     try {
-      await createRewardBlockAsync(dataId, dataVal)
-      // ack consumption of all original hash messages part of this aggregation event
+      await retry(async bail => {
+        await createRewardBlockAsync(dataId, dataVal)
+      }, {
+        retries: 15,        // The maximum amount of times to retry the operation. Default is 10
+        factor: 1.2,        // The exponential factor to use. Default is 2
+        minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
+        onRetry: (error) => { console.error(`registerLockEvents : rewardLock : retrying : ${error.message}`) }
+      })
+
       amqpChannel.ack(msg)
       debug.reward(`registerLockEvents : rewardLock : [reward] consume message acked ${rewardMsgObj.node.address}`)
     } catch (error) {
