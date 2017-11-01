@@ -1098,8 +1098,8 @@ async function performLeaderElection () {
 }
 
 // Initalizes all the consul watches
-function startWatches () {
-  debug.general(' startWatches : begin')
+function startConsulWatches () {
+  debug.general(' startConsulWatches : begin')
 
   // Continuous watch on the consul key holding the NIST object.
   var nistWatch = consul.watch({ method: consul.kv.get, options: { key: env.NIST_KEY } })
@@ -1108,16 +1108,16 @@ function startWatches () {
   nistWatch.on('change', async function (data, res) {
     // process only if a value has been returned and it is different than what is already stored
     if (data && data.Value && nistLatest !== data.Value) {
-      debug.nist(' startWatches : nistLatest : %s', data.Value)
+      debug.nist(' startConsulWatches : nistLatest : %s', data.Value)
       nistLatest = data.Value
     }
   })
 
   nistWatch.on('error', function (err) {
-    console.error(' startWatches : nistWatch : ', err)
+    console.error(' startConsulWatches : nistWatch : ', err)
   })
 
-  debug.general(' startWatches : end')
+  debug.general(' startConsulWatches : end')
 }
 
 // process all steps need to start the application
@@ -1136,8 +1136,8 @@ async function start () {
     performLeaderElection()
     debug.general('start : init RabbitMQ connection')
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    debug.general('start : init watches and intervals')
-    startWatches()
+    debug.general('start : init Consul watches')
+    startConsulWatches()
     debug.general('start : complete')
   } catch (error) {
     console.error(`start : An error has occurred on startup: ${error.message}`)
