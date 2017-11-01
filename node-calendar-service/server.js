@@ -452,7 +452,17 @@ let generateCalendarTree = () => {
 
 // Write tree to calendar block DB and also to proof state service via RMQ
 let persistCalendarTreeAsync = async (treeDataObj) => {
-  debug.general(`persistCalendarTreeAsync : begin`)
+  debug.calendar(`persistCalendarTreeAsync : begin`)
+
+  // if the amqp channel is null (closed), processing should not continue,
+  // throw an error to force retry. Do this before any other DB or CPU time is
+  // wasted within the lock around this function. Also helps ensure a cal block
+  // is not written if RMQ writes will likely fail after it.
+  if (amqpChannel === null) {
+    debug.btcAnchor('aggregateAndAnchorBTCAsync : amqpChannel is null : returning')
+    throw new Error(`persistCalendarTreeAsync : amqpChannel is null : force retry`)
+  }
+
   // get an array of messages to be acked or nacked in this process
   let messages = treeDataObj.proofData.map((proofDataItem) => {
     return proofDataItem.agg_msg
@@ -503,7 +513,7 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
         // ack consumption of all original messages part of this aggregation event
         let rootObj = JSON.parse(message.content.toString())
         amqpChannel.ack(message)
-        debug.general(`persistCalendarTreeAsync : [aggregator] consume message acked : ${rootObj.agg_id}`)
+        debug.calendar(`persistCalendarTreeAsync : [aggregator] consume message acked : ${rootObj.agg_id}`)
       }
     })
   } catch (error) {
@@ -517,7 +527,7 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
     })
     throw new Error(error.message)
   }
-  debug.general(`persistCalendarTreeAsync : end`)
+  debug.calendar(`persistCalendarTreeAsync : end`)
 }
 
 // Aggregate all block hashes on chain since last BTC anchor block, add new
@@ -727,13 +737,20 @@ registerLockEvents(genesisLock, 'genesisLock', async () => {
 // LOCK HANDLERS : calendar
 registerLockEvents(calendarLock, 'calendarLock', async () => {
   try {
+    // this must not be retried since it mutates state.
     let treeDataObj = generateCalendarTree()
-    // if there is some data to process, continue and persist
-    if (treeDataObj) {
-      await persistCalendarTreeAsync(treeDataObj)
+
+    if (!_.isEmpty(treeDataObj)) {
+      await retry(async bail => {
+        await persistCalendarTreeAsync(treeDataObj)
+      }, {
+        retries: 15,        // The maximum amount of times to retry the operation. Default is 10
+        factor: 1.2,        // The exponential factor to use. Default is 2
+        minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
+        onRetry: (error) => { console.error(`registerLockEvents : calendarLock : retrying : ${error.message}`) }
+      })
     } else {
-      // there is nothing to process in this calendar interval, write nothing, release lock
-      debug.general('registerLockEvents : calendarLock : no hashes for this calendar interval')
+      debug.calendar('registerLockEvents : calendarLock : no treeData (hashes) to process for calendar interval')
     }
   } catch (error) {
     console.error(`registerLockEvents : calendarLock : unable to create calendar block: ${error.message}`)
@@ -1072,8 +1089,8 @@ async function performLeaderElection () {
 }
 
 // This initalizes all the consul watches and JS intervals that fire all calendar events
-function startWatchesAndIntervals () {
-  debug.general('startWatchesAndIntervals : begin')
+function startWatches () {
+  debug.general(' startWatches : begin')
 
   // Continuous watch on the consul key holding the NIST object.
   var nistWatch = consul.watch({ method: consul.kv.get, options: { key: env.NIST_KEY } })
@@ -1082,31 +1099,16 @@ function startWatchesAndIntervals () {
   nistWatch.on('change', async function (data, res) {
     // process only if a value has been returned and it is different than what is already stored
     if (data && data.Value && nistLatest !== data.Value) {
-      debug.general('startWatchesAndIntervals : nistLatest : %s', data.Value)
+      debug.nist(' startWatches : nistLatest : %s', data.Value)
       nistLatest = data.Value
     }
   })
 
   nistWatch.on('error', function (err) {
-    console.error('startWatchesAndIntervals : nistWatch : ', err)
+    console.error(' startWatches : nistWatch : ', err)
   })
 
-  // PERIODIC TIMERS
-
-  // Write a new calendar block
-  setInterval(() => {
-    try {
-      // if the amqp channel is null (closed), processing should not continue, defer to next interval
-      if (amqpChannel === null) return
-      if (AGGREGATION_ROOTS.length > 0) { // there will be data to process, acquire lock and continue
-        calendarLock.acquire()
-      }
-    } catch (error) {
-      console.error(`startWatchesAndIntervals : calendarLock.acquire : ${error.message}`)
-    }
-  }, env.CALENDAR_INTERVAL_MS)
-
-  debug.general('startWatchesAndIntervals : end')
+  debug.general(' startWatches : end')
 }
 
 // process all steps need to start the application
@@ -1126,7 +1128,7 @@ async function start () {
     debug.general('start : init RabbitMQ connection')
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     debug.general('start : init watches and intervals')
-    startWatchesAndIntervals()
+    startWatches()
     debug.general('start : complete')
   } catch (error) {
     console.error(`start : An error has occurred on startup: ${error.message}`)
@@ -1151,8 +1153,39 @@ async function lastBtcAnchorBlockIdForStackId () {
   return id
 }
 
+// SCHEDULED ACTIONS
+// ////////////////////////////////////////////
+
 // Cron like scheduler. Params are:
 // sec min hour day_of_month month day_of_week
+
+// calendarLock : run every 10 seconds, in every zone.
+// Help de-conflict across zones by running at a random
+// offset from 0 seconds.
+// e.g.
+//   */0,10,20,30,40,50 * * * * *
+//   */1,11,21,31,41,51 * * * * *
+let calRandomIntervalBase = _.random(9)
+let calRandomInterval = _.map([0, 10, 20, 30, 40, 50], function (interval) {
+  interval += calRandomIntervalBase
+  return interval
+})
+
+let cronScheduleCalendarAnchor = `*/${calRandomInterval.join(',')} * * * * *`
+debug.calendar(`scheduleJob : calendarLock : cronScheduleCalendarAnchor : %s`, cronScheduleCalendarAnchor)
+schedule.scheduleJob(cronScheduleCalendarAnchor, () => {
+  if (AGGREGATION_ROOTS.length > 0) {
+    debug.calendar(`scheduleJob : calendarLock.acquire : AGGREGATION_ROOTS.length : %d`, AGGREGATION_ROOTS.length)
+
+    try {
+      calendarLock.acquire()
+    } catch (error) {
+      console.error('scheduleJob : calendarLock.acquire : %s', error.message)
+    }
+  } else {
+    debug.calendar(`scheduleJob : calendarLock.acquire : AGGREGATION_ROOTS.length : 0`)
+  }
+})
 
 // nistLock : run every 30 min at 25 and 55 minute marks
 // so as not to conflict with activity at the top and bottom
@@ -1177,7 +1210,7 @@ schedule.scheduleJob('0 */25,55 * * * *', () => {
 // within the top and bottom of the hour to de-conflict
 // zones running the same code.
 let cronScheduleBtcAnchor = `${_.random(59)} */30 * * * *`
-debug.btcAnchor(`scheduleJob : btcAnchor : cronSchedule : ${cronScheduleBtcAnchor}`)
+debug.btcAnchor(`scheduleJob : btcAnchor : cronScheduleBtcAnchor : ${cronScheduleBtcAnchor}`)
 schedule.scheduleJob(cronScheduleBtcAnchor, () => {
   if (env.ANCHOR_BTC === 'enabled') {
     debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : ANCHOR_BTC enabled`)

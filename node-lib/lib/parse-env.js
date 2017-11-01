@@ -137,7 +137,6 @@ let envDefinitions = {
   // Calendar service specific variables
   RMQ_PREFETCH_COUNT_CAL: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
   RMQ_WORK_IN_CAL_QUEUE: envalid.str({ default: 'work.cal', desc: 'The queue name for message consumption originating from the aggregator, btc-tx, and btc-mon services' }),
-  CALENDAR_INTERVAL_MS: envalid.num({ default: 10000, desc: 'The frequency to generate new calendar blocks, defaults to 10 seconds' }),
   CALENDAR_LEADER_KEY: envalid.str({ default: 'service/calendar/leader/lock', desc: 'Key used for acquiring audit calendar process leadership locks' }),
 
   // NIST beacon service specific variables
