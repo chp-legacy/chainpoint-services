@@ -35,7 +35,8 @@ let sequelizeOptions = {
   dialect: 'postgres',
   host: env.COCKROACH_HOST,
   port: env.COCKROACH_PORT,
-  logging: false
+  logging: false,
+  operatorsAliases: false
 }
 
 // Present TLS client certificate to production cluster

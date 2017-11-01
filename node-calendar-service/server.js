@@ -26,14 +26,15 @@ const crypto = require('crypto')
 const calendarBlock = require('./lib/models/CalendarBlock.js')
 const cnsl = require('consul')
 const utils = require('./lib/utils.js')
-const heartbeats = require('heartbeats')
-const rand = require('random-number-csprng')
 const rp = require('request-promise-native')
 const leaderElection = require('exp-leader-election')
 const schedule = require('node-schedule')
 
 // See : https://github.com/zeit/async-retry
 const retry = require('async-retry')
+
+const Sequelize = require('sequelize-cockroachdb')
+const Op = Sequelize.Op
 
 var debug = {
   general: require('debug')('calendar:general'),
@@ -60,9 +61,6 @@ const signingKeypair = nacl.sign.keyPair.fromSecretKey(signingSecretKeyBytes)
 
 const zeroStr = '0000000000000000000000000000000000000000000000000000000000000000'
 
-// the fuzz factor for anchor interval meant to give each core instance a random chance of being first
-const maxFuzzyMS = 1000
-
 // The merkle tools object for building trees and generating proof paths
 const merkleTools = new MerkleTools()
 
@@ -87,10 +85,8 @@ let rewardLatest = null
 // The URI to use for requests to the eth-tnt-tx service
 let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
 
-// create a heartbeat for every 200ms
-// 1 second heartbeats had a drift that caused occasional skipping of a whole second
-// decreasing the interval of the heartbeat and checking current time resolves this
-let heart = heartbeats.createHeart(200)
+// The ID of the last BTC anchor block for this stack found at top and bottom of the hour
+let lastBtcAnchorBlockId = null
 
 // pull in variables defined in shared CalendarBlock module
 let sequelize = calendarBlock.sequelize
@@ -210,7 +206,7 @@ let createBtcAnchorBlockAsync = async (root) => {
       throw new Error('no previous block found')
     }
   } catch (error) {
-    throw new Error(`createBtcAnchorBlockAsync : could not write BTC anchor block: ${error.message}`)
+    throw new Error(`createBtcAnchorBlockAsync : failed to write btc-a block: ${error.message}`)
   }
 }
 
@@ -264,7 +260,7 @@ function processMessage (msg) {
           consumeBtcTxMessageAsync(msg)
         } else {
           // BTC anchoring has been disabled, ack message and do nothing
-          debug.general(`processMessage : [btctx] publish message acked : btc disabled : ${msg.btctx_id}`)
+          debug.general(`processMessage : [btctx] publish message acked : BTC disabled : ${msg.btctx_id}`)
           amqpChannel.ack(msg)
         }
         break
@@ -274,7 +270,7 @@ function processMessage (msg) {
           consumeBtcMonMessage(msg)
         } else {
           // BTC anchoring has been disabled, ack message and do nothing
-          debug.general(`processMessage : [btcmon] publish message acked : btc disabled : ${msg.btctx_id}`)
+          debug.general(`processMessage : [btcmon] publish message acked : BTC disabled : ${msg.btctx_id}`)
           amqpChannel.ack(msg)
         }
         break
@@ -338,7 +334,7 @@ async function consumeBtcTxMessageAsync (msg) {
             }
           })
       },
-      // inform btc-mon of new tx_id to watch, queue up message bound for btc mon
+      // inform btc-mon of new tx_id to watch, queue up message bound for BTC mon
       (callback) => {
         amqpChannel.sendToQueue(env.RMQ_WORK_OUT_BTCMON_QUEUE, Buffer.from(JSON.stringify({ tx_id: btcTxObj.btctx_id })), { persistent: true },
           (err, ok) => {
@@ -527,13 +523,28 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
 // Aggregate all block hashes on chain since last BTC anchor block, add new
 // BTC anchor block to calendar, add new proof state entries, anchor root
 let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
-  debug.general(`aggregateAndAnchorBTCAsync : begin`)
-  try {
-    // Retrieve calendar blocks since last anchor block
-    if (!lastBtcAnchorBlockId) lastBtcAnchorBlockId = -1
-    let blocks = await CalendarBlock.findAll({ where: { id: { $gt: lastBtcAnchorBlockId } }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
+  debug.btcAnchor(`aggregateAndAnchorBTCAsync : begin`)
 
-    if (blocks.length === 0) throw new Error('No blocks returned to create btc anchor tree')
+  // if the amqp channel is null (closed), processing should not continue,
+  // defer to next interval. Do this before any other DB or CPU time is
+  // wasted within the lock around this function.
+  if (amqpChannel === null) {
+    debug.btcAnchor('aggregateAndAnchorBTCAsync : amqpChannel is null : returning')
+    return
+  }
+
+  try {
+    // Retrieve ALL Calendar blocks since last anchor block created by any stack.
+    // This will change when we determine an approach to allow only a single zone to anchor.
+    if (!lastBtcAnchorBlockId) lastBtcAnchorBlockId = -1
+    let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastBtcAnchorBlockId } }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
+    // debug.btcAnchor('aggregateAndAnchorBTCAsync : btc blocks to anchor : %o', blocks)
+    debug.btcAnchor('aggregateAndAnchorBTCAsync : btc blocks.length to anchor : %d', blocks.length)
+
+    if (blocks.length === 0) {
+      debug.btcAnchor('aggregateAndAnchorBTCAsync : No blocks to anchor since last btc-a : returning')
+      return
+    }
 
     // Build merkle tree with block hashes
     let leaves = blocks.map((blockObj) => {
@@ -567,12 +578,9 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
     }
     treeData.proofData = proofData
 
-    debug.general(`aggregateAndAnchorBTCAsync : blocks.length : ${blocks.length}`)
+    debug.btcAnchor(`aggregateAndAnchorBTCAsync : blocks.length : ${blocks.length}`)
 
-    // if the amqp channel is null (closed), processing should not continue, defer to next interval
-    if (amqpChannel === null) return
-
-    // Create new btc anchor block with resulting tree root
+    // Create new BTC anchor block with resulting tree root
     await createBtcAnchorBlockAsync(treeData.anchor_btc_agg_root)
 
     // For each calendar record block in the tree, add proof state
@@ -605,7 +613,7 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
             console.error('aggregateAndAnchorBTCAsync : anchor aggregation had errors ', err.message)
             return seriesCallback(err)
           } else {
-            debug.general(`aggregateAndAnchorBTCAsync : anchor aggregation complete`)
+            debug.btcAnchor(`aggregateAndAnchorBTCAsync : anchor aggregation complete`)
             return seriesCallback(null)
           }
         })
@@ -617,7 +625,7 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
           anchor_btc_agg_root: treeData.anchor_btc_agg_root
         }
 
-        // Send anchorData to the btc tx service for anchoring
+        // Send anchorData to the BTC tx service for anchoring
         amqpChannel.sendToQueue(env.RMQ_WORK_OUT_BTCTX_QUEUE, Buffer.from(JSON.stringify(anchorData)), { persistent: true },
           (err, ok) => {
             if (err !== null) {
@@ -631,12 +639,12 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
       }
     ], (err) => {
       if (err) throw new Error(err)
-      debug.general(`aggregateAndAnchorBTCAsync : complete`)
+      debug.btcAnchor(`aggregateAndAnchorBTCAsync : complete`)
     })
   } catch (error) {
     throw new Error(`aggregateAndAnchorBTCAsync error: ${error.message}`)
   }
-  debug.general(`aggregateAndAnchorBTCAsync : end`)
+  debug.btcAnchor(`aggregateAndAnchorBTCAsync : end`)
 }
 
 // Each of these locks must be defined up front since event handlers
@@ -751,7 +759,7 @@ registerLockEvents(nistLock, 'nistLock', async () => {
       onRetry: (error) => { console.error(`registerLockEvents : nistLock : retrying : ${error.message}`) }
     })
   } catch (error) {
-    console.error(`registerLockEvents : nistLock : unable to create NIST block: ${error.message}`)
+    console.error(`registerLockEvents : nistLock : unable to create NIST block after retries : ${error.message}`)
   } finally {
     // always release lock
     try {
@@ -765,36 +773,18 @@ registerLockEvents(nistLock, 'nistLock', async () => {
 // LOCK HANDLERS : btc-anchor
 registerLockEvents(btcAnchorLock, 'btcAnchorLock', async () => {
   try {
-    let btcAnchorIntervalMinutes = 60 / env.ANCHOR_BTC_PER_HOUR
-    let lastBtcAnchorBlock
-    try {
-      lastBtcAnchorBlock = await CalendarBlock.findOne({ where: { type: 'btc-a', stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'hash', 'time', 'stackId'], order: [['id', 'DESC']] })
-    } catch (error) {
-      throw new Error(`unable to retrieve most recent btc anchor block: ${error.message}`)
-    }
-
-    if (lastBtcAnchorBlock) {
-      // checks if the last btc anchor block is at least btcAnchorIntervalMinutes - oneMinuteMS old
-      // Only if so, we write a new anchor and do the work of that function. Otherwise immediate release lock.
-      let oneMinuteMS = 60000
-      let lastBtcAnchorMS = lastBtcAnchorBlock.time * 1000
-      let currentMS = Date.now()
-      let ageMS = currentMS - lastBtcAnchorMS
-      let lastAnchorTooRecent = (ageMS < (btcAnchorIntervalMinutes * 60 * 1000 - oneMinuteMS))
-      if (lastAnchorTooRecent) {
-        let ageSec = Math.round(ageMS / 1000)
-        debug.btcAnchor(`registerLockEvents : btcAnchorLock : no work: ${btcAnchorIntervalMinutes} minutes must elapse between each new btc-a block. The last one was generated ${ageSec} seconds ago by Core ${lastBtcAnchorBlock.stackId}.`)
-        return
-      }
-    }
-    try {
-      let lastBtcAnchorBlockId = lastBtcAnchorBlock ? parseInt(lastBtcAnchorBlock.id, 10) : null
+    await retry(async bail => {
+      // Grab last BTC anchor block ID from global var 'lastBtcAnchorBlockId'
+      // set at top and bottom of hour just prior to requesting this lock.
       await aggregateAndAnchorBTCAsync(lastBtcAnchorBlockId)
-    } catch (error) {
-      throw new Error(`unable to aggregate and create btc anchor block: ${error.message}`)
-    }
+    }, {
+      retries: 15,        // The maximum amount of times to retry the operation. Default is 10
+      factor: 1.2,        // The exponential factor to use. Default is 2
+      minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
+      onRetry: (error) => { console.error(`registerLockEvents : btcAnchorLock : retrying : ${error.message}`) }
+    })
   } catch (error) {
-    console.error(`registerLockEvents : btcAnchorLock : ${error.message}`)
+    console.error(`registerLockEvents : btcAnchorLock : unable to aggregate and create BTC anchor block after retries : ${error.message}`)
   } finally {
     // always release lock
     try {
@@ -977,42 +967,6 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
   }
 })
 
-// Set the BTC anchor interval
-let setBtcInterval = () => {
-  debug.general('setBtcInterval : begin')
-  let currentMinute = new Date().getUTCMinutes()
-
-  // determine the minutes of the hour to run process based on ANCHOR_BTC_PER_HOUR
-  let btcAnchorMinutes = []
-  let minuteOfHour = 0
-  while (minuteOfHour < 60) {
-    btcAnchorMinutes.push(minuteOfHour)
-    minuteOfHour += (60 / env.ANCHOR_BTC_PER_HOUR)
-  }
-
-  heart.createEvent(1, async function (count, last) {
-    let now = new Date()
-
-    // if we are on a new minute
-    if (now.getUTCMinutes() !== currentMinute) {
-      currentMinute = now.getUTCMinutes()
-      if (btcAnchorMinutes.includes(currentMinute)) {
-        // if the amqp channel is null (closed), processing should not continue, defer to next interval
-        if (amqpChannel === null) return
-        let randomFuzzyMS = await rand(0, maxFuzzyMS)
-        setTimeout(() => {
-          try {
-            btcAnchorLock.acquire()
-          } catch (error) {
-            console.error(`setBtcInterval : acquire : ${error.message}`)
-          }
-        }, randomFuzzyMS)
-      }
-    }
-  })
-  debug.general('setBtcInterval : end')
-}
-
 /**
  * Opens a storage connection
  **/
@@ -1152,14 +1106,6 @@ function startWatchesAndIntervals () {
     }
   }, env.CALENDAR_INTERVAL_MS)
 
-  // Add all block hashes back to the previous BTC anchor to a Merkle tree and send to BTC TX
-  if (env.ANCHOR_BTC === 'enabled') { // Do this only if BTC anchoring is enabled
-    setBtcInterval()
-    debug.general('startWatchesAndIntervals : ANCHOR_BTC enabled')
-  } else {
-    debug.general('startWatchesAndIntervals : ANCHOR_BTC disabled')
-  }
-
   debug.general('startWatchesAndIntervals : end')
 }
 
@@ -1191,10 +1137,28 @@ async function start () {
 // get the whole show started
 start()
 
+async function lastBtcAnchorBlockIdForStackId () {
+  debug.btcAnchor('lastBtcAnchorBlockForStackId : begin')
+  let lastBtcAnchorBlockForStack
+  try {
+    lastBtcAnchorBlockForStack = await CalendarBlock.findOne({ where: { type: 'btc-a', stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'hash', 'time', 'stackId'], order: [['id', 'DESC']] })
+  } catch (error) {
+    throw new Error(`unable to retrieve most recent BTC anchor block: ${error.message}`)
+  }
+
+  let id = lastBtcAnchorBlockForStack ? parseInt(lastBtcAnchorBlockForStack.id, 10) : null
+  debug.btcAnchor(`lastBtcAnchorBlockIdForStackId : last block ID : ${id}`)
+  return id
+}
+
 // Cron like scheduler. Params are:
 // sec min hour day_of_month month day_of_week
-// Run every 30 min at the top and bottom of the hour
-schedule.scheduleJob('0 */30 * * * *', () => {
+
+// nistLock : run every 30 min at 25 and 55 minute marks
+// so as not to conflict with activity at the top and bottom
+// of the hour. Runs only in a single leader elected zone so
+// no de-confliction should be required.
+schedule.scheduleJob('0 */25,55 * * * *', () => {
   debug.nist(`scheduleJob : nistLock.acquire : leader? : ${IS_LEADER}`)
 
   // Don't consume a lock unless this Calendar is the zone leader
@@ -1205,5 +1169,40 @@ schedule.scheduleJob('0 */30 * * * *', () => {
     } catch (error) {
       console.error('scheduleJob : nistLock.acquire : %s', error.message)
     }
+  }
+})
+
+// btcAnchorLock : run every 30 min, in every zone,
+// at the top and bottom of the hour. Pick a random second
+// within the top and bottom of the hour to de-conflict
+// zones running the same code.
+let cronScheduleBtcAnchor = `${_.random(59)} */30 * * * *`
+debug.btcAnchor(`scheduleJob : btcAnchor : cronSchedule : ${cronScheduleBtcAnchor}`)
+schedule.scheduleJob(cronScheduleBtcAnchor, () => {
+  if (env.ANCHOR_BTC === 'enabled') {
+    debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : ANCHOR_BTC enabled`)
+    // Look up last anchor block in DB outside of a lock to reduce
+    // time spent inside the lock which is blocking for all other
+    // lock users.
+    lastBtcAnchorBlockIdForStackId()
+    .then((id) => {
+      // Set global var with last anchor block ID for use inside lock.
+      // Doing it this way since we can't pass params to lock.
+      lastBtcAnchorBlockId = id
+      debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : set lastBtcAnchorBlockId : ${lastBtcAnchorBlockId}`)
+
+      try {
+        // Now that we've done some heavy DB lifting lets acquire the lock
+        btcAnchorLock.acquire()
+      } catch (error) {
+        console.error('scheduleJob : btcAnchorLock.acquire : %s', error.message)
+      }
+    })
+    .catch(error => {
+      lastBtcAnchorBlockId = null
+      console.error('scheduleJob : lastBtcAnchorBlockIdForStackId : %s', error.message)
+    })
+  } else {
+    debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : ANCHOR_BTC disabled`)
   }
 })
