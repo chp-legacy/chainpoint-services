@@ -1138,15 +1138,15 @@ async function scheduleActionsAsync () {
   // Help de-conflict across zones by running at a random
   // offset from 0 seconds.
   // e.g.
-  //   */0,10,20,30,40,50 * * * * *
-  //   */1,11,21,31,41,51 * * * * *
+  //   0,10,20,30,40,50 * * * * *
+  //   1,11,21,31,41,51 * * * * *
   let calRandomIntervalBase = _.random(9)
   let calRandomInterval = _.map([0, 10, 20, 30, 40, 50], function (interval) {
     interval += calRandomIntervalBase
     return interval
   })
 
-  let cronScheduleCalendarAnchor = `*/${calRandomInterval.join(',')} * * * * *`
+  let cronScheduleCalendarAnchor = `${calRandomInterval.join(',')} * * * * *`
   debug.calendar(`scheduleJob : calendarLock : cronScheduleCalendarAnchor : %s`, cronScheduleCalendarAnchor)
   schedule.scheduleJob(cronScheduleCalendarAnchor, () => {
     if (AGGREGATION_ROOTS.length > 0) {
@@ -1166,7 +1166,7 @@ async function scheduleActionsAsync () {
   // so as not to conflict with activity at the top and bottom
   // of the hour. Runs only in a single leader elected zone so
   // no de-confliction should be required.
-  schedule.scheduleJob('0 */25,55 * * * *', () => {
+  schedule.scheduleJob('0 25,55 * * * *', () => {
     debug.nist(`scheduleJob : nistLock.acquire : leader? : ${IS_LEADER}`)
 
     // Don't consume a lock unless this Calendar is the zone leader
@@ -1184,7 +1184,7 @@ async function scheduleActionsAsync () {
   // at the top and bottom of the hour. Pick a random second
   // within the top and bottom of the hour to de-conflict
   // zones running the same code.
-  let cronScheduleBtcAnchor = `${_.random(59)} */30 * * * *`
+  let cronScheduleBtcAnchor = `${_.random(59)} 0,30 * * * *`
   debug.btcAnchor(`scheduleJob : btcAnchor : cronScheduleBtcAnchor : ${cronScheduleBtcAnchor}`)
   schedule.scheduleJob(cronScheduleBtcAnchor, async () => {
     if (env.ANCHOR_BTC === 'enabled') {
