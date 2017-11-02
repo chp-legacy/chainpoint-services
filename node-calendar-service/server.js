@@ -532,7 +532,7 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
 
 // Aggregate all block hashes on chain since last BTC anchor block, add new
 // BTC anchor block to calendar, add new proof state entries, anchor root
-let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
+let aggregateAndAnchorBTCAsync = async () => {
   debug.btcAnchor(`aggregateAndAnchorBTCAsync : begin`)
 
   // if the amqp channel is null (closed), processing should not continue,
@@ -546,6 +546,9 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
   try {
     // Retrieve ALL Calendar blocks since last anchor block created by any stack.
     // This will change when we determine an approach to allow only a single zone to anchor.
+
+    // Use last BTC anchor block ID from global var 'lastBtcAnchorBlockId'
+    // set at top and bottom of hour just prior to requesting this lock.
     if (!lastBtcAnchorBlockId) lastBtcAnchorBlockId = -1
     let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastBtcAnchorBlockId } }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
     // debug.btcAnchor('aggregateAndAnchorBTCAsync : btc blocks to anchor : %o', blocks)
@@ -806,9 +809,7 @@ registerLockEvents(nistLock, 'nistLock', async () => {
 registerLockEvents(btcAnchorLock, 'btcAnchorLock', async () => {
   try {
     await retry(async bail => {
-      // Grab last BTC anchor block ID from global var 'lastBtcAnchorBlockId'
-      // set at top and bottom of hour just prior to requesting this lock.
-      await aggregateAndAnchorBTCAsync(lastBtcAnchorBlockId)
+      await aggregateAndAnchorBTCAsync()
     }, {
       retries: 15,        // The maximum amount of times to retry the operation. Default is 10
       factor: 1.2,        // The exponential factor to use. Default is 2
