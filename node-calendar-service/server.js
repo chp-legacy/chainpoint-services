@@ -859,9 +859,9 @@ registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
           onRetry: (error) => { console.error(`registerLockEvents : btcConfirmLock : retrying : ${error.message}`) }
         })
       } catch (error) {
-        // an error occurred and this message could not be processed
-        // return the message to the BTC_MON_MESSAGES array to be tried again at the next interval
-        BTC_MON_MESSAGES.push(monMessagesToProcess[x])
+        // an error occurred and this message could not be processed, nack and try again later
+        amqpChannel.nack(msg)
+        console.error('registerLockEvents : btcConfirmLock : [btcmon] consume message nacked', btctxId)
         throw new Error(`unable to create btc-c block : ${error.message}`)
       }
 
