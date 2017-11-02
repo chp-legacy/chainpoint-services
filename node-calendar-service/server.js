@@ -887,6 +887,36 @@ registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
   }
 })
 
+async function sendTNTRewardAsync (ethAddr, tntGrains) {
+  let options = {
+    headers: [
+      {
+        name: 'Content-Type',
+        value: 'application/json'
+      }
+    ],
+    method: 'POST',
+    uri: `${ethTntTxUri}/transfer`,
+    body: {
+      to_addr: ethAddr,
+      value: tntGrains
+    },
+    json: true,
+    gzip: true,
+    resolveWithFullResponse: true
+  }
+
+  try {
+    let rewardResponse = await rp(options)
+    let nodeRewardTxId = rewardResponse.body.trx_id
+    debug.reward(`sendTNTRewardAsync : ${tntGrains} grains (${tntGrains / 10 ** 8} TNT) transferred to ETH address ${ethAddr} in transaction ${nodeRewardTxId}`)
+    return nodeRewardTxId
+  } catch (error) {
+    console.error(`sendTNTRewardAsync : ${tntGrains} grains (${tntGrains / 10 ** 8} TNT) failed to be transferred to ETH address ${ethAddr}: ${error.message}`)
+    return null
+  }
+}
+
 // LOCK HANDLERS : reward
 registerLockEvents(rewardLock, 'rewardLock', async () => {
   let msg = rewardLatest
@@ -901,69 +931,19 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
     let coreRewardEthAddr = rewardMsgObj.core ? rewardMsgObj.core.address : null
     let coreTNTGrainsRewardShare = rewardMsgObj.core ? rewardMsgObj.core.amount : 0
 
-    // reward TNT to ETH address for selected qualifying Node according to random reward message selection
-    let postObject = {
-      to_addr: nodeRewardETHAddr,
-      value: nodeTNTGrainsRewardShare
-    }
-
-    let options = {
-      headers: [
-        {
-          name: 'Content-Type',
-          value: 'application/json'
-        }
-      ],
-      method: 'POST',
-      uri: `${ethTntTxUri}/transfer`,
-      body: postObject,
-      json: true,
-      gzip: true,
-      resolveWithFullResponse: true
-    }
-
-    try {
-      let rewardResponse = await rp(options)
-      nodeRewardTxId = rewardResponse.body.trx_id
-      debug.reward(`registerLockEvents : rewardLock : ${nodeTNTGrainsRewardShare} grains (${nodeTNTGrainsRewardShare / 10 ** 8} TNT) transferred to Node using ETH address ${nodeRewardETHAddr} in transaction ${nodeRewardTxId}`)
-    } catch (error) {
-      console.error(`registerLockEvents : rewardLock : ${nodeTNTGrainsRewardShare} grains (${nodeTNTGrainsRewardShare / 10 ** 8} TNT) failed to be transferred to Node using ETH address ${nodeRewardETHAddr}: ${error.message}`)
-    }
+    // FIXME : extract this HTTP call to outside of the lock
+    nodeRewardTxId = await sendTNTRewardAsync(nodeRewardETHAddr, nodeTNTGrainsRewardShare)
 
     // reward TNT to Core operator according to random reward message selection (if applicable)
     if (coreTNTGrainsRewardShare > 0) {
-      let postObject = {
-        to_addr: coreRewardEthAddr,
-        value: coreTNTGrainsRewardShare
-      }
-
-      let options = {
-        headers: [
-          {
-            name: 'Content-Type',
-            value: 'application/json'
-          }
-        ],
-        method: 'POST',
-        uri: `${ethTntTxUri}/transfer`,
-        body: postObject,
-        json: true,
-        gzip: true,
-        resolveWithFullResponse: true
-      }
-
-      try {
-        let rewardResponse = await rp(options)
-        coreRewardTxId = rewardResponse.body.trx_id
-        debug.reward(`registerLockEvents : rewardLock : ${coreTNTGrainsRewardShare} grains (${coreTNTGrainsRewardShare / 10 ** 8} TNT) transferred to Core using ETH address ${coreRewardEthAddr} in transaction ${coreRewardTxId}`)
-      } catch (error) {
-        console.error(`registerLockEvents : rewardLock : ${coreTNTGrainsRewardShare} grains (${coreTNTGrainsRewardShare / 10 ** 8} TNT) failed to be transferred to Core using ETH address ${coreRewardEthAddr}: ${error.message}`)
-      }
+      // FIXME : extract this HTTP call to outside of the lock
+      coreRewardTxId = await sendTNTRewardAsync(coreRewardEthAddr, coreTNTGrainsRewardShare)
     }
 
     // construct the reward block data
     let dataId = nodeRewardTxId
     let dataVal = [rewardMsgObj.node.address, rewardMsgObj.node.amount].join(':')
+
     if (rewardMsgObj.core) {
       dataId = [dataId, coreRewardTxId].join(':')
       dataVal = [dataVal, rewardMsgObj.core.address, rewardMsgObj.core.amount].join(':')
