@@ -919,8 +919,10 @@ async function sendTNTRewardAsync (ethAddr, tntGrains) {
 
 // LOCK HANDLERS : reward
 registerLockEvents(rewardLock, 'rewardLock', async () => {
+  debug.reward(`registerLockEvents : rewardLock : begin`)
   let msg = rewardLatest
   let rewardMsgObj = JSON.parse(msg.content.toString())
+  debug.reward('registerLockEvents : rewardLock : rewardMsgObj : %j', rewardMsgObj)
 
   try {
     // transfer TNT according to random reward message selection
@@ -931,16 +933,20 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
     let coreRewardEthAddr = rewardMsgObj.core ? rewardMsgObj.core.address : null
     let coreTNTGrainsRewardShare = rewardMsgObj.core ? rewardMsgObj.core.amount : 0
 
+    debug.reward('registerLockEvents : rewardLock : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
+
     // FIXME : extract this HTTP call to outside of the lock
+    debug.reward('registerLockEvents : rewardLock : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
     nodeRewardTxId = await sendTNTRewardAsync(nodeRewardETHAddr, nodeTNTGrainsRewardShare)
 
-    // reward TNT to Core operator according to random reward message selection (if applicable)
+    // Reward TNT to Core operator if enabled
     if (coreTNTGrainsRewardShare > 0) {
       // FIXME : extract this HTTP call to outside of the lock
+      debug.reward('registerLockEvents : rewardLock : coreRewardEthAddr : %s : coreTNTGrainsRewardShare : %s', coreRewardEthAddr, coreTNTGrainsRewardShare)
       coreRewardTxId = await sendTNTRewardAsync(coreRewardEthAddr, coreTNTGrainsRewardShare)
     }
 
-    // construct the reward block data
+    // Construct the reward block data
     let dataId = nodeRewardTxId
     let dataVal = [rewardMsgObj.node.address, rewardMsgObj.node.amount].join(':')
 
@@ -951,21 +957,21 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
 
     try {
       await retry(async bail => {
+        debug.reward('registerLockEvents : rewardLock : writing block : dataId : %s : dataVal : %s', dataId, dataVal)
         await createRewardBlockAsync(dataId, dataVal)
       }, {
         retries: 15,        // The maximum amount of times to retry the operation. Default is 10
         factor: 1.2,        // The exponential factor to use. Default is 2
         minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-        onRetry: (error) => { console.error(`registerLockEvents : rewardLock : retrying : ${error.message}`) }
+        onRetry: (error) => { console.error(`registerLockEvents : rewardLock : writing block : retrying : ${error.message}`) }
       })
 
       amqpChannel.ack(msg)
-      debug.reward(`registerLockEvents : rewardLock : [reward] consume message acked ${rewardMsgObj.node.address}`)
+      debug.reward('registerLockEvents : rewardLock : acked message w/ address : %s', rewardMsgObj.node.address)
     } catch (error) {
-      // ack consumption of all original message
-      // this message must be acked to avoid reward distribution to node from occuring again
+      // ack consumption of original message to avoid distribution again
       amqpChannel.ack(msg)
-      console.error(`registerLockEvents : rewardLock : [reward] consume message acked with error: ${error.message} ${rewardMsgObj.node.address}`)
+      console.error('registerLockEvents : rewardLock : message acked with for address : %s : %s', rewardMsgObj.node.address, error.message)
       throw new Error(`unable to create reward block: ${error.message}`)
     }
   } catch (error) {
