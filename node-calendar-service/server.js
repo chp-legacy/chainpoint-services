@@ -285,6 +285,20 @@ function processMessage (msg) {
   }
 }
 
+async function acquireLockAsync (lock, name) {
+  await retry(async bail => {
+    if (lock.isAcquired) throw new Error(`${name} already acquired and in use`)
+    lock.acquire()
+  }, {
+    retries: 10000,    // The maximum amount of times to retry the operation. Default is 10
+    factor: 1,       // The exponential factor to use. Default is 2
+    minTimeout: 3000,   // The number of milliseconds before starting the first retry. Default is 1000
+    maxTimeout: 6000,
+    randomize: true,
+    onRetry: (error) => { console.error(`${name}.acquire() : retrying : ${error.message}`) }
+  })
+}
+
 function consumeAggRootMessage (msg) {
   if (msg !== null) {
     let rootObj = JSON.parse(msg.content.toString())
@@ -366,17 +380,7 @@ async function consumeBtcMonMessageAsync (msg) {
   if (msg !== null) {
     BTC_MON_MESSAGES.push(msg)
     try {
-      await retry(async bail => {
-        if (btcConfirmLock.isAcquired) throw new Error('btcConfirmLock already acquired and in use')
-        btcConfirmLock.acquire()
-      }, {
-        retries: 10000,    // The maximum amount of times to retry the operation. Default is 10
-        factor: 1,       // The exponential factor to use. Default is 2
-        minTimeout: 3000,   // The number of milliseconds before starting the first retry. Default is 1000
-        maxTimeout: 6000,
-        randomize: true,
-        onRetry: (error) => { console.error(`btcConfirmLock.acquire() : retrying : ${error.message}`) }
-      })
+      await acquireLockAsync(btcConfirmLock, 'btcConfirmLock')
     } catch (error) {
       console.error('consumeBtcMonMessage : acquire : ', error.message)
     }
@@ -387,17 +391,7 @@ async function consumeRewardMessageAsync (msg) {
   if (msg !== null) {
     rewardLatest = msg
     try {
-      await retry(async bail => {
-        if (rewardLock.isAcquired) throw new Error('rewardLock already acquired and in use')
-        rewardLock.acquire()
-      }, {
-        retries: 10000,    // The maximum amount of times to retry the operation. Default is 10
-        factor: 1,       // The exponential factor to use. Default is 2
-        minTimeout: 3000,   // The number of milliseconds before starting the first retry. Default is 1000
-        maxTimeout: 6000,
-        randomize: true,
-        onRetry: (error) => { console.error(`rewardLock.acquire() : retrying : ${error.message}`) }
-      })
+      await acquireLockAsync(rewardLock, 'rewardLock')
     } catch (error) {
       console.error('consumeRewardMessage : acquire : ', error.message)
     }
@@ -1060,17 +1054,7 @@ async function openStorageConnectionAsync () {
     let blockCount = await CalendarBlock.count()
     if (blockCount === 0) {
       debug.general('openStorageConnectionAsync : trigger genesisLock')
-      await retry(async bail => {
-        if (genesisLock.isAcquired) throw new Error('genesisLock already acquired and in use')
-        genesisLock.acquire()
-      }, {
-        retries: 10000,    // The maximum amount of times to retry the operation. Default is 10
-        factor: 1,       // The exponential factor to use. Default is 2
-        minTimeout: 3000,   // The number of milliseconds before starting the first retry. Default is 1000
-        maxTimeout: 6000,
-        randomize: true,
-        onRetry: (error) => { console.error(`genesisLock.acquire() : retrying : ${error.message}`) }
-      })
+      await acquireLockAsync(genesisLock, 'genesisLock')
     } else {
       debug.general('openStorageConnectionAsync : skip genesisLock : CalendarBlock.count : %d', blockCount)
     }
@@ -1198,17 +1182,7 @@ async function scheduleActionsAsync () {
       debug.calendar(`scheduleJob : calendarLock.acquire : AGGREGATION_ROOTS.length : %d`, AGGREGATION_ROOTS.length)
 
       try {
-        await retry(async bail => {
-          if (calendarLock.isAcquired) throw new Error('calendarLock already acquired and in use')
-          calendarLock.acquire()
-        }, {
-          retries: 10000,    // The maximum amount of times to retry the operation. Default is 10
-          factor: 1,       // The exponential factor to use. Default is 2
-          minTimeout: 3000,   // The number of milliseconds before starting the first retry. Default is 1000
-          maxTimeout: 6000,
-          randomize: true,
-          onRetry: (error) => { console.error(`calendarLock.acquire() : retrying : ${error.message}`) }
-        })
+        await acquireLockAsync(calendarLock, 'calendarLock')
       } catch (error) {
         console.error('scheduleJob : calendarLock.acquire : %s', error.message)
       }
@@ -1228,17 +1202,7 @@ async function scheduleActionsAsync () {
     // and there is NIST data available.
     if (IS_LEADER && !_.isEmpty(nistLatest)) {
       try {
-        await retry(async bail => {
-          if (nistLock.isAcquired) throw new Error('nistLock already acquired and in use')
-          nistLock.acquire()
-        }, {
-          retries: 10000,    // The maximum amount of times to retry the operation. Default is 10
-          factor: 1,       // The exponential factor to use. Default is 2
-          minTimeout: 3000,   // The number of milliseconds before starting the first retry. Default is 1000
-          maxTimeout: 6000,
-          randomize: true,
-          onRetry: (error) => { console.error(`nistLock.acquire() : retrying : ${error.message}`) }
-        })
+        await acquireLockAsync(nistLock, 'nistLock')
       } catch (error) {
         console.error('scheduleJob : nistLock.acquire : %s', error.message)
       }
@@ -1265,17 +1229,7 @@ async function scheduleActionsAsync () {
         debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : set lastBtcAnchorBlockId : ${lastBtcAnchorBlockId}`)
 
         try {
-          await retry(async bail => {
-            if (btcAnchorLock.isAcquired) throw new Error('btcAnchorLock already acquired and in use')
-            btcAnchorLock.acquire()
-          }, {
-            retries: 10000,    // The maximum amount of times to retry the operation. Default is 10
-            factor: 1,       // The exponential factor to use. Default is 2
-            minTimeout: 3000,   // The number of milliseconds before starting the first retry. Default is 1000
-            maxTimeout: 6000,
-            randomize: true,
-            onRetry: (error) => { console.error(`btcAnchorLock.acquire() : retrying : ${error.message}`) }
-          })
+          await acquireLockAsync(btcAnchorLock, 'btcAnchorLock')
         } catch (error) {
           console.error('scheduleJob : btcAnchorLock.acquire : %s', error.message)
         }
