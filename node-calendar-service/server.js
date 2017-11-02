@@ -737,7 +737,7 @@ function registerLockEvents (lock, lockName, acquireFunction) {
 
   lock.on('end', () => {
     lock.isAcquired = false
-    console.log(`registerLockEvents : ${lockName} : released and ended`)
+    debug.general(`registerLockEvents : ${lockName} : released and ended`)
   })
 }
 
