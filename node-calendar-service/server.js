@@ -166,7 +166,7 @@ let createCalendarBlockAsync = async (root) => {
     let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
     if (prevBlock) {
       let newId = parseInt(prevBlock.id, 10) + 1
-      debug.calendar(`createCalendarBlockAsync : prevBlock found : ${newId}`)
+      debug.calendar(`createCalendarBlockAsync : prevBlock found : ${prevBlock.id}`)
       return await writeBlockAsync(newId, 'cal', newId.toString(), root.toString(), prevBlock.hash, 'CAL')
     } else {
       throw new Error('no previous block found')
@@ -182,7 +182,7 @@ let createNistBlockAsync = async (nistDataObj) => {
     let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
     if (prevBlock) {
       let newId = parseInt(prevBlock.id, 10) + 1
-      debug.nist(`createNistBlockAsync : prevBlock found : ${newId}`)
+      debug.nist(`createNistBlockAsync : prevBlock found : ${prevBlock.id}`)
       let dataId = nistDataObj.split(':')[0].toString() // the epoch timestamp for this NIST entry
       let dataVal = nistDataObj.split(':')[1].toString()  // the hex value for this NIST entry
       return await writeBlockAsync(newId, 'nist', dataId, dataVal, prevBlock.hash, 'NIST')
@@ -200,7 +200,7 @@ let createBtcAnchorBlockAsync = async (root) => {
     let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
     if (prevBlock) {
       let newId = parseInt(prevBlock.id, 10) + 1
-      debug.btcAnchor(`createBtcAnchorBlockAsync : prevBlock found : ${newId} : btc-a : '' : ${root.toString()} : ${prevBlock.hash} : 'BTC-ANCHOR'`)
+      debug.btcAnchor(`createBtcAnchorBlockAsync : prevBlock found : ${prevBlock.id} : btc-a : '' : ${root.toString()} : ${prevBlock.hash} : 'BTC-ANCHOR'`)
       return await writeBlockAsync(newId, 'btc-a', '', root.toString(), prevBlock.hash, 'BTC-ANCHOR')
     } else {
       throw new Error('no previous block found')
@@ -216,7 +216,7 @@ let createBtcConfirmBlockAsync = async (height, root) => {
     let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
     if (prevBlock) {
       let newId = parseInt(prevBlock.id, 10) + 1
-      debug.btcConfirm(`createBtcConfirmBlockAsync : prevBlock found : ${newId}`)
+      debug.btcConfirm(`createBtcConfirmBlockAsync : prevBlock found : ${prevBlock.id}`)
       return await writeBlockAsync(newId, 'btc-c', height.toString(), root.toString(), prevBlock.hash, 'BTC-CONFIRM')
     } else {
       throw new Error('no previous block found')
@@ -232,7 +232,7 @@ let createRewardBlockAsync = async (dataId, dataVal) => {
     let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
     if (prevBlock) {
       let newId = parseInt(prevBlock.id, 10) + 1
-      debug.reward(`createRewardBlockAsync : prevBlock found : ${newId}`)
+      debug.reward(`createRewardBlockAsync : prevBlock found : ${prevBlock.id}`)
       return await writeBlockAsync(newId, 'reward', dataId.toString(), dataVal.toString(), prevBlock.hash, 'REWARD')
     } else {
       throw new Error('no previous block found')
