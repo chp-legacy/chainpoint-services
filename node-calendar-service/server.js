@@ -657,6 +657,21 @@ let aggregateAndAnchorBTCAsync = async (lastBtcAnchorBlockId) => {
   debug.btcAnchor(`aggregateAndAnchorBTCAsync : end`)
 }
 
+// Get the id of that most recent btc-a block for the current stackId
+async function lastBtcAnchorBlockIdForStackIdAsync () {
+  debug.btcAnchor('lastBtcAnchorBlockForStackId : begin')
+  let lastBtcAnchorBlockForStack
+  try {
+    lastBtcAnchorBlockForStack = await CalendarBlock.findOne({ where: { type: 'btc-a', stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'hash', 'time', 'stackId'], order: [['id', 'DESC']] })
+  } catch (error) {
+    throw new Error(`unable to retrieve most recent BTC anchor block: ${error.message}`)
+  }
+
+  let id = lastBtcAnchorBlockForStack ? parseInt(lastBtcAnchorBlockForStack.id, 10) : null
+  debug.btcAnchor(`lastBtcAnchorBlockIdForStackIdAsync : last block ID : ${id}`)
+  return id
+}
+
 // Each of these locks must be defined up front since event handlers
 // need to be registered for each. They are all effectively locking the same
 // resource since they share the same CALENDAR_LOCK_KEY. The value is
@@ -1113,6 +1128,93 @@ function startConsulWatches () {
   debug.general(' startConsulWatches : end')
 }
 
+// SCHEDULED ACTIONS
+// ////////////////////////////////////////////
+async function scheduleActionsAsync () {
+  // Cron like scheduler. Params are:
+  // sec min hour day_of_month month day_of_week
+
+  // calendarLock : run every 10 seconds, in every zone.
+  // Help de-conflict across zones by running at a random
+  // offset from 0 seconds.
+  // e.g.
+  //   */0,10,20,30,40,50 * * * * *
+  //   */1,11,21,31,41,51 * * * * *
+  let calRandomIntervalBase = _.random(9)
+  let calRandomInterval = _.map([0, 10, 20, 30, 40, 50], function (interval) {
+    interval += calRandomIntervalBase
+    return interval
+  })
+
+  let cronScheduleCalendarAnchor = `*/${calRandomInterval.join(',')} * * * * *`
+  debug.calendar(`scheduleJob : calendarLock : cronScheduleCalendarAnchor : %s`, cronScheduleCalendarAnchor)
+  schedule.scheduleJob(cronScheduleCalendarAnchor, () => {
+    if (AGGREGATION_ROOTS.length > 0) {
+      debug.calendar(`scheduleJob : calendarLock.acquire : AGGREGATION_ROOTS.length : %d`, AGGREGATION_ROOTS.length)
+
+      try {
+        calendarLock.acquire()
+      } catch (error) {
+        console.error('scheduleJob : calendarLock.acquire : %s', error.message)
+      }
+    } else {
+      debug.calendar(`scheduleJob : calendarLock.acquire : AGGREGATION_ROOTS.length : 0`)
+    }
+  })
+
+  // nistLock : run every 30 min at 25 and 55 minute marks
+  // so as not to conflict with activity at the top and bottom
+  // of the hour. Runs only in a single leader elected zone so
+  // no de-confliction should be required.
+  schedule.scheduleJob('0 */25,55 * * * *', () => {
+    debug.nist(`scheduleJob : nistLock.acquire : leader? : ${IS_LEADER}`)
+
+    // Don't consume a lock unless this Calendar is the zone leader
+    // and there is NIST data available.
+    if (IS_LEADER && !_.isEmpty(nistLatest)) {
+      try {
+        nistLock.acquire()
+      } catch (error) {
+        console.error('scheduleJob : nistLock.acquire : %s', error.message)
+      }
+    }
+  })
+
+  // btcAnchorLock : run every 30 min, in every zone,
+  // at the top and bottom of the hour. Pick a random second
+  // within the top and bottom of the hour to de-conflict
+  // zones running the same code.
+  let cronScheduleBtcAnchor = `${_.random(59)} */30 * * * *`
+  debug.btcAnchor(`scheduleJob : btcAnchor : cronScheduleBtcAnchor : ${cronScheduleBtcAnchor}`)
+  schedule.scheduleJob(cronScheduleBtcAnchor, async () => {
+    if (env.ANCHOR_BTC === 'enabled') {
+      debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : ANCHOR_BTC enabled`)
+      // Look up last anchor block in DB outside of a lock to reduce
+      // time spent inside the lock which is blocking for all other
+      // lock users.
+      try {
+        // Set global var with last anchor block ID for use inside lock.
+        // Doing it this way since we can't pass params to lock.
+        lastBtcAnchorBlockId = await lastBtcAnchorBlockIdForStackIdAsync()
+
+        debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : set lastBtcAnchorBlockId : ${lastBtcAnchorBlockId}`)
+
+        try {
+          // Now that we've done some heavy DB lifting lets acquire the lock
+          btcAnchorLock.acquire()
+        } catch (error) {
+          console.error('scheduleJob : btcAnchorLock.acquire : %s', error.message)
+        }
+      } catch (error) {
+        lastBtcAnchorBlockId = null
+        console.error('scheduleJob : lastBtcAnchorBlockIdForStackId : %s', error.message)
+      }
+    } else {
+      debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : ANCHOR_BTC disabled`)
+    }
+  })
+}
+
 // process all steps need to start the application
 async function start () {
   debug.general('start : begin')
@@ -1131,6 +1233,8 @@ async function start () {
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     debug.general('start : init Consul watches')
     startConsulWatches()
+    debug.general('start : init scheduled actions')
+    await scheduleActionsAsync()
     debug.general('start : complete')
   } catch (error) {
     console.error(`start : An error has occurred on startup: ${error.message}`)
@@ -1140,104 +1244,3 @@ async function start () {
 
 // get the whole show started
 start()
-
-async function lastBtcAnchorBlockIdForStackId () {
-  debug.btcAnchor('lastBtcAnchorBlockForStackId : begin')
-  let lastBtcAnchorBlockForStack
-  try {
-    lastBtcAnchorBlockForStack = await CalendarBlock.findOne({ where: { type: 'btc-a', stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'hash', 'time', 'stackId'], order: [['id', 'DESC']] })
-  } catch (error) {
-    throw new Error(`unable to retrieve most recent BTC anchor block: ${error.message}`)
-  }
-
-  let id = lastBtcAnchorBlockForStack ? parseInt(lastBtcAnchorBlockForStack.id, 10) : null
-  debug.btcAnchor(`lastBtcAnchorBlockIdForStackId : last block ID : ${id}`)
-  return id
-}
-
-// SCHEDULED ACTIONS
-// ////////////////////////////////////////////
-
-// Cron like scheduler. Params are:
-// sec min hour day_of_month month day_of_week
-
-// calendarLock : run every 10 seconds, in every zone.
-// Help de-conflict across zones by running at a random
-// offset from 0 seconds.
-// e.g.
-//   */0,10,20,30,40,50 * * * * *
-//   */1,11,21,31,41,51 * * * * *
-let calRandomIntervalBase = _.random(9)
-let calRandomInterval = _.map([0, 10, 20, 30, 40, 50], function (interval) {
-  interval += calRandomIntervalBase
-  return interval
-})
-
-let cronScheduleCalendarAnchor = `*/${calRandomInterval.join(',')} * * * * *`
-debug.calendar(`scheduleJob : calendarLock : cronScheduleCalendarAnchor : %s`, cronScheduleCalendarAnchor)
-schedule.scheduleJob(cronScheduleCalendarAnchor, () => {
-  if (AGGREGATION_ROOTS.length > 0) {
-    debug.calendar(`scheduleJob : calendarLock.acquire : AGGREGATION_ROOTS.length : %d`, AGGREGATION_ROOTS.length)
-
-    try {
-      calendarLock.acquire()
-    } catch (error) {
-      console.error('scheduleJob : calendarLock.acquire : %s', error.message)
-    }
-  } else {
-    debug.calendar(`scheduleJob : calendarLock.acquire : AGGREGATION_ROOTS.length : 0`)
-  }
-})
-
-// nistLock : run every 30 min at 25 and 55 minute marks
-// so as not to conflict with activity at the top and bottom
-// of the hour. Runs only in a single leader elected zone so
-// no de-confliction should be required.
-schedule.scheduleJob('0 */25,55 * * * *', () => {
-  debug.nist(`scheduleJob : nistLock.acquire : leader? : ${IS_LEADER}`)
-
-  // Don't consume a lock unless this Calendar is the zone leader
-  // and there is NIST data available.
-  if (IS_LEADER && !_.isEmpty(nistLatest)) {
-    try {
-      nistLock.acquire()
-    } catch (error) {
-      console.error('scheduleJob : nistLock.acquire : %s', error.message)
-    }
-  }
-})
-
-// btcAnchorLock : run every 30 min, in every zone,
-// at the top and bottom of the hour. Pick a random second
-// within the top and bottom of the hour to de-conflict
-// zones running the same code.
-let cronScheduleBtcAnchor = `${_.random(59)} */30 * * * *`
-debug.btcAnchor(`scheduleJob : btcAnchor : cronScheduleBtcAnchor : ${cronScheduleBtcAnchor}`)
-schedule.scheduleJob(cronScheduleBtcAnchor, () => {
-  if (env.ANCHOR_BTC === 'enabled') {
-    debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : ANCHOR_BTC enabled`)
-    // Look up last anchor block in DB outside of a lock to reduce
-    // time spent inside the lock which is blocking for all other
-    // lock users.
-    lastBtcAnchorBlockIdForStackId()
-    .then((id) => {
-      // Set global var with last anchor block ID for use inside lock.
-      // Doing it this way since we can't pass params to lock.
-      lastBtcAnchorBlockId = id
-      debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : set lastBtcAnchorBlockId : ${lastBtcAnchorBlockId}`)
-
-      try {
-        // Now that we've done some heavy DB lifting lets acquire the lock
-        btcAnchorLock.acquire()
-      } catch (error) {
-        console.error('scheduleJob : btcAnchorLock.acquire : %s', error.message)
-      }
-    })
-    .catch(error => {
-      lastBtcAnchorBlockId = null
-      console.error('scheduleJob : lastBtcAnchorBlockIdForStackId : %s', error.message)
-    })
-  } else {
-    debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : ANCHOR_BTC disabled`)
-  }
-})
