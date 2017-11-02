@@ -409,9 +409,8 @@ function formatAsChainpointV3Ops (proof, op) {
 }
 
 // Take work off of the AGGREGATION_ROOTS array and build Merkle tree
-let generateCalendarTree = () => {
+let generateCalendarTree = (rootsForTree) => {
   debug.general(`generateCalendarTree : begin`)
-  let rootsForTree = AGGREGATION_ROOTS.splice(0)
 
   let treeDataObj = null
   // create merkle tree only if there is at least one root to process
@@ -754,9 +753,10 @@ registerLockEvents(genesisLock, 'genesisLock', async () => {
 
 // LOCK HANDLERS : calendar
 registerLockEvents(calendarLock, 'calendarLock', async () => {
+  let rootsForTree = AGGREGATION_ROOTS.splice(0)
   try {
     // this must not be retried since it mutates state.
-    let treeDataObj = generateCalendarTree()
+    let treeDataObj = generateCalendarTree(rootsForTree)
 
     if (!_.isEmpty(treeDataObj)) {
       await retry(async bail => {
@@ -771,6 +771,9 @@ registerLockEvents(calendarLock, 'calendarLock', async () => {
       debug.calendar('registerLockEvents : calendarLock : no treeData (hashes) to process for calendar interval')
     }
   } catch (error) {
+    // an error has occured, return the rootsForTree back to AGGREGATION_ROOTS
+    // to be processed at the next interval
+    AGGREGATION_ROOTS = rootsForTree.concat(AGGREGATION_ROOTS)
     console.error(`registerLockEvents : calendarLock : unable to create calendar block: ${error.message}`)
   } finally {
     // always release lock
