@@ -29,6 +29,7 @@ const utils = require('./lib/utils.js')
 const rp = require('request-promise-native')
 const leaderElection = require('exp-leader-election')
 const schedule = require('node-schedule')
+const debugPkg = require('debug')
 
 // See : https://github.com/zeit/async-retry
 const retry = require('async-retry')
@@ -37,16 +38,16 @@ const Sequelize = require('sequelize-cockroachdb')
 const Op = Sequelize.Op
 
 var debug = {
-  general: require('debug')('calendar:general'),
-  genesis: require('debug')('calendar:block:genesis'),
-  calendar: require('debug')('calendar:block:calendar'),
-  btcAnchor: require('debug')('calendar:block:btcAnchor'),
-  btcConfirm: require('debug')('calendar:block:btcConfirm'),
-  reward: require('debug')('calendar:block:reward'),
-  nist: require('debug')('calendar:block:nist')
+  general: debugPkg('calendar:general'),
+  genesis: debugPkg('calendar:block:genesis'),
+  calendar: debugPkg('calendar:block:calendar'),
+  btcAnchor: debugPkg('calendar:block:btcAnchor'),
+  btcConfirm: debugPkg('calendar:block:btcConfirm'),
+  reward: debugPkg('calendar:block:reward'),
+  nist: debugPkg('calendar:block:nist')
 }
 // direct debug to output over STDOUT
-debug.log = console.info.bind(console)
+debugPkg.log = console.info.bind(console)
 
 // TweetNaCl.js
 // see: http://ed25519.cr.yp.to
