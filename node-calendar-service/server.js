@@ -45,6 +45,8 @@ var debug = {
   reward: require('debug')('calendar:block:reward'),
   nist: require('debug')('calendar:block:nist')
 }
+// direct debug to output over STDOUT
+debug.log = console.info.bind(console)
 
 // TweetNaCl.js
 // see: http://ed25519.cr.yp.to
