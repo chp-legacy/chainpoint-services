@@ -298,7 +298,7 @@ async function acquireLockAsync (lock, name) {
     minTimeout: 3000,   // The number of milliseconds before starting the first retry. Default is 1000
     maxTimeout: 6000,
     randomize: true,
-    onRetry: (error) => { console.error(`${name}.acquire() : retrying : ${error.message}`) }
+    onRetry: (error) => { debug.general(`${name}.acquire() : retrying : ${error.message}`) }
   })
 }
 
