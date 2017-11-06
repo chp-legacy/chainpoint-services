@@ -17,7 +17,6 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('cal')
 
-const async = require('async')
 const _ = require('lodash')
 const MerkleTools = require('merkle-tools')
 const amqp = require('amqplib')
@@ -321,61 +320,50 @@ async function consumeBtcTxMessageAsync (msg) {
     // before the Bitcore API even acknowledges the existence of the transaction (404)
     await utils.sleep(30000)
 
-    async.series([
-      (callback) => {
-        // queue up message containing updated proof state bound for proof state service
-        let stateObj = {}
-        stateObj.anchor_btc_agg_id = btcTxObj.anchor_btc_agg_id
-        stateObj.btctx_id = btcTxObj.btctx_id
-        let anchorBTCAggRoot = btcTxObj.anchor_btc_agg_root
-        let btctxBody = btcTxObj.btctx_body
-        let prefix = btctxBody.substr(0, btctxBody.indexOf(anchorBTCAggRoot))
-        let suffix = btctxBody.substr(btctxBody.indexOf(anchorBTCAggRoot) + anchorBTCAggRoot.length)
-        stateObj.btctx_state = {}
-        stateObj.btctx_state.ops = [
-          { l: prefix },
-          { r: suffix },
-          { op: 'sha-256-x2' }
-        ]
+    // queue up message containing updated proof state bound for proof state service
+    let stateObj = {}
+    stateObj.anchor_btc_agg_id = btcTxObj.anchor_btc_agg_id
+    stateObj.btctx_id = btcTxObj.btctx_id
+    let anchorBTCAggRoot = btcTxObj.anchor_btc_agg_root
+    let btctxBody = btcTxObj.btctx_body
+    let prefix = btctxBody.substr(0, btctxBody.indexOf(anchorBTCAggRoot))
+    let suffix = btctxBody.substr(btctxBody.indexOf(anchorBTCAggRoot) + anchorBTCAggRoot.length)
+    stateObj.btctx_state = {}
+    stateObj.btctx_state.ops = [
+      { l: prefix },
+      { r: suffix },
+      { op: 'sha-256-x2' }
+    ]
 
-        amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(stateObj)), { persistent: true, type: 'btctx' },
-          (err, ok) => {
-            if (err !== null) {
-              // An error as occurred publishing a message
-              console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[btctx] publish message nacked')
-              return callback(err)
-            } else {
-              // New message has been published
-              // debug.general(env.RMQ_WORK_OUT_STATE_QUEUE, '[btctx] publish message acked')
-              return callback(null)
-            }
-          })
-      },
-      // inform btc-mon of new tx_id to watch, queue up message bound for BTC mon
-      (callback) => {
-        amqpChannel.sendToQueue(env.RMQ_WORK_OUT_BTCMON_QUEUE, Buffer.from(JSON.stringify({ tx_id: btcTxObj.btctx_id })), { persistent: true },
-          (err, ok) => {
-            if (err !== null) {
-              // An error as occurred publishing a message
-              console.error(env.RMQ_WORK_OUT_BTCMON_QUEUE, 'publish message nacked')
-              return callback(err)
-            } else {
-              // New message has been published
-              // debug.general(env.RMQ_WORK_OUT_BTCMON_QUEUE, 'publish message acked')
-              return callback(null)
-            }
-          })
-      }
-    ], (err, results) => {
-      if (err) {
-        amqpChannel.nack(msg)
-        console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] consume message nacked', btcTxObj.btctx_id)
-      } else {
-        amqpChannel.ack(msg)
-        debug.general(`consumeBtcTxMessageAsync : [btctx] consume message acked : ${btcTxObj.btctx_id}`)
-      }
-    })
+    try {
+      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(stateObj)), { persistent: true, type: 'btctx' })
+      // New message has been published
+      // debug.general(env.RMQ_WORK_OUT_STATE_QUEUE, '[btctx] publish message acked')
+    } catch (error) {
+      // An error as occurred publishing a message
+      amqpChannel.nack(msg)
+      console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[btctx] publish message nacked')
+      console.error(`consumeBtcTxMessageAsync : Unable to publish state message : ${error.message}`)
+      console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] consume message nacked', btcTxObj.btctx_id)
+      return
+    }
+
+    try {
+      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_BTCMON_QUEUE, Buffer.from(JSON.stringify({ tx_id: btcTxObj.btctx_id })), { persistent: true })
+      // New message has been published
+      // debug.general(env.RMQ_WORK_OUT_BTCMON_QUEUE, 'publish message acked')
+    } catch (error) {
+      // An error as occurred publishing a message
+      amqpChannel.nack(msg)
+      console.error(env.RMQ_WORK_OUT_BTCMON_QUEUE, 'publish message nacked')
+      console.error(`consumeBtcTxMessageAsync : Unable to btcmon message : ${error.message}`)
+      console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[btctx] consume message nacked', btcTxObj.btctx_id)
+      return
+    }
+    amqpChannel.ack(msg)
+    debug.general(`consumeBtcTxMessageAsync : [btctx] consume message acked : ${btcTxObj.btctx_id}`)
   }
+
   debug.general(`consumeBtcTxMessageAsync : end`)
 }
 
