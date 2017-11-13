@@ -45,7 +45,15 @@ async function ConsumeAggregationMessageAsync (msg) {
     stateObjects.push(stateObj)
   }
 
-  let transaction = await storageClient.sequelize.transaction()
+  let transaction
+  try {
+    transaction = await storageClient.sequelize.transaction()
+  } catch (error) {
+    amqpChannel.nack(msg)
+    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: Unable to initialize transaction: ${error.message}`)
+    return
+  }
+
   try {
     // Store this state information
     await storageClient.writeAggStateObjectsBulkAsync(stateObjects, transaction)
