@@ -30,6 +30,7 @@ let ethTokenTxSequelize = ethTokenTxLog.sequelize
 let EthTokenTxLog = ethTokenTxLog.EthTokenLog
 let registeredNodeSequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
+let Op = ethTokenTxSequelize.Op
 
 // The provider, token contract, and create the TokenOps class
 let web3Provider = null
@@ -46,7 +47,7 @@ async function getLastKnownEventInfoAsync () {
 
   // Get the latest incoming transfer from the DB
   let lastTransfer = await EthTokenTxLog.findOne({
-    where: { toAddress: { $in: addresses } },
+    where: { toAddress: { [Op.in]: addresses } },
     order: [['created_at', 'DESC']]
   })
 

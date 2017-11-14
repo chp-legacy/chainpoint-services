@@ -56,6 +56,7 @@ let auditChallengeSequelize = auditChallenge.sequelize
 let AuditChallenge = auditChallenge.AuditChallenge
 let nodeAuditSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
+let Op = regNodeSequelize.Op
 
 // Retrieve all registered Nodes with public_uris for auditing.
 async function auditNodesAsync () {
@@ -124,7 +125,7 @@ async function generateAuditChallengeAsync () {
 }
 
 async function calculateChallengeSolutionAsync (min, max, nonce) {
-  let blocks = await CalendarBlock.findAll({ where: { id: { $between: [min, max] } }, order: [['id', 'ASC']] })
+  let blocks = await CalendarBlock.findAll({ where: { id: { [Op.between]: [min, max] } }, order: [['id', 'ASC']] })
 
   if (blocks.length === 0) throw new Error('No blocks returned to create challenge tree')
 
@@ -150,7 +151,7 @@ async function calculateChallengeSolutionAsync (min, max, nonce) {
 
 async function performCreditTopoffAsync (creditAmount) {
   try {
-    await RegisteredNode.update({ tntCredit: creditAmount }, { where: { tntCredit: { $lt: creditAmount } } })
+    await RegisteredNode.update({ tntCredit: creditAmount }, { where: { tntCredit: { [Op.lt]: creditAmount } } })
     console.log(`All Nodes topped off to ${creditAmount} credits`)
   } catch (error) {
     console.error(`Unable to perform credit topoff: ${error.message}`)
@@ -164,7 +165,7 @@ async function pruneAuditDataAsync () {
   try {
     // continually delete old audit log entries in batches until all are gone
     do {
-      pruneCount = await NodeAuditLog.destroy({ where: { audit_at: { $lt: cutoffTimestamp } }, limit: 500 })
+      pruneCount = await NodeAuditLog.destroy({ where: { audit_at: { [Op.lt]: cutoffTimestamp } }, limit: 500 })
       totalPruned += pruneCount
     } while (pruneCount > 0)
   } catch (error) {

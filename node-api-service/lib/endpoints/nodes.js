@@ -34,6 +34,7 @@ let registeredNodeSequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
 let nodeAuditLogSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
+let Op = registeredNodeSequelize.Op
 
 // The maximum  number of registered Nodes allowed
 // This value is updated from consul events as changes are detected
@@ -352,7 +353,7 @@ async function putNodeV1Async (req, res, next) {
     if (parsedPublicUri.hostname === '0.0.0.0') return next(new restify.InvalidArgumentError('0.0.0.0 not allowed in public_uri'))
 
     try {
-      let count = await RegisteredNode.count({ where: { publicUri: lowerCasedPublicUri, tntAddr: { $ne: lowerCasedTntAddrParam } } })
+      let count = await RegisteredNode.count({ where: { publicUri: lowerCasedPublicUri, tntAddr: { [Op.ne]: lowerCasedTntAddrParam } } })
       if (count >= 1) {
         return next(new restify.ConflictError('the public URI provided is already registered'))
       }

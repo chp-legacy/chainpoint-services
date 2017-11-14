@@ -58,6 +58,7 @@ let calBlockSequelize = calendarBlock.sequelize
 let CalendarBlock = calendarBlock.CalendarBlock
 let registeredCoreSequelize = registeredCore.sequelize
 let RegisteredCore = registeredCore.RegisteredCore
+let Op = nodeAuditSequelize.Op
 
 // Randomly select and deliver token reward from the list
 // of registered nodes that meet the minimum audit and TNT balance
@@ -79,7 +80,7 @@ async function performRewardAsync () {
     // SELECT all tnt addresses in the audit log that have minAuditPasses full pass entries since auditsFromDateMS
     qualifiedNodes = await NodeAuditLog.findAll({
       attributes: ['tntAddr'],
-      where: { tntAddr: { $notIn: NODE_REWARD_TNT_ADDR_BLACKLIST }, publicIPPass: true, timePass: true, calStatePass: true, minCreditsPass: true, nodeVersionPass: true, auditAt: { $gte: auditsFromDateMS } },
+      where: { tntAddr: { [Op.notIn]: NODE_REWARD_TNT_ADDR_BLACKLIST }, publicIPPass: true, timePass: true, calStatePass: true, minCreditsPass: true, nodeVersionPass: true, auditAt: { [Op.gte]: auditsFromDateMS } },
       group: 'tnt_addr',
       having: nodeAuditSequelize.literal(`COUNT(tnt_addr) >= ${minAuditPasses}`),
       raw: true

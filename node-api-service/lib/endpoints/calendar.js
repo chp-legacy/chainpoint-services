@@ -23,6 +23,7 @@ const BLOCKRANGE_SIZE = 100
 // pull in variables defined in shared CalendarBlock module
 let sequelize = calendarBlock.sequelize
 let CalendarBlock = calendarBlock.CalendarBlock
+let Op = sequelize.Op
 
 /**
  * GET /calendar/:height handler
@@ -98,7 +99,7 @@ async function getCalBlockRangeV2Async (req, res, next) {
 
   let blocks
   try {
-    blocks = await CalendarBlock.findAll({ where: { id: { $between: [fromHeight, toHeight] } }, order: [['id', 'ASC']] })
+    blocks = await CalendarBlock.findAll({ where: { id: { [Op.between]: [fromHeight, toHeight] } }, order: [['id', 'ASC']] })
   } catch (error) {
     return next(new restify.InternalError(error.message))
   }
