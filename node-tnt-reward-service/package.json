@@ -18,6 +18,7 @@
     "random-number-csprng": "^1.0.2",
     "request": "^2.81.0",
     "request-promise-native": "^1.0.4",
+    "sequelize": "^4.22.6",
     "sequelize-cockroachdb": "^1.0.2"
   }
 }
