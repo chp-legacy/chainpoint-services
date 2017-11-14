@@ -34,7 +34,7 @@ const PROOF_STATE_EXPIRE_HOURS = 3
 // Connection URI for Postgres
 const POSTGRES_CONNECT_URI = `${env.POSTGRES_CONNECT_PROTOCOL}//${env.POSTGRES_CONNECT_USER}:${env.POSTGRES_CONNECT_PW}@${env.POSTGRES_CONNECT_HOST}:${env.POSTGRES_CONNECT_PORT}/${env.POSTGRES_CONNECT_DB}`
 
-const sequelize = new Sequelize(POSTGRES_CONNECT_URI, { logging: null })
+const sequelize = new Sequelize(POSTGRES_CONNECT_URI, { logging: null, operatorsAliases: false })
 
 // table for state data connecting individual hashes to aggregation roots
 let AggStates = sequelize.define('agg_states', {
