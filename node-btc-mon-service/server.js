@@ -94,7 +94,7 @@ let monitorTransactionsAsync = async () => {
       merkleTools.makeBTCTree(true)
       let rootValueBuffer = merkleTools.getMerkleRoot()
       // re-adjust for endieness, reverse and convert back to hex
-      let rootValueHex = rootValueBuffer.reverse().toString('hex')
+      let rootValueHex = rootValueBuffer.toString('hex').match(/.{2}/g).reverse().join('')
       if (rootValueHex !== blockStats.merkleRoot) throw new Error(`calculated merkle root (${rootValueHex}) does not match block merkle root (${blockStats.merkleRoot}) for tx ${txStats.id}`)
       // get proof path from tx to block root
       let proofPath = merkleTools.getProof(txIndex)
