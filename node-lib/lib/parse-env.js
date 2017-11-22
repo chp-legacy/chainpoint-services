@@ -57,7 +57,6 @@ let envDefinitions = {
   // ANCHOR_ETH: flag for enabling and disabling ETH anchoring
   // PROOF_EXPIRE_MINUTES: The lifespan of stored proofs, in minutes
   // GET_PROOFS_MAX_REST: The maximum number of proofs that can be requested in one GET /proofs request
-  // GET_PROOFS_MAX_WS: The maximum number of proofs that can be requested/subscribed to in one call
   // POST_VERIFY_PROOFS_MAX: The maximum number of proofs allowed to be verified in one request
 
   // ***********************************************************************
@@ -109,10 +108,7 @@ let envDefinitions = {
 
   // API service specific variables
   RMQ_PREFETCH_COUNT_API: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
-  RMQ_WORK_IN_API_QUEUE: envalid.str({ default: 'work.api', desc: 'The queue name for message consumption originating from proof gen service' }),
-  RMQ_INCOMING_EXCHANGE: envalid.str({ default: 'exchange.headers', desc: 'The exchange for receiving messages from proof gen service' }),
   GET_PROOFS_MAX_REST: envalid.num({ default: 250, desc: 'The maximum number of proofs that can be requested in one GET /proofs request' }),
-  GET_PROOFS_MAX_WS: envalid.num({ default: 250, desc: 'The maximum number of proofs that can be requested/subscribed to in one call' }),
   MAX_BODY_SIZE: envalid.num({ default: 131072, desc: 'Max body size in bytes for incoming requests' }),
   POST_VERIFY_PROOFS_MAX: envalid.num({ default: 1000, desc: 'The maximum number of proofs allowed to be verified in one request' }),
 

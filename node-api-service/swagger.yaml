@@ -440,9 +440,6 @@ definitions:
       get_proofs_max_rest:
         type: integer
         example: 250
-      get_proofs_max_ws:
-        type: integer
-        example: 250
       post_verify_proofs_max:
         type: integer
         example: 1000

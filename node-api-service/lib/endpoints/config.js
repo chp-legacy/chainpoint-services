@@ -57,7 +57,6 @@ async function getConfigInfoV1Async (req, res, next) {
       anchor_eth: env.ANCHOR_ETH,
       proof_expire_minutes: env.PROOF_EXPIRE_MINUTES,
       get_proofs_max_rest: env.GET_PROOFS_MAX_REST,
-      get_proofs_max_ws: env.GET_PROOFS_MAX_WS,
       post_verify_proofs_max: env.POST_VERIFY_PROOFS_MAX,
       get_calendar_blocks_max: 1000,
       public_keys: getCorePublicKeyList(),

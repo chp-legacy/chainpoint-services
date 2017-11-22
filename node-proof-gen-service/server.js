@@ -115,8 +115,8 @@ async function consumeProofReadyMessageAsync (msg) {
           return
         }
 
-        // store in redis and deliver to API if necessary
-        await storeAndDeliverProofAsync(proof)
+        // store in redis
+        await storeProofAsync(proof)
 
         // logs the calendar proof event
         await storageClient.logCalendarEventForHashIdAsync(aggStateRow.hash_id)
@@ -164,8 +164,8 @@ async function consumeProofReadyMessageAsync (msg) {
           return
         }
 
-        // store in redis and deliver to API if necessary
-        await storeAndDeliverProofAsync(proof)
+        // store in redis
+        await storeProofAsync(proof)
 
         // logs the btc proof event
         await storageClient.logBtcEventForHashIdAsync(aggStateRow.hash_id)
@@ -191,35 +191,11 @@ async function consumeProofReadyMessageAsync (msg) {
   }
 }
 
-async function storeAndDeliverProofAsync (proof) {
+async function storeProofAsync (proof) {
   // compress proof to binary format Base64
   let proofBase64 = chpBinary.objectToBase64Sync(proof)
   // save proof to redis
   await redis.setAsync(proof.hash_id_core, proofBase64, 'EX', env.PROOF_EXPIRE_MINUTES * 60)
-  // check if a subscription for the hash exists
-  // Preface the sub key with 'sub:' so as not to conflict with the proof storage, which uses the plain hashId as the key already
-  let key = 'sub:' + proof.hash_id_core
-  let APIServiceInstanceId
-  let wsConnectionId
-  let getResult = redis.hgetallAsync(key)
-  if (getResult) {
-    APIServiceInstanceId = getResult.api_id
-    wsConnectionId = getResult.cx_id
-  }
-  // publish 'ready' message for API service if and only if a subscription exists for this hash
-  if (APIServiceInstanceId && wsConnectionId) {
-    let opts = { headers: { 'api_id': APIServiceInstanceId }, persistent: true }
-    let message = {
-      cx_id: wsConnectionId,
-      hash_id: proof.hash_id_core
-    }
-    try {
-      await amqpChannel.publish(env.RMQ_OUTGOING_EXCHANGE, '', Buffer.from(JSON.stringify(message)), opts)
-    } catch (error) {
-      console.error(env.RMQ_WORK_OUT_API_QUEUE, 'publish message nacked')
-      throw new Error(error.message)
-    }
-  }
 }
 
 /**
