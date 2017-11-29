@@ -219,7 +219,7 @@ async function calculateCurrentRewardShares () {
     throw new Error(`Unable to query reward block count: ${error.message}`)
   }
   */
-  let nodeTNTRewardShare = 500
+  let nodeTNTRewardShare = 1000
   let coreTNTRewardShare = 0
   /*
   switch (true) {
