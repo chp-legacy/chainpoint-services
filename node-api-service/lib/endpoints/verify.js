@@ -90,20 +90,16 @@ function ProcessVerifyTasks (verifyTasks, callback) {
 function BuildVerifyTaskList (proofs) {
   let results = []
   let proofIndex = 0
-  let parseObj = null
   // extract id, time, anchors, and calculate expected values
-  _.forEach(proofs, function (proof) {
-    if (typeof (proof) === 'string') { // then this should be a binary proof
-      chpParse.parseBinary(proof, function (err, result) {
-        if (!err) parseObj = result
-      })
-    } else if (typeof (proof) === 'object') { // then this should be a JSON proof
-      chpParse.parseObject(proof, function (err, result) {
-        if (!err) parseObj = result
-      })
+  _.forEach(proofs, (proof) => {
+    let parseObj
+    try {
+      parseObj = chpParse.parse(proof)
+    } catch (error) {
+      parseObj = null
     }
 
-    let hash = parseObj !== null ? parseObj.hash : undefined
+    let hash = parseObj ? parseObj.hash : undefined
     let hashIdNode = parseObj !== null ? parseObj.hash_id_node : undefined
     let hashSubmittedNodeAt = parseObj !== null ? parseObj.hash_submitted_node_at : undefined
     let hashIdCore = parseObj !== null ? parseObj.hash_id_core : undefined
