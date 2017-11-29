@@ -69,7 +69,13 @@ let monitorTransactionsAsync = async () => {
 
     try {
       // Get BTC Transaction Stats
-      let txStats = await anchor.btcGetTxStatsAsync(btcTxIdObj.tx_id)
+      let txStats
+      try {
+        txStats = await anchor.btcGetTxStatsAsync(btcTxIdObj.tx_id)
+      } catch (error) {
+        console.error(`Could not get stats for transaction ${btcTxIdObj.tx_id}`)
+        throw new Error(error.message)
+      }
       if (txStats.confirmations < env.MIN_BTC_CONFIRMS) {
         // nack consumption of this message
         amqpChannel.nack(btcTxIdObj.msg)
@@ -78,7 +84,13 @@ let monitorTransactionsAsync = async () => {
       }
 
       // if ready, Get BTC Block Stats with Transaction Ids
-      let blockStats = await anchor.btcGetBlockStatsAsync(txStats.blockHash)
+      let blockStats
+      try {
+        blockStats = await anchor.btcGetBlockStatsAsync(txStats.blockHash)
+      } catch (error) {
+        console.error(`Could not get stats for block ${txStats.blockHeight} (${txStats.blockHash})`)
+        throw new Error(error.message)
+      }
       let txIndex = blockStats.txIds.indexOf(txStats.id)
       if (txIndex === -1) throw new Error(`transaction ${txStats.id} not found in block ${txStats.blockHeight}`)
       // adjusting for endieness, reverse txids for further processing
