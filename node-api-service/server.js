@@ -52,10 +52,11 @@ let server = restify.createServer({
   log: logger
 })
 
-server.pre(function (request, response, next) {
-  request.log.info({ req: [request.url, request.method, request.rawHeaders] }, 'API-REQUEST')
-  next()
-})
+// LOG EVERY REQUEST
+// server.pre(function (request, response, next) {
+//   request.log.info({ req: [request.url, request.method, request.rawHeaders] }, 'API-REQUEST')
+//   next()
+// })
 
 let consul = null
 
