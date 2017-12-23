@@ -1224,10 +1224,9 @@ async function scheduleActionsAsync () {
     }
   })
 
-  // btcAnchorLock : run every 30 min, in every zone,
+  // btcAnchorLock : run every 60 min, in every zone,
   // at the top and bottom of the hour. Pick a random second
-  // within the top and bottom of the hour to de-conflict
-  // zones running the same code.
+  // at the top of the hour to de-conflict zones running the same code.
   let cronScheduleBtcAnchor = `${_.random(59)} 0 * * * *`
   debug.btcAnchor(`scheduleJob : btcAnchor : cronScheduleBtcAnchor : ${cronScheduleBtcAnchor}`)
   schedule.scheduleJob(cronScheduleBtcAnchor, async () => {
