@@ -1228,7 +1228,7 @@ async function scheduleActionsAsync () {
   // at the top and bottom of the hour. Pick a random second
   // within the top and bottom of the hour to de-conflict
   // zones running the same code.
-  let cronScheduleBtcAnchor = `${_.random(59)} 0,30 * * * *`
+  let cronScheduleBtcAnchor = `${_.random(59)} 0 * * * *`
   debug.btcAnchor(`scheduleJob : btcAnchor : cronScheduleBtcAnchor : ${cronScheduleBtcAnchor}`)
   schedule.scheduleJob(cronScheduleBtcAnchor, async () => {
     if (env.ANCHOR_BTC === 'enabled') {
