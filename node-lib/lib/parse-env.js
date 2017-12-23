@@ -124,11 +124,11 @@ let envDefinitions = {
   // This is to safeguard against the service returning a very high value in error
   // and to impose a common sense limit on the highest fee per byte to allow.
   // MAX BTC to spend = AverageTxSizeBytes * BTC_MAX_FEE_SAT_PER_BYTE / 100000000
-  // If we are to limit the maximum fee per transaction to 0.01 BTC, then
-  // 0.01 = 235 * BTC_MAX_FEE_SAT_PER_BYTE / 100000000
-  // BTC_MAX_FEE_SAT_PER_BYTE = 0.01 *  100000000 / 235
-  // BTC_MAX_FEE_SAT_PER_BYTE = 4255
-  BTC_MAX_FEE_SAT_PER_BYTE: envalid.num({ default: 4255, desc: 'The maximum feeRateSatPerByte value accepted' }),
+  // If we are to limit the maximum fee per transaction to 0.0015 BTC, then
+  // 0.0015 = 235 * BTC_MAX_FEE_SAT_PER_BYTE / 100000000
+  // BTC_MAX_FEE_SAT_PER_BYTE = 0.0015 * 100000000 / 235
+  // BTC_MAX_FEE_SAT_PER_BYTE = 635
+  BTC_MAX_FEE_SAT_PER_BYTE: envalid.num({ default: 600, desc: 'The maximum feeRateSatPerByte value accepted' }),
 
   // Calendar service specific variables
   RMQ_PREFETCH_COUNT_CAL: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
