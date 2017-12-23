@@ -29,7 +29,7 @@ const env = envalid.cleanEnv(process.env, {
 })
 
 // How many hours any piece of proof state data is retained until pruned
-const PROOF_STATE_EXPIRE_HOURS = 6
+const PROOF_STATE_EXPIRE_HOURS = 12
 
 // Connection URI for Postgres
 const POSTGRES_CONNECT_URI = `${env.POSTGRES_CONNECT_PROTOCOL}//${env.POSTGRES_CONNECT_USER}:${env.POSTGRES_CONNECT_PW}@${env.POSTGRES_CONNECT_HOST}:${env.POSTGRES_CONNECT_PORT}/${env.POSTGRES_CONNECT_DB}`
