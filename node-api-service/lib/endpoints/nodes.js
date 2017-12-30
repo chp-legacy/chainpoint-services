@@ -409,6 +409,7 @@ async function putNodeV1Async (req, res, next) {
       regNode.publicUri = lowerCasedPublicUri
     }
 
+    /*
     // check to see if the Node has the min balance required for Node operation
     try {
       let nodeBalance = await getTNTGrainsBalanceForAddressAsync(lowerCasedTntAddrParam)
@@ -419,6 +420,7 @@ async function putNodeV1Async (req, res, next) {
     } catch (error) {
       return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
     }
+    */
 
     await regNode.save()
   } catch (error) {
