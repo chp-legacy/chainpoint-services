@@ -23,6 +23,7 @@ const auditChallenge = require('./lib/models/AuditChallenge.js')
 const utils = require('./lib/utils.js')
 const amqp = require('amqplib')
 const semver = require('semver')
+const retry = require('async-retry')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -183,17 +184,25 @@ async function processIncomingAuditJobAsync (msg) {
 
   async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass) {
     try {
-      await NodeAuditLog.create({
-        tntAddr: tntAddr,
-        publicUri: publicUri,
-        auditAt: auditTime,
-        publicIPPass: publicIPPass,
-        nodeMSDelta: nodeMSDelta,
-        timePass: timePass,
-        calStatePass: calStatePass,
-        minCreditsPass: minCreditsPass,
-        nodeVersion: nodeVersion,
-        nodeVersionPass: nodeVersionPass
+      await retry(async bail => {
+        await NodeAuditLog.create({
+          tntAddr: tntAddr,
+          publicUri: publicUri,
+          auditAt: auditTime,
+          publicIPPass: publicIPPass,
+          nodeMSDelta: nodeMSDelta,
+          timePass: timePass,
+          calStatePass: calStatePass,
+          minCreditsPass: minCreditsPass,
+          nodeVersion: nodeVersion,
+          nodeVersionPass: nodeVersionPass
+        })
+      }, {
+        retries: 5,    // The maximum amount of times to retry the operation. Default is 10
+        factor: 1,       // The exponential factor to use. Default is 2
+        minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+        maxTimeout: 400,
+        randomize: true
       })
     } catch (error) {
       console.error(`Audit logging error: ${tntAddr}: ${error.message} `)
