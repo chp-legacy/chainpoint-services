@@ -457,7 +457,6 @@ async function persistCalendarTreeAsync (treeDataObj) {
   // wasted within the lock around this function. Also helps ensure a cal block
   // is not written if RMQ writes will likely fail after it.
   if (amqpChannel === null) {
-    debug.btcAnchor('aggregateAndAnchorBTCAsync : amqpChannel is null : returning')
     throw new Error(`persistCalendarTreeAsync : amqpChannel is null : force retry`)
   }
 
