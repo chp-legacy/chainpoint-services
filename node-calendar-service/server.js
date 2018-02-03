@@ -770,17 +770,8 @@ async function processCalendarInterval () {
   try {
     // this must not be retried since it mutates state.
     let treeDataObj = generateCalendarTree(rootsForTree)
-
     if (!_.isEmpty(treeDataObj)) {
-      let block
-      await retry(async bail => {
-        block = await persistCalendarTreeAsync(treeDataObj)
-      }, {
-        retries: 15,        // The maximum amount of times to retry the operation. Default is 10
-        factor: 1.2,        // The exponential factor to use. Default is 2
-        minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-        onRetry: (error) => { console.error(`scheduleJob : processCalendarInterval : retrying : ${error.message}`) }
-      })
+      let block = await persistCalendarTreeAsync(treeDataObj)
 
       // queue messages for state service
       setImmediate(() => { queueCalStateDataAsync(treeDataObj, block) })
@@ -797,35 +788,20 @@ async function processCalendarInterval () {
 
 async function processNistInterval () {
   try {
-    await retry(async bail => {
-      await createNistBlockAsync(nistLatest)
-    }, {
-      retries: 15,        // The maximum amount of times to retry the operation. Default is 10
-      factor: 1.2,        // The exponential factor to use. Default is 2
-      minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-      onRetry: (error) => { console.error(`scheduleJob : processNistInterval : retrying : ${error.message}`) }
-    })
+    await createNistBlockAsync(nistLatest)
   } catch (error) {
-    console.error(`scheduleJob : processNistInterval : unable to create NIST block after retries : ${error.message}`)
+    console.error(`scheduleJob : processNistInterval : unable to create NIST block : ${error.message}`)
   }
 }
 
 async function processBtcAnchorInterval (lastBtcAnchorBlockId) {
-  let treeData
   try {
-    await retry(async bail => {
-      treeData = await aggregateAndAnchorBTCAsync(lastBtcAnchorBlockId)
-    }, {
-      retries: 15,        // The maximum amount of times to retry the operation. Default is 10
-      factor: 1.2,        // The exponential factor to use. Default is 2
-      minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-      onRetry: (error) => { console.error(`scheduleJob : processBtcAnchorInterval : retrying : ${error.message}`) }
-    })
+    let treeData = await aggregateAndAnchorBTCAsync(lastBtcAnchorBlockId)
 
     // queue messages for state service
     setImmediate(() => { queueBtcAStateDataAsync(treeData) })
   } catch (error) {
-    console.error(`scheduleJob : processBtcAnchorInterval : unable to aggregate and create BTC anchor block after retries : ${error.message}`)
+    console.error(`scheduleJob : processBtcAnchorInterval : unable to aggregate and create BTC anchor block : ${error.message}`)
   }
 }
 
@@ -838,16 +814,11 @@ async function processBtcMonMessage (msg) {
     let btcheadRoot = btcMonObj.btchead_root
 
     // Store Merkle root of BTC block in chain
-    let block
     try {
-      await retry(async bail => {
-        block = await createBtcConfirmBlockAsync(btcheadHeight, btcheadRoot)
-      }, {
-        retries: 15,        // The maximum amount of times to retry the operation. Default is 10
-        factor: 1.2,        // The exponential factor to use. Default is 2
-        minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-        onRetry: (error) => { console.error(`consumeBtcMonMessageAsync : processBtcMonMessage : retrying : ${error.message}`) }
-      })
+      let block = await createBtcConfirmBlockAsync(btcheadHeight, btcheadRoot)
+
+      // queue message for state service and ack original message
+      setImmediate(() => { queueBtcCStateDataAsync(msg, block) })
     } catch (error) {
       // an error occurred and this message could not be processed, nack and try again later
       amqpChannel.nack(msg)
@@ -855,8 +826,6 @@ async function processBtcMonMessage (msg) {
       throw new Error(`unable to create btc-c block : ${error.message}`)
     }
 
-    // queue message for state service and ack original message
-    setImmediate(() => { queueBtcCStateDataAsync(msg, block) })
     debug.reward(`consumeBtcMonMessageAsync : processBtcMonMessage : end`)
   } catch (error) {
     console.error(`consumeBtcMonMessageAsync : processBtcMonMessage : ${error.message}`)
@@ -898,15 +867,7 @@ async function processRewardMessage (msg) {
     }
 
     try {
-      await retry(async bail => {
-        debug.reward('consumeRewardMessageAsync : processRewardMessage : writing block : dataId : %s : dataVal : %s', dataId, dataVal)
-        await createRewardBlockAsync(dataId, dataVal)
-      }, {
-        retries: 15,        // The maximum amount of times to retry the operation. Default is 10
-        factor: 1.2,        // The exponential factor to use. Default is 2
-        minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-        onRetry: (error) => { console.error(`consumeRewardMessageAsync : processRewardMessage : writing block : retrying : ${error.message}`) }
-      })
+      await createRewardBlockAsync(dataId, dataVal)
 
       amqpChannel.ack(msg)
       debug.reward('consumeRewardMessageAsync : processRewardMessage : acked message w/ address : %s', rewardMsgObj.node.address)
