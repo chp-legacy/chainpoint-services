@@ -30,6 +30,16 @@ const env = envalid.cleanEnv(process.env, {
   COCKROACH_TLS_CLIENT_CRT: envalid.str({ devDefault: '', desc: 'CockroachDB TLS Client Cert' })
 })
 
+const pg = require('pg')
+const pgClientPool = new pg.Pool({
+  user: env.COCKROACH_DB_USER,
+  host: env.COCKROACH_HOST,
+  database: env.COCKROACH_DB_NAME,
+  port: env.COCKROACH_PORT,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000
+})
+
 // Connect to CockroachDB through Sequelize.
 let sequelizeOptions = {
   dialect: 'postgres',
@@ -175,5 +185,6 @@ var CalendarBlock = sequelize.define(env.COCKROACH_CAL_TABLE_NAME,
 
 module.exports = {
   sequelize: sequelize,
-  CalendarBlock: CalendarBlock
+  CalendarBlock: CalendarBlock,
+  pgClientPool: pgClientPool
 }

@@ -78,23 +78,15 @@ let amqpChannel = null
 // This value is updated from consul events as changes are detected
 let nistLatest = null
 
-// An array of all Btc-Mon messages received and awaiting processing
-let BTC_MON_MESSAGES = []
-
-// Most recent Reward message received and awaiting processing
-let rewardLatest = null
-
 // The URI to use for requests to the eth-tnt-tx service
-let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
-
-// The ID of the last BTC anchor block for this stack found at top and bottom of the hour
-let lastBtcAnchorBlockId = null
+const ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
 
 // pull in variables defined in shared CalendarBlock module
-let sequelize = calendarBlock.sequelize
-let CalendarBlock = calendarBlock.CalendarBlock
+const sequelize = calendarBlock.sequelize
+const CalendarBlock = calendarBlock.CalendarBlock
+const pgClientPool = calendarBlock.pgClientPool
 
-let consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
+const consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
 debug.general('consul connection established')
 
 // Calculate the hash of the signing public key bytes
@@ -104,13 +96,13 @@ debug.general('consul connection established')
 // When a Base64 pubKey is published publicly it should also
 // be accompanied by this hash of its bytes to serve
 // as a fingerprint.
-let calcSigningPubKeyHashHex = (pubKey) => {
+function calcSigningPubKeyHashHex (pubKey) {
   return crypto.createHash('sha256').update(pubKey).digest('hex')
 }
 const signingPubKeyHashHex = calcSigningPubKeyHashHex(signingKeypair.publicKey)
 
 // Calculate a deterministic block hash and return a Buffer hash value
-let calcBlockHashHex = (block) => {
+function calcBlockHashHex (block) {
   let prefixString = `${block.id.toString()}:${block.time.toString()}:${block.version.toString()}:${block.stackId.toString()}:${block.type.toString()}:${block.dataId.toString()}`
   let prefixBuffer = Buffer.from(prefixString, 'utf8')
   let dataValBuffer = utils.isHex(block.dataVal) ? Buffer.from(block.dataVal, 'hex') : Buffer.from(block.dataVal, 'utf8')
@@ -124,13 +116,12 @@ let calcBlockHashHex = (block) => {
 }
 
 // Calculate a base64 encoded signature over the block hash
-let calcBlockHashSigB64 = (blockHashHex) => {
+function calcBlockHashSigB64 (blockHashHex) {
   return nacl.util.encodeBase64(nacl.sign.detached(nacl.util.decodeUTF8(blockHashHex), signingKeypair.secretKey))
 }
 
 // The write function used by all block creation functions to write to calendar blockchain
-let writeBlockAsync = async (height, type, dataId, dataVal, prevHash, friendlyName) => {
-  debug.general(`writeBlockAsync : begin : ${friendlyName}`)
+async function writeBlockAsync (client, height, type, dataId, dataVal, prevHash) {
   let b = {}
   b.id = height
   b.time = Math.trunc(Date.now() / 1000)
@@ -148,99 +139,81 @@ let writeBlockAsync = async (height, type, dataId, dataVal, prevHash, friendlyNa
   // pubkey bytes, joined with ':', to allow for lookup of signing pubkey.
   b.sig = [signingPubKeyHashHex.slice(0, 12), calcBlockHashSigB64(blockHashHex)].join(':')
 
-  try {
-    let block = await CalendarBlock.create(b)
-    debug.general(`writeBlockAsync : wrote ${friendlyName} block : id : ${block.get({ plain: true }).id}`)
-    return block.get({ plain: true })
-  } catch (error) {
-    throw new Error(`writeBlockAsync : ${friendlyName} error : ${error.message}: ${error.stack}`)
-  }
+  const insertBlockSQL = 'INSERT INTO chainpoint_calendar_blockchain (id, time, version, stack_id, type, data_id, data_val, prev_hash, hash, sig) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *'
+  const insertBlockData = [b.id, b.time, b.version, b.stackId, b.type, b.dataId, b.dataVal, b.prevHash, b.hash, b.sig]
+  let insertResult = await client.query(insertBlockSQL, insertBlockData)
+  let block = insertResult.rows[0]
+  // add block fields to mirror those of teh CalendarBlock model so all processes my use this block object
+  block.stackId = block.stack_id
+  block.dataId = block.data_id
+  block.dataVal = block.data_val
+  block.prevHash = block.prev_hash
+  return block
 }
 
-let createGenesisBlockAsync = async () => {
+async function createGenesisBlockAsync () {
+  // Initialize client, execute ,and release here
+  // This is an exception to other block type since there is no transaction needed
+  const client = await pgClientPool.connect()
   debug.genesis(`createGenesisBlockAsync : begin`)
-  await writeBlockAsync(0, 'gen', '0', zeroStr, zeroStr, 'GENESIS')
+  await writeBlockAsync(client, 0, 'gen', '0', zeroStr, zeroStr, 'GENESIS')
+  await client.release()
 }
 
-let createCalendarBlockAsync = async (root) => {
+async function createCalendarBlockAsync (root) {
   debug.calendar(`createCalendarBlockAsync : begin`)
   try {
-    let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
-    if (prevBlock) {
-      let newId = parseInt(prevBlock.id, 10) + 1
-      debug.calendar(`createCalendarBlockAsync : prevBlock found : ${prevBlock.id}`)
-      return await writeBlockAsync(newId, 'cal', newId.toString(), root.toString(), prevBlock.hash, 'CAL')
-    } else {
-      throw new Error('no previous block found')
-    }
+    let block = await executeBlockWriteTransactionAsync('cal', null, root.toString())
+    debug.calendar(`createCalendarBlockAsync : end`)
+    return block
   } catch (error) {
-    throw new Error(`createCalendarBlockAsync : could not write calendar block: ${error.message}`)
+    throw new Error(`createCalendarBlockAsync : could not write calendar block : ${error.message}`)
   }
 }
 
-let createNistBlockAsync = async (nistDataObj) => {
+async function createNistBlockAsync (nistDataObj) {
   debug.nist(`createNistBlockAsync : begin`)
   try {
-    let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
-    if (prevBlock) {
-      let newId = parseInt(prevBlock.id, 10) + 1
-      debug.nist(`createNistBlockAsync : prevBlock found : ${prevBlock.id}`)
-      let dataId = nistDataObj.split(':')[0].toString() // the epoch timestamp for this NIST entry
-      let dataVal = nistDataObj.split(':')[1].toString()  // the hex value for this NIST entry
-      return await writeBlockAsync(newId, 'nist', dataId, dataVal, prevBlock.hash, 'NIST')
-    } else {
-      throw new Error('no previous block found')
-    }
+    let dataId = nistDataObj.split(':')[0].toString() // the epoch timestamp for this NIST entry
+    let dataVal = nistDataObj.split(':')[1].toString()  // the hex value for this NIST entry
+    let block = await executeBlockWriteTransactionAsync('nist', dataId, dataVal)
+    debug.nist(`createNistBlockAsync : end`)
+    return block
   } catch (error) {
-    throw new Error(`createNistBlockAsync : could not write NIST block: ${error.message}`)
+    throw new Error(`createNistBlockAsync : could not write NIST block : ${error.message}`)
   }
 }
 
-let createBtcAnchorBlockAsync = async (root) => {
+async function createBtcAnchorBlockAsync (root) {
   debug.btcAnchor(`createBtcAnchorBlockAsync : begin`)
   try {
-    let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
-    if (prevBlock) {
-      let newId = parseInt(prevBlock.id, 10) + 1
-      debug.btcAnchor(`createBtcAnchorBlockAsync : prevBlock found : ${prevBlock.id} : btc-a : '' : ${root.toString()} : ${prevBlock.hash} : 'BTC-ANCHOR'`)
-      return await writeBlockAsync(newId, 'btc-a', '', root.toString(), prevBlock.hash, 'BTC-ANCHOR')
-    } else {
-      throw new Error('no previous block found')
-    }
+    let block = await executeBlockWriteTransactionAsync('btc-a', '', root.toString())
+    debug.btcAnchor(`createBtcAnchorBlockAsync : end`)
+    return block
   } catch (error) {
-    throw new Error(`createBtcAnchorBlockAsync : failed to write btc-a block: ${error.message}`)
+    throw new Error(`createBtcAnchorBlockAsync : failed to write btc-a block : ${error.message}`)
   }
 }
 
-let createBtcConfirmBlockAsync = async (height, root) => {
+async function createBtcConfirmBlockAsync (height, root) {
   debug.btcConfirm(`createBtcConfirmBlockAsync : begin`)
   try {
-    let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
-    if (prevBlock) {
-      let newId = parseInt(prevBlock.id, 10) + 1
-      debug.btcConfirm(`createBtcConfirmBlockAsync : prevBlock found : ${prevBlock.id}`)
-      return await writeBlockAsync(newId, 'btc-c', height.toString(), root.toString(), prevBlock.hash, 'BTC-CONFIRM')
-    } else {
-      throw new Error('no previous block found')
-    }
+    let block = await executeBlockWriteTransactionAsync('btc-c', height.toString(), root.toString())
+    debug.btcConfirm(`createBtcConfirmBlockAsync : end`)
+    return block
   } catch (error) {
-    throw new Error(`could not write BTC confirm block: ${error.message}`)
+    throw new Error(`createBtcConfirmBlockAsync : could not write BTC confirm block : ${error.message}`)
   }
 }
 
-let createRewardBlockAsync = async (dataId, dataVal) => {
+async function createRewardBlockAsync (dataId, dataVal) {
   debug.reward(`createRewardBlockAsync : begin`)
   try {
-    let prevBlock = await CalendarBlock.findOne({ attributes: ['id', 'hash'], order: [['id', 'DESC']] })
-    if (prevBlock) {
-      let newId = parseInt(prevBlock.id, 10) + 1
-      debug.reward(`createRewardBlockAsync : prevBlock found : ${prevBlock.id}`)
-      return await writeBlockAsync(newId, 'reward', dataId.toString(), dataVal.toString(), prevBlock.hash, 'REWARD')
-    } else {
-      throw new Error('no previous block found')
-    }
+    let block = await executeBlockWriteTransactionAsync('reward', dataId.toString(), dataVal.toString())
+    debug.reward(`createRewardBlockAsync : end`)
+    return block
   } catch (error) {
-    throw new Error(`could not write reward block: ${error.message}`)
+    throw new Error(`createRewardBlockAsync : could not write reward block : ${error.message}`)
   }
 }
 
@@ -287,18 +260,45 @@ function processMessage (msg) {
   }
 }
 
-async function acquireLockAsync (lock, name) {
-  await retry(async bail => {
-    if (lock.isAcquired) throw new Error(`${name} already acquired and in use`)
-    lock.acquire()
-  }, {
-    retries: 10000,    // The maximum amount of times to retry the operation. Default is 10
-    factor: 1,       // The exponential factor to use. Default is 2
-    minTimeout: 3000,   // The number of milliseconds before starting the first retry. Default is 1000
-    maxTimeout: 6000,
-    randomize: true,
-    onRetry: (error) => { debug.general(`${name}.acquire() : retrying : ${error.message}`) }
-  })
+async function executeBlockWriteTransactionAsync (blockType, dataId, dataVal) {
+  const client = await pgClientPool.connect()
+  debug.general(`executeBlockWriteTransactionAsync : begin`)
+
+  await client.query('BEGIN')
+
+  // Attempt the work.
+  try {
+    // Read the most recent block, as we need the id and hash values for use in the subsequent block
+    let prevBlockResult = await client.query('SELECT id, hash FROM chainpoint_calendar_blockchain ORDER BY id DESC LIMIT 1')
+    if (prevBlockResult.rows.length === 0) throw new Error(`No genesis block found`)
+
+    let prevBlock = {
+      id: prevBlockResult.rows[0].id,
+      hash: prevBlockResult.rows[0].hash
+    }
+    debug.general(`executeBlockWriteTransactionAsync : previous block : ${prevBlock.id} : ${prevBlock.hash}`)
+
+    let newId = parseInt(prevBlock.id, 10) + 1
+    // cal blocks use the newId as the dataId, if dataId is null, set it to the value of newId
+    if (dataId === null) dataId = newId.toString()
+    let newBlock = await writeBlockAsync(client, newId, blockType, dataId, dataVal, prevBlock.hash)
+    debug.general(`executeBlockWriteTransactionAsync : new block : ${newBlock.id} : ${newBlock.hash}`)
+
+    await client.query('COMMIT')
+    await client.release()
+    debug.general(`executeBlockWriteTransactionAsync : end`)
+
+    return newBlock
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK')
+      debug.general(`executeBlockWriteTransactionAsync : rollback : complete`)
+    } catch (error) {
+      debug.general(`executeBlockWriteTransactionAsync : rollback : ${error.message}`)
+    }
+    await client.release()
+    throw error
+  }
 }
 
 function consumeAggRootMessage (msg) {
@@ -372,23 +372,13 @@ async function consumeBtcTxMessageAsync (msg) {
 
 async function consumeBtcMonMessageAsync (msg) {
   if (msg !== null) {
-    BTC_MON_MESSAGES.push(msg)
-    try {
-      await acquireLockAsync(btcConfirmLock, 'btcConfirmLock')
-    } catch (error) {
-      console.error('consumeBtcMonMessage : acquire : ', error.message)
-    }
+    processBtcMonMessage(msg)
   }
 }
 
 async function consumeRewardMessageAsync (msg) {
   if (msg !== null) {
-    rewardLatest = msg
-    try {
-      await acquireLockAsync(rewardLock, 'rewardLock')
-    } catch (error) {
-      console.error('consumeRewardMessage : acquire : ', error.message)
-    }
+    processRewardMessage(msg)
   }
 }
 
@@ -417,7 +407,7 @@ function formatAsChainpointV3Ops (proof, op) {
 }
 
 // Take work off of the AGGREGATION_ROOTS array and build Merkle tree
-let generateCalendarTree = (rootsForTree) => {
+function generateCalendarTree (rootsForTree) {
   debug.general(`generateCalendarTree : begin`)
 
   let treeDataObj = null
@@ -458,7 +448,7 @@ let generateCalendarTree = (rootsForTree) => {
 }
 
 // Write tree to calendar block DB and also to proof state service via RMQ
-let persistCalendarTreeAsync = async (treeDataObj) => {
+async function persistCalendarTreeAsync (treeDataObj) {
   debug.calendar(`persistCalendarTreeAsync : begin`)
 
   // if the amqp channel is null (closed), processing should not continue,
@@ -496,7 +486,7 @@ let persistCalendarTreeAsync = async (treeDataObj) => {
 
 // Aggregate all block hashes on chain since last BTC anchor block, add new
 // BTC anchor block to calendar, add new proof state entries, anchor root
-let aggregateAndAnchorBTCAsync = async () => {
+async function aggregateAndAnchorBTCAsync (lastBtcAnchorBlockId) {
   debug.btcAnchor(`aggregateAndAnchorBTCAsync : begin`)
 
   // if the amqp channel is null (closed), processing should not continue,
@@ -574,7 +564,7 @@ async function lastBtcAnchorBlockIdForStackIdAsync () {
   try {
     lastBtcAnchorBlockForStack = await CalendarBlock.findOne({ where: { type: 'btc-a', stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'hash', 'time', 'stackId'], order: [['id', 'DESC']] })
   } catch (error) {
-    throw new Error(`unable to retrieve most recent BTC anchor block: ${error.message}`)
+    throw new Error(`unable to retrieve most recent BTC anchor block : ${error.message}`)
   }
 
   let id = lastBtcAnchorBlockForStack ? parseInt(lastBtcAnchorBlockForStack.id, 10) : null
@@ -752,64 +742,9 @@ async function sendTNTRewardAsync (ethAddr, tntGrains) {
   }
 }
 
-// Each of these locks must be defined up front since event handlers
-// need to be registered for each. They are all effectively locking the same
-// resource since they share the same CALENDAR_LOCK_KEY. The value is
-// purely informational and allows you to see which entity is currently
-// holding a lock in the Consul admin web app.
-//
-// See also : https://github.com/hashicorp/consul/blob/master/api/lock.go#L21
-//
-var lockOpts = {
-  key: env.CALENDAR_LOCK_KEY,
-  lockwaittime: '15s',
-  lockwaittimeout: '15s',
-  lockretrytime: '100ms',
-  session: {
-    behavior: 'release',
-    checks: ['serfHealth'],
-    lockdelay: '1ms',
-    name: 'calendar-blockchain-lock',
-    ttl: '15s'
-  }
-}
-
-let genesisLock = consul.lock(_.merge({}, lockOpts, { value: 'genesis' }))
-let calendarLock = consul.lock(_.merge({}, lockOpts, { value: 'calendar' }))
-let nistLock = consul.lock(_.merge({}, lockOpts, { value: 'nist' }))
-let btcAnchorLock = consul.lock(_.merge({}, lockOpts, { value: 'btc-anchor' }))
-let btcConfirmLock = consul.lock(_.merge({}, lockOpts, { value: 'btc-confirm' }))
-let rewardLock = consul.lock(_.merge({}, lockOpts, { value: 'reward' }))
-
-function registerLockEvents (lock, lockName, acquireFunction) {
-  debug.general(`registerLockEvents : ${lockName} : begin`)
-
-  lock.on('acquire', () => {
-    lock.isAcquired = true
-    debug.general(`registerLockEvents : ${lockName} : acquired`)
-    acquireFunction()
-  })
-
-  lock.on('error', (err) => {
-    lock.isAcquired = false
-    console.error(`registerLockEvents : ${lockName} : ${err.message}`)
-  })
-
-  lock.on('release', () => {
-    lock.isAcquired = false
-  })
-
-  lock.on('end', () => {
-    lock.isAcquired = false
-    debug.general(`registerLockEvents : ${lockName} : released and ended`)
-  })
-}
-
-// LOCK HANDLERS : genesis
-registerLockEvents(genesisLock, 'genesisLock', async () => {
+async function initializeCalendarBlock0Async () {
   try {
-    // The value of the lock determines what function it triggers
-    // Is a genesis block needed? If not release lock and move on.
+    // Is a genesis block needed? If not move on.
     let blockCount
     try {
       blockCount = await CalendarBlock.count()
@@ -820,25 +755,17 @@ registerLockEvents(genesisLock, 'genesisLock', async () => {
       try {
         await createGenesisBlockAsync()
       } catch (error) {
-        throw new Error(`unable to create genesis block: ${error.message}`)
+        throw new Error(`unable to create genesis block : ${error.message}`)
       }
     } else {
-      debug.general(`registerLockEvents : genesisLock : no genesis block needed: ${blockCount} block(s) found`)
+      debug.general(`openStorageConnectionAsync : initializeCalendarBlock0Async : no genesis block needed: ${blockCount} block(s) found`)
     }
   } catch (error) {
-    console.error(`registerLockEvents : genesisLock : unable to create genesis block: ${error.message}`)
-  } finally {
-    // always release lock
-    try {
-      genesisLock.release()
-    } catch (error) {
-      console.error(`registerLockEvents : genesisLock : finally release : ${error.message}`)
-    }
+    console.error(`openStorageConnectionAsync : initializeCalendarBlock0Async : unable to create genesis block : ${error.message}`)
   }
-})
+}
 
-// LOCK HANDLERS : calendar
-registerLockEvents(calendarLock, 'calendarLock', async () => {
+async function processCalendarInterval () {
   let rootsForTree = AGGREGATION_ROOTS.splice(0)
   try {
     // this must not be retried since it mutates state.
@@ -852,31 +779,23 @@ registerLockEvents(calendarLock, 'calendarLock', async () => {
         retries: 15,        // The maximum amount of times to retry the operation. Default is 10
         factor: 1.2,        // The exponential factor to use. Default is 2
         minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-        onRetry: (error) => { console.error(`registerLockEvents : calendarLock : retrying : ${error.message}`) }
+        onRetry: (error) => { console.error(`scheduleJob : processCalendarInterval : retrying : ${error.message}`) }
       })
 
       // queue messages for state service
       setImmediate(() => { queueCalStateDataAsync(treeDataObj, block) })
     } else {
-      debug.calendar('registerLockEvents : calendarLock : no treeData (hashes) to process for calendar interval')
+      debug.calendar('scheduleJob : processCalendarInterval : no treeData (hashes) to process for calendar interval')
     }
   } catch (error) {
     // an error has occured, return the rootsForTree back to AGGREGATION_ROOTS
     // to be processed at the next interval
     AGGREGATION_ROOTS = rootsForTree.concat(AGGREGATION_ROOTS)
-    console.error(`registerLockEvents : calendarLock : unable to create calendar block: ${error.message}`)
-  } finally {
-    // always release lock
-    try {
-      calendarLock.release()
-    } catch (error) {
-      console.error(`registerLockEvents : calendarLock : finally release : ${error.message}`)
-    }
+    console.error(`scheduleJob : processCalendarInterval : unable to create calendar block : ${error.message}`)
   }
-})
+}
 
-// LOCK HANDLERS : nist
-registerLockEvents(nistLock, 'nistLock', async () => {
+async function processNistInterval () {
   try {
     await retry(async bail => {
       await createNistBlockAsync(nistLatest)
@@ -884,104 +803,70 @@ registerLockEvents(nistLock, 'nistLock', async () => {
       retries: 15,        // The maximum amount of times to retry the operation. Default is 10
       factor: 1.2,        // The exponential factor to use. Default is 2
       minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-      onRetry: (error) => { console.error(`registerLockEvents : nistLock : retrying : ${error.message}`) }
+      onRetry: (error) => { console.error(`scheduleJob : processNistInterval : retrying : ${error.message}`) }
     })
   } catch (error) {
-    console.error(`registerLockEvents : nistLock : unable to create NIST block after retries : ${error.message}`)
-  } finally {
-    // always release lock
-    try {
-      nistLock.release()
-    } catch (error) {
-      console.error(`registerLockEvents : nistLock : finally release : ${error.message}`)
-    }
+    console.error(`scheduleJob : processNistInterval : unable to create NIST block after retries : ${error.message}`)
   }
-})
+}
 
-// LOCK HANDLERS : btc-anchor
-registerLockEvents(btcAnchorLock, 'btcAnchorLock', async () => {
+async function processBtcAnchorInterval (lastBtcAnchorBlockId) {
   let treeData
   try {
     await retry(async bail => {
-      treeData = await aggregateAndAnchorBTCAsync()
+      treeData = await aggregateAndAnchorBTCAsync(lastBtcAnchorBlockId)
     }, {
       retries: 15,        // The maximum amount of times to retry the operation. Default is 10
       factor: 1.2,        // The exponential factor to use. Default is 2
       minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-      onRetry: (error) => { console.error(`registerLockEvents : btcAnchorLock : retrying : ${error.message}`) }
+      onRetry: (error) => { console.error(`scheduleJob : processBtcAnchorInterval : retrying : ${error.message}`) }
     })
 
     // queue messages for state service
     setImmediate(() => { queueBtcAStateDataAsync(treeData) })
   } catch (error) {
-    console.error(`registerLockEvents : btcAnchorLock : unable to aggregate and create BTC anchor block after retries : ${error.message}`)
-  } finally {
-    // always release lock
-    try {
-      btcAnchorLock.release()
-    } catch (error) {
-      console.error(`registerLockEvents : btcAnchorLock : finally release : ${error.message}`)
-    }
+    console.error(`scheduleJob : processBtcAnchorInterval : unable to aggregate and create BTC anchor block after retries : ${error.message}`)
   }
-})
+}
 
-// LOCK HANDLERS : btc-confirm
-registerLockEvents(btcConfirmLock, 'btcConfirmLock', async () => {
+async function processBtcMonMessage (msg) {
+  debug.reward(`consumeBtcMonMessageAsync : processBtcMonMessage : begin`)
   try {
-    let monMessagesToProcess = BTC_MON_MESSAGES.splice(0)
+    let btcMonObj = JSON.parse(msg.content.toString())
+    let btctxId = btcMonObj.btctx_id
+    let btcheadHeight = btcMonObj.btchead_height
+    let btcheadRoot = btcMonObj.btchead_root
 
-    if (monMessagesToProcess.length === 0) {
-      debug.btcConfirm('registerLockEvents : btcConfirmLock : no messages to process : returning')
-      return
-    }
-
-    for (let x = 0; x < monMessagesToProcess.length; x++) {
-      let msg = monMessagesToProcess[x]
-
-      let btcMonObj = JSON.parse(msg.content.toString())
-      let btctxId = btcMonObj.btctx_id
-      let btcheadHeight = btcMonObj.btchead_height
-      let btcheadRoot = btcMonObj.btchead_root
-
-      // Store Merkle root of BTC block in chain
-      let block
-      try {
-        await retry(async bail => {
-          block = await createBtcConfirmBlockAsync(btcheadHeight, btcheadRoot)
-        }, {
-          retries: 15,        // The maximum amount of times to retry the operation. Default is 10
-          factor: 1.2,        // The exponential factor to use. Default is 2
-          minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-          onRetry: (error) => { console.error(`registerLockEvents : btcConfirmLock : retrying : ${error.message}`) }
-        })
-      } catch (error) {
-        // an error occurred and this message could not be processed, nack and try again later
-        amqpChannel.nack(msg)
-        console.error('registerLockEvents : btcConfirmLock : [btcmon] consume message nacked', btctxId)
-        throw new Error(`unable to create btc-c block : ${error.message}`)
-      }
-
-      // queue message for state service and ack original message
-      setImmediate(() => { queueBtcCStateDataAsync(msg, block) })
-    }
-  } catch (error) {
-    console.error(`registerLockEvents : btcConfirmLock : ${error.message}`)
-  } finally {
-    // always release lock
+    // Store Merkle root of BTC block in chain
+    let block
     try {
-      btcConfirmLock.release()
+      await retry(async bail => {
+        block = await createBtcConfirmBlockAsync(btcheadHeight, btcheadRoot)
+      }, {
+        retries: 15,        // The maximum amount of times to retry the operation. Default is 10
+        factor: 1.2,        // The exponential factor to use. Default is 2
+        minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
+        onRetry: (error) => { console.error(`consumeBtcMonMessageAsync : processBtcMonMessage : retrying : ${error.message}`) }
+      })
     } catch (error) {
-      console.error(`registerLockEvents : btcConfirmLock : finally release : ${error.message}`)
+      // an error occurred and this message could not be processed, nack and try again later
+      amqpChannel.nack(msg)
+      console.error('consumeBtcMonMessageAsync : processBtcMonMessage : [btcmon] consume message nacked', btctxId)
+      throw new Error(`unable to create btc-c block : ${error.message}`)
     }
-  }
-})
 
-// LOCK HANDLERS : reward
-registerLockEvents(rewardLock, 'rewardLock', async () => {
-  debug.reward(`registerLockEvents : rewardLock : begin`)
-  let msg = rewardLatest
+    // queue message for state service and ack original message
+    setImmediate(() => { queueBtcCStateDataAsync(msg, block) })
+    debug.reward(`consumeBtcMonMessageAsync : processBtcMonMessage : end`)
+  } catch (error) {
+    console.error(`consumeBtcMonMessageAsync : processBtcMonMessage : ${error.message}`)
+  }
+}
+
+async function processRewardMessage (msg) {
+  debug.reward(`consumeRewardMessageAsync : processRewardMessage : begin`)
   let rewardMsgObj = JSON.parse(msg.content.toString())
-  debug.reward('registerLockEvents : rewardLock : rewardMsgObj : %j', rewardMsgObj)
+  debug.reward('consumeRewardMessageAsync : processRewardMessage : rewardMsgObj : %j', rewardMsgObj)
 
   try {
     // transfer TNT according to random reward message selection
@@ -992,16 +877,14 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
     let coreRewardEthAddr = rewardMsgObj.core ? rewardMsgObj.core.address : null
     let coreTNTGrainsRewardShare = rewardMsgObj.core ? rewardMsgObj.core.amount : 0
 
-    debug.reward('registerLockEvents : rewardLock : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
+    debug.reward('consumeRewardMessageAsync : processRewardMessage : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
 
-    // FIXME : extract this HTTP call to outside of the lock
-    debug.reward('registerLockEvents : rewardLock : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
+    debug.reward('consumeRewardMessageAsync : processRewardMessage : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
     nodeRewardTxId = await sendTNTRewardAsync(nodeRewardETHAddr, nodeTNTGrainsRewardShare)
 
     // Reward TNT to Core operator if enabled
     if (coreTNTGrainsRewardShare > 0) {
-      // FIXME : extract this HTTP call to outside of the lock
-      debug.reward('registerLockEvents : rewardLock : coreRewardEthAddr : %s : coreTNTGrainsRewardShare : %s', coreRewardEthAddr, coreTNTGrainsRewardShare)
+      debug.reward('consumeRewardMessageAsync : processRewardMessage : coreRewardEthAddr : %s : coreTNTGrainsRewardShare : %s', coreRewardEthAddr, coreTNTGrainsRewardShare)
       coreRewardTxId = await sendTNTRewardAsync(coreRewardEthAddr, coreTNTGrainsRewardShare)
     }
 
@@ -1016,34 +899,27 @@ registerLockEvents(rewardLock, 'rewardLock', async () => {
 
     try {
       await retry(async bail => {
-        debug.reward('registerLockEvents : rewardLock : writing block : dataId : %s : dataVal : %s', dataId, dataVal)
+        debug.reward('consumeRewardMessageAsync : processRewardMessage : writing block : dataId : %s : dataVal : %s', dataId, dataVal)
         await createRewardBlockAsync(dataId, dataVal)
       }, {
         retries: 15,        // The maximum amount of times to retry the operation. Default is 10
         factor: 1.2,        // The exponential factor to use. Default is 2
         minTimeout: 250,    // The number of milliseconds before starting the first retry. Default is 1000
-        onRetry: (error) => { console.error(`registerLockEvents : rewardLock : writing block : retrying : ${error.message}`) }
+        onRetry: (error) => { console.error(`consumeRewardMessageAsync : processRewardMessage : writing block : retrying : ${error.message}`) }
       })
 
       amqpChannel.ack(msg)
-      debug.reward('registerLockEvents : rewardLock : acked message w/ address : %s', rewardMsgObj.node.address)
+      debug.reward('consumeRewardMessageAsync : processRewardMessage : acked message w/ address : %s', rewardMsgObj.node.address)
     } catch (error) {
       // ack consumption of original message to avoid distribution again
       amqpChannel.ack(msg)
-      console.error('registerLockEvents : rewardLock : message acked with for address : %s : %s', rewardMsgObj.node.address, error.message)
-      throw new Error(`unable to create reward block: ${error.message}`)
+      console.error('consumeRewardMessageAsync : processRewardMessage : message acked with for address : %s : %s', rewardMsgObj.node.address, error.message)
+      throw new Error(`unable to create reward block : ${error.message}`)
     }
   } catch (error) {
-    console.error(`registerLockEvents : rewardLock : ${error.message}`)
-  } finally {
-    // always release lock
-    try {
-      rewardLock.release()
-    } catch (error) {
-      console.error(`registerLockEvents : rewardLock : finally release : ${error.message}`)
-    }
+    console.error(`consumeRewardMessageAsync : processRewardMessage : ${error.message}`)
   }
-})
+}
 
 /**
  * Opens a storage connection
@@ -1063,15 +939,14 @@ async function openStorageConnectionAsync () {
   }
 
   // Pre-check the current Calendar block count.
-  // Trigger creation of the genesis block if needed and
-  // don't consume a lock on every service restart if not.
+  // Trigger creation of the genesis block if needed
   try {
     let blockCount = await CalendarBlock.count()
     if (blockCount === 0) {
-      debug.general('openStorageConnectionAsync : trigger genesisLock')
-      await acquireLockAsync(genesisLock, 'genesisLock')
+      debug.general('openStorageConnectionAsync : create genesis block')
+      await initializeCalendarBlock0Async()
     } else {
-      debug.general('openStorageConnectionAsync : skip genesisLock : CalendarBlock.count : %d', blockCount)
+      debug.general('openStorageConnectionAsync : CalendarBlock.count : %d', blockCount)
     }
   } catch (error) {
     throw new Error(`openStorageConnectionAsync : unable to count calendar blocks: ${error.message}`)
@@ -1151,7 +1026,7 @@ async function performLeaderElection () {
 
 // Initalizes all the consul watches
 function startConsulWatches () {
-  debug.general(' startConsulWatches : begin')
+  debug.general('startConsulWatches : begin')
 
   // Continuous watch on the consul key holding the NIST object.
   var nistWatch = consul.watch({ method: consul.kv.get, options: { key: env.NIST_KEY } })
@@ -1160,16 +1035,16 @@ function startConsulWatches () {
   nistWatch.on('change', async function (data, res) {
     // process only if a value has been returned and it is different than what is already stored
     if (data && data.Value && nistLatest !== data.Value) {
-      debug.nist(' startConsulWatches : nistLatest : %s', data.Value)
+      debug.nist('startConsulWatches : nistLatest : %s', data.Value)
       nistLatest = data.Value
     }
   })
 
   nistWatch.on('error', function (err) {
-    console.error(' startConsulWatches : nistWatch : ', err)
+    console.error('startConsulWatches : nistWatch : ', err)
   })
 
-  debug.general(' startConsulWatches : end')
+  debug.general('startConsulWatches : end')
 }
 
 // SCHEDULED ACTIONS
@@ -1178,7 +1053,7 @@ async function scheduleActionsAsync () {
   // Cron like scheduler. Params are:
   // sec min hour day_of_month month day_of_week
 
-  // calendarLock : run every 10 seconds, in every zone.
+  // calendar : run every 10 seconds, in every zone.
   // Help de-conflict across zones by running at a random
   // offset from 0 seconds.
   // e.g.
@@ -1191,68 +1066,51 @@ async function scheduleActionsAsync () {
   })
 
   let cronScheduleCalendarAnchor = `${calRandomInterval.join(',')} * * * * *`
-  debug.calendar(`scheduleJob : calendarLock : cronScheduleCalendarAnchor : %s`, cronScheduleCalendarAnchor)
+  debug.calendar(`scheduleJob : calendar : cronScheduleCalendarAnchor : %s`, cronScheduleCalendarAnchor)
   schedule.scheduleJob(cronScheduleCalendarAnchor, async () => {
     if (AGGREGATION_ROOTS.length > 0) {
-      debug.calendar(`scheduleJob : calendarLock.acquire : AGGREGATION_ROOTS.length : %d`, AGGREGATION_ROOTS.length)
-
-      try {
-        await acquireLockAsync(calendarLock, 'calendarLock')
-      } catch (error) {
-        console.error('scheduleJob : calendarLock.acquire : %s', error.message)
-      }
+      debug.calendar(`scheduleJob : calendar : AGGREGATION_ROOTS.length : %d`, AGGREGATION_ROOTS.length)
+      processCalendarInterval()
     } else {
-      debug.calendar(`scheduleJob : calendarLock.acquire : AGGREGATION_ROOTS.length : 0`)
+      debug.calendar(`scheduleJob : calendar : AGGREGATION_ROOTS.length : 0`)
     }
   })
 
-  // nistLock : run every 30 min at 25 and 55 minute marks
+  // NIST : run every 30 min at 25 and 55 minute marks
   // so as not to conflict with activity at the top and bottom
   // of the hour. Runs only in a single leader elected zone so
   // no de-confliction should be required.
   schedule.scheduleJob('0 25,55 * * * *', async () => {
-    debug.nist(`scheduleJob : nistLock.acquire : leader? : ${IS_LEADER}`)
+    debug.nist(`scheduleJob : NIST : leader? : ${IS_LEADER}`)
 
     // Don't consume a lock unless this Calendar is the zone leader
     // and there is NIST data available.
     if (IS_LEADER && !_.isEmpty(nistLatest)) {
-      try {
-        await acquireLockAsync(nistLock, 'nistLock')
-      } catch (error) {
-        console.error('scheduleJob : nistLock.acquire : %s', error.message)
-      }
+      processNistInterval()
     }
   })
 
-  // btcAnchorLock : run every 60 min, in every zone,
+  // BTC anchor : run every 60 min, in every zone,
   // at the top and bottom of the hour. Pick a random second
   // at the top of the hour to de-conflict zones running the same code.
   let cronScheduleBtcAnchor = `${_.random(59)} 0 * * * *`
-  debug.btcAnchor(`scheduleJob : btcAnchor : cronScheduleBtcAnchor : ${cronScheduleBtcAnchor}`)
+  debug.btcAnchor(`scheduleJob : BTC anchor : cronScheduleBtcAnchor : ${cronScheduleBtcAnchor}`)
   schedule.scheduleJob(cronScheduleBtcAnchor, async () => {
     if (env.ANCHOR_BTC === 'enabled') {
-      debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : ANCHOR_BTC enabled`)
+      debug.btcAnchor(`scheduleJob : BTC anchor : ANCHOR_BTC enabled`)
       // Look up last anchor block in DB outside of a lock to reduce
       // time spent inside the lock which is blocking for all other
       // lock users.
       try {
         // Set global var with last anchor block ID for use inside lock.
         // Doing it this way since we can't pass params to lock.
-        lastBtcAnchorBlockId = await lastBtcAnchorBlockIdForStackIdAsync()
-
-        debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : set lastBtcAnchorBlockId : ${lastBtcAnchorBlockId}`)
-
-        try {
-          await acquireLockAsync(btcAnchorLock, 'btcAnchorLock')
-        } catch (error) {
-          console.error('scheduleJob : btcAnchorLock.acquire : %s', error.message)
-        }
+        let lastBtcAnchorBlockId = await lastBtcAnchorBlockIdForStackIdAsync()
+        processBtcAnchorInterval(lastBtcAnchorBlockId)
       } catch (error) {
-        lastBtcAnchorBlockId = null
-        console.error('scheduleJob : lastBtcAnchorBlockIdForStackId : %s', error.message)
+        console.error(`scheduleJob : BTC anchor : ${error.message}`)
       }
     } else {
-      debug.btcAnchor(`scheduleJob : btcAnchorLock.acquire : ANCHOR_BTC disabled`)
+      debug.btcAnchor(`scheduleJob : BTC anchor : ANCHOR_BTC disabled`)
     }
   })
 }
