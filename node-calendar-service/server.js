@@ -164,7 +164,7 @@ async function createGenesisBlockAsync () {
 async function createCalendarBlockAsync (root) {
   debug.calendar(`createCalendarBlockAsync : begin`)
   try {
-    let block = await executeBlockWriteTransactionAsync('cal', null, root.toString(), debug.calendar)
+    let block = await executeRetryableBlockWriteTransactionAsync('cal', null, root.toString(), debug.calendar)
     debug.calendar(`createCalendarBlockAsync : end`)
     return block
   } catch (error) {
@@ -177,7 +177,7 @@ async function createNistBlockAsync (nistDataObj) {
   try {
     let dataId = nistDataObj.split(':')[0].toString() // the epoch timestamp for this NIST entry
     let dataVal = nistDataObj.split(':')[1].toString()  // the hex value for this NIST entry
-    let block = await executeBlockWriteTransactionAsync('nist', dataId, dataVal, debug.nist)
+    let block = await executeRetryableBlockWriteTransactionAsync('nist', dataId, dataVal, debug.nist)
     debug.nist(`createNistBlockAsync : end`)
     return block
   } catch (error) {
@@ -188,7 +188,7 @@ async function createNistBlockAsync (nistDataObj) {
 async function createBtcAnchorBlockAsync (root) {
   debug.btcAnchor(`createBtcAnchorBlockAsync : begin`)
   try {
-    let block = await executeBlockWriteTransactionAsync('btc-a', '', root.toString(), debug.btcAnchor)
+    let block = await executeRetryableBlockWriteTransactionAsync('btc-a', '', root.toString(), debug.btcAnchor)
     debug.btcAnchor(`createBtcAnchorBlockAsync : end`)
     return block
   } catch (error) {
@@ -199,7 +199,7 @@ async function createBtcAnchorBlockAsync (root) {
 async function createBtcConfirmBlockAsync (height, root) {
   debug.btcConfirm(`createBtcConfirmBlockAsync : begin`)
   try {
-    let block = await executeBlockWriteTransactionAsync('btc-c', height.toString(), root.toString(), debug.btcConfirm)
+    let block = await executeRetryableBlockWriteTransactionAsync('btc-c', height.toString(), root.toString(), debug.btcConfirm)
     debug.btcConfirm(`createBtcConfirmBlockAsync : end`)
     return block
   } catch (error) {
@@ -210,7 +210,7 @@ async function createBtcConfirmBlockAsync (height, root) {
 async function createRewardBlockAsync (dataId, dataVal) {
   debug.reward(`createRewardBlockAsync : begin`)
   try {
-    let block = await executeBlockWriteTransactionAsync('reward', dataId.toString(), dataVal.toString(), debug.reward)
+    let block = await executeRetryableBlockWriteTransactionAsync('reward', dataId.toString(), dataVal.toString(), debug.reward)
     debug.reward(`createRewardBlockAsync : end`)
     return block
   } catch (error) {
@@ -261,9 +261,9 @@ function processMessage (msg) {
   }
 }
 
-async function executeBlockWriteTransactionAsync (blockType, dataId, dataVal, debuglogger) {
+async function writeTransactionAsync (blockType, dataId, dataVal, debuglogger) {
   const client = await pgClientPool.connect()
-  debuglogger(`executeBlockWriteTransactionAsync : begin`)
+  debuglogger(`writeTransactionAsync : begin`)
 
   await client.query('BEGIN')
 
@@ -277,29 +277,43 @@ async function executeBlockWriteTransactionAsync (blockType, dataId, dataVal, de
       id: prevBlockResult.rows[0].id,
       hash: prevBlockResult.rows[0].hash
     }
-    debuglogger(`executeBlockWriteTransactionAsync : previous block : ${prevBlock.id} : ${prevBlock.hash}`)
+    debuglogger(`writeTransactionAsync : previous block : ${prevBlock.id} : ${prevBlock.hash}`)
 
     let newId = parseInt(prevBlock.id, 10) + 1
     // cal blocks use the newId as the dataId, if dataId is null, set it to the value of newId
     if (dataId === null) dataId = newId.toString()
     let newBlock = await writeBlockAsync(client, newId, blockType, dataId, dataVal, prevBlock.hash)
-    debuglogger(`executeBlockWriteTransactionAsync : new block : ${newBlock.id} : ${newBlock.hash}`)
+    debuglogger(`writeTransactionAsync : new block : ${newBlock.id} : ${newBlock.hash}`)
 
     await client.query('COMMIT')
     await client.release()
-    debuglogger(`executeBlockWriteTransactionAsync : end`)
+    debuglogger(`writeTransactionAsync : end`)
 
     return newBlock
   } catch (error) {
     try {
       await client.query('ROLLBACK')
-      debuglogger(`executeBlockWriteTransactionAsync : rollback : complete`)
+      debuglogger(`writeTransactionAsync : rollback : complete`)
     } catch (error) {
-      debuglogger(`executeBlockWriteTransactionAsync : rollback : ${error.message}`)
+      debuglogger(`writeTransactionAsync : rollback : ${error.message}`)
     }
     await client.release()
     throw error
   }
+}
+async function executeRetryableBlockWriteTransactionAsync (blockType, dataId, dataVal, debuglogger) {
+  let newBlock = await retry(async bail => {
+    let newBlock = await writeTransactionAsync(blockType, dataId, dataVal, debuglogger)
+    return newBlock
+  }, {
+    retries: 25,        // The maximum amount of times to retry the operation. Default is 10
+    factor: 1,        // The exponential factor to use. Default is 2
+    minTimeout: 5,   // The number of milliseconds before starting the first retry. Default is 1000
+    maxTimeout: 100,
+    onRetry: (error) => { debuglogger(`executeRetryableBlockWriteTransactionAsync : retrying : writing block : ${blockType} : ${error.message}`) }
+  })
+
+  return newBlock
 }
 
 function consumeAggRootMessage (msg) {
