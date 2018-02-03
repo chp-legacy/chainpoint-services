@@ -158,12 +158,13 @@ async function createGenesisBlockAsync () {
   debug.genesis(`createGenesisBlockAsync : begin`)
   await writeBlockAsync(client, 0, 'gen', '0', zeroStr, zeroStr, 'GENESIS')
   await client.release()
+  debug.genesis(`createGenesisBlockAsync : end`)
 }
 
 async function createCalendarBlockAsync (root) {
   debug.calendar(`createCalendarBlockAsync : begin`)
   try {
-    let block = await executeBlockWriteTransactionAsync('cal', null, root.toString())
+    let block = await executeBlockWriteTransactionAsync('cal', null, root.toString(), debug.calendar)
     debug.calendar(`createCalendarBlockAsync : end`)
     return block
   } catch (error) {
@@ -176,7 +177,7 @@ async function createNistBlockAsync (nistDataObj) {
   try {
     let dataId = nistDataObj.split(':')[0].toString() // the epoch timestamp for this NIST entry
     let dataVal = nistDataObj.split(':')[1].toString()  // the hex value for this NIST entry
-    let block = await executeBlockWriteTransactionAsync('nist', dataId, dataVal)
+    let block = await executeBlockWriteTransactionAsync('nist', dataId, dataVal, debug.nist)
     debug.nist(`createNistBlockAsync : end`)
     return block
   } catch (error) {
@@ -187,7 +188,7 @@ async function createNistBlockAsync (nistDataObj) {
 async function createBtcAnchorBlockAsync (root) {
   debug.btcAnchor(`createBtcAnchorBlockAsync : begin`)
   try {
-    let block = await executeBlockWriteTransactionAsync('btc-a', '', root.toString())
+    let block = await executeBlockWriteTransactionAsync('btc-a', '', root.toString(), debug.btcAnchor)
     debug.btcAnchor(`createBtcAnchorBlockAsync : end`)
     return block
   } catch (error) {
@@ -198,7 +199,7 @@ async function createBtcAnchorBlockAsync (root) {
 async function createBtcConfirmBlockAsync (height, root) {
   debug.btcConfirm(`createBtcConfirmBlockAsync : begin`)
   try {
-    let block = await executeBlockWriteTransactionAsync('btc-c', height.toString(), root.toString())
+    let block = await executeBlockWriteTransactionAsync('btc-c', height.toString(), root.toString(), debug.btcConfirm)
     debug.btcConfirm(`createBtcConfirmBlockAsync : end`)
     return block
   } catch (error) {
@@ -209,7 +210,7 @@ async function createBtcConfirmBlockAsync (height, root) {
 async function createRewardBlockAsync (dataId, dataVal) {
   debug.reward(`createRewardBlockAsync : begin`)
   try {
-    let block = await executeBlockWriteTransactionAsync('reward', dataId.toString(), dataVal.toString())
+    let block = await executeBlockWriteTransactionAsync('reward', dataId.toString(), dataVal.toString(), debug.reward)
     debug.reward(`createRewardBlockAsync : end`)
     return block
   } catch (error) {
@@ -260,9 +261,9 @@ function processMessage (msg) {
   }
 }
 
-async function executeBlockWriteTransactionAsync (blockType, dataId, dataVal) {
+async function executeBlockWriteTransactionAsync (blockType, dataId, dataVal, debuglogger) {
   const client = await pgClientPool.connect()
-  debug.general(`executeBlockWriteTransactionAsync : begin`)
+  debuglogger(`executeBlockWriteTransactionAsync : begin`)
 
   await client.query('BEGIN')
 
@@ -276,25 +277,25 @@ async function executeBlockWriteTransactionAsync (blockType, dataId, dataVal) {
       id: prevBlockResult.rows[0].id,
       hash: prevBlockResult.rows[0].hash
     }
-    debug.general(`executeBlockWriteTransactionAsync : previous block : ${prevBlock.id} : ${prevBlock.hash}`)
+    debuglogger(`executeBlockWriteTransactionAsync : previous block : ${prevBlock.id} : ${prevBlock.hash}`)
 
     let newId = parseInt(prevBlock.id, 10) + 1
     // cal blocks use the newId as the dataId, if dataId is null, set it to the value of newId
     if (dataId === null) dataId = newId.toString()
     let newBlock = await writeBlockAsync(client, newId, blockType, dataId, dataVal, prevBlock.hash)
-    debug.general(`executeBlockWriteTransactionAsync : new block : ${newBlock.id} : ${newBlock.hash}`)
+    debuglogger(`executeBlockWriteTransactionAsync : new block : ${newBlock.id} : ${newBlock.hash}`)
 
     await client.query('COMMIT')
     await client.release()
-    debug.general(`executeBlockWriteTransactionAsync : end`)
+    debuglogger(`executeBlockWriteTransactionAsync : end`)
 
     return newBlock
   } catch (error) {
     try {
       await client.query('ROLLBACK')
-      debug.general(`executeBlockWriteTransactionAsync : rollback : complete`)
+      debuglogger(`executeBlockWriteTransactionAsync : rollback : complete`)
     } catch (error) {
-      debug.general(`executeBlockWriteTransactionAsync : rollback : ${error.message}`)
+      debuglogger(`executeBlockWriteTransactionAsync : rollback : ${error.message}`)
     }
     await client.release()
     throw error
