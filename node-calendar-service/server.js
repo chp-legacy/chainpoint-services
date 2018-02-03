@@ -143,7 +143,7 @@ async function writeBlockAsync (client, height, type, dataId, dataVal, prevHash)
   const insertBlockData = [b.id, b.time, b.version, b.stackId, b.type, b.dataId, b.dataVal, b.prevHash, b.hash, b.sig]
   let insertResult = await client.query(insertBlockSQL, insertBlockData)
   let block = insertResult.rows[0]
-  // add block fields to mirror those of teh CalendarBlock model so all processes my use this block object
+  // add block fields to mirror those of the CalendarBlock model so all processes may use this block object
   block.stackId = block.stack_id
   block.dataId = block.data_id
   block.dataVal = block.data_val
