@@ -19,15 +19,19 @@ const env = require('./lib/parse-env.js')('audit')
 
 const rp = require('request-promise-native')
 const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
-const auditChallenge = require('./lib/models/AuditChallenge.js')
+const cachedAuditChallenge = require('./lib/models/cachedAuditChallenge.js')
 const utils = require('./lib/utils.js')
 const amqp = require('amqplib')
 const semver = require('semver')
 const retry = require('async-retry')
+const bluebird = require('bluebird')
+const r = require('redis')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
 let amqpChannel = null
+
+let redis = null
 
 // TweetNaCl.js
 // see: http://ed25519.cr.yp.to
@@ -38,8 +42,6 @@ nacl.util = require('tweetnacl-util')
 // pull in variables defined in shared database models
 let nodeAuditSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
-let auditChallengeSequelize = auditChallenge.sequelize
-let AuditChallenge = auditChallenge.AuditChallenge
 
 // The acceptable time difference between Node and Core for a timestamp to be considered valid, in milliseconds
 const ACCEPTABLE_DELTA_MS = 5000 // 5 seconds
@@ -139,7 +141,7 @@ async function processIncomingAuditJobAsync (msg) {
       let minTimestamp = configResultTime - (MAX_NODE_RESPONSE_CHALLENGE_AGE_MIN * 60 * 1000)
       if (nodeAuditResponseTimestamp >= minTimestamp) {
         try {
-          coreAuditChallenge = await AuditChallenge.findOne({ where: { time: nodeAuditResponseTimestamp } })
+          coreAuditChallenge = await cachedAuditChallenge.getChallengeDataByTimeAsync(nodeAuditResponseTimestamp)
         } catch (error) {
           console.error(`NodeAudit: Could not query for audit challenge: ${nodeAuditResponseTimestamp}`)
         }
@@ -242,16 +244,38 @@ async function openStorageConnectionAsync () {
   while (!dbConnected) {
     try {
       await nodeAuditSequelize.sync({ logging: false })
-      await auditChallengeSequelize.sync({ logging: false })
+      await cachedAuditChallenge.getAuditChallengeSequelize().sync({ logging: false })
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {
-      console.log(error.message)
       // catch errors when attempting to establish connection
       console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
       await utils.sleep(5000)
     }
   }
+}
+
+/**
+ * Opens a Redis connection
+ *
+ * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ */
+function openRedisConnection (redisURI) {
+  redis = r.createClient(redisURI)
+  redis.on('ready', () => {
+    bluebird.promisifyAll(redis)
+    cachedAuditChallenge.setRedis(redis)
+    console.log('Redis connection established')
+  })
+  redis.on('error', async (err) => {
+    console.error(`A redis error has ocurred: ${err}`)
+    redis.quit()
+    redis = null
+    cachedAuditChallenge.setRedis(null)
+    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
+    await utils.sleep(5000)
+    openRedisConnection(redisURI)
+  })
 }
 
 /**
@@ -299,6 +323,8 @@ async function start () {
   try {
     // init DB
     await openStorageConnectionAsync()
+    // init Redis
+    openRedisConnection(env.REDIS_CONNECT_URI)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     console.log('startup completed successfully')
