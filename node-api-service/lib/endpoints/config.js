@@ -17,11 +17,10 @@
 const env = require('../parse-env.js')('api')
 
 const calendarBlock = require('../models/CalendarBlock.js')
-const auditChallenge = require('../models/AuditChallenge.js')
+const cachedAuditChallenge = require('../models/cachedAuditChallenge.js')
 const restify = require('restify')
 
 let CalendarBlock = calendarBlock.CalendarBlock
-let AuditChallenge = auditChallenge.AuditChallenge
 
 function getCorePublicKeyList () {
   return {
@@ -44,12 +43,7 @@ async function getConfigInfoV1Async (req, res, next) {
     let topCoreBlock = await CalendarBlock.findOne({ attributes: ['id'], order: [['id', 'DESC']] })
     if (!topCoreBlock) throw new Error('no blocks found on calendar')
 
-    let mostRecentChallenge = await AuditChallenge.findOne({ order: [['time', 'DESC']] })
-
-    let mostRecentChallengeText
-    if (mostRecentChallenge) {
-      mostRecentChallengeText = `${mostRecentChallenge.time}:${mostRecentChallenge.minBlock}:${mostRecentChallenge.maxBlock}:${mostRecentChallenge.nonce}`
-    }
+    let mostRecentChallenge = await cachedAuditChallenge.getMostRecentChallengeDataSolutionRemovedAsync()
 
     result = {
       chainpoint_core_base_uri: env.CHAINPOINT_CORE_BASE_URI,
@@ -62,7 +56,7 @@ async function getConfigInfoV1Async (req, res, next) {
       public_keys: getCorePublicKeyList(),
       calendar: {
         height: parseInt(topCoreBlock.id),
-        audit_challenge: mostRecentChallengeText || undefined
+        audit_challenge: mostRecentChallenge || undefined
       },
       core_eth_address: coreEthAddress
     }
@@ -71,7 +65,7 @@ async function getConfigInfoV1Async (req, res, next) {
     return next(new restify.InternalServerError('server error'))
   }
 
-  res.cache('public', {maxAge: 60})
+  res.cache('public', { maxAge: 60 })
   res.send(result)
   return next()
 }
@@ -79,5 +73,8 @@ async function getConfigInfoV1Async (req, res, next) {
 module.exports = {
   getConfigInfoV1Async: getConfigInfoV1Async,
   setCalendarBlock: (calBlock) => { CalendarBlock = calBlock },
-  setAuditChallenge: (auditChallenge) => { AuditChallenge = auditChallenge }
+  setRedis: (r) => { cachedAuditChallenge.setRedis(r) },
+  setConsul: (c) => { cachedAuditChallenge.setConsul(c) },
+  setMostRecentChallengeKey: (key) => { cachedAuditChallenge.setMostRecentChallengeKey(key) },
+  getAuditChallengeSequelize: () => { return cachedAuditChallenge.getAuditChallengeSequelize() }
 }

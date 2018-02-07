@@ -17,7 +17,7 @@
 /**
  * env required for tnt to credit rate
  */
-const env = require('./parse-env.js')
+const env = require('./parse-env.js')()
 const BigNumber = require('bignumber.js')
 
 /**

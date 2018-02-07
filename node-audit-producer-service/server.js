@@ -20,7 +20,7 @@ const env = require('./lib/parse-env.js')('audit')
 const registeredNode = require('./lib/models/RegisteredNode.js')
 const utils = require('./lib/utils.js')
 const calendarBlock = require('./lib/models/CalendarBlock.js')
-const auditChallenge = require('./lib/models/AuditChallenge.js')
+const cachedAuditChallenge = require('./lib/models/cachedAuditChallenge.js')
 const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
 const crypto = require('crypto')
 const rnd = require('random-number-csprng')
@@ -28,10 +28,17 @@ const MerkleTools = require('merkle-tools')
 const heartbeats = require('heartbeats')
 const amqp = require('amqplib')
 const leaderElection = require('exp-leader-election')
+const cnsl = require('consul')
+const bluebird = require('bluebird')
+const r = require('redis')
+
+let consul = null
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
 let amqpChannel = null
+
+let redis = null
 
 // The leadership status for this instance of the audit producer service
 let IS_LEADER = false
@@ -52,8 +59,6 @@ let regNodeSequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
 let calBlockSequelize = calendarBlock.sequelize
 let CalendarBlock = calendarBlock.CalendarBlock
-let auditChallengeSequelize = auditChallenge.sequelize
-let AuditChallenge = auditChallenge.AuditChallenge
 let nodeAuditSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
 let Op = regNodeSequelize.Op
@@ -110,17 +115,11 @@ async function generateAuditChallengeAsync () {
 
     let challengeSolution = await calculateChallengeSolutionAsync(challengeMinBlockHeight, challengeMaxBlockHeight, challengeNonce)
 
-    let newChallenge = await AuditChallenge.create({
-      time: challengeTime,
-      minBlock: challengeMinBlockHeight,
-      maxBlock: challengeMaxBlockHeight,
-      nonce: challengeNonce,
-      solution: challengeSolution
-    })
-    let auditChallenge = `${newChallenge.time}:${newChallenge.minBlock}:${newChallenge.maxBlock}:${newChallenge.nonce}:${newChallenge.solution}`
+    let auditChallenge = await cachedAuditChallenge.setNewAuditChallengeAsync(challengeTime, challengeMinBlockHeight, challengeMaxBlockHeight, challengeNonce, challengeSolution)
+
     console.log(`New challenge generated: ${auditChallenge}`)
   } catch (error) {
-    console.error((`Could not generate audit challenge: ${error.message}`))
+    console.error(`Could not generate audit challenge: ${error.message}`)
   }
 }
 
@@ -186,16 +185,38 @@ async function openStorageConnectionAsync () {
       await regNodeSequelize.sync({ logging: false })
       await calBlockSequelize.sync({ logging: false })
       await nodeAuditSequelize.sync({ logging: false })
-      await auditChallengeSequelize.sync({ logging: false })
+      await cachedAuditChallenge.getAuditChallengeSequelize().sync({ logging: false })
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {
-      console.log(error.message)
       // catch errors when attempting to establish connection
       console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
       await utils.sleep(5000)
     }
   }
+}
+
+/**
+ * Opens a Redis connection
+ *
+ * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ */
+function openRedisConnection (redisURI) {
+  redis = r.createClient(redisURI)
+  redis.on('ready', () => {
+    bluebird.promisifyAll(redis)
+    cachedAuditChallenge.setRedis(redis)
+    console.log('Redis connection established')
+  })
+  redis.on('error', async (err) => {
+    console.error(`A redis error has ocurred: ${err}`)
+    redis.quit()
+    redis = null
+    cachedAuditChallenge.setRedis(null)
+    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
+    await utils.sleep(5000)
+    openRedisConnection(redisURI)
+  })
 }
 
 /**
@@ -364,8 +385,14 @@ async function startWatchesAndIntervalsAsync () {
 async function start () {
   if (env.NODE_ENV === 'test') return
   try {
+    // init consul
+    consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
+    cachedAuditChallenge.setConsul(consul)
+    console.log('Consul connection established')
     // init DB
     await openStorageConnectionAsync()
+    // init Redis
+    openRedisConnection(env.REDIS_CONNECT_URI)
     // init consul and perform leader election
     performLeaderElection()
     // init RabbitMQ

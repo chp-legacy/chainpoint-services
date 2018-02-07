@@ -142,6 +142,7 @@ async function openStorageConnectionAsync () {
       await calendar.getCalendarBlockSequelize().sync({ logging: false })
       await verify.getCalendarBlockSequelize().sync({ logging: false })
       await nodes.getNodeAuditLogSequelize().sync({ logging: false })
+      await config.getAuditChallengeSequelize().sync({ logging: false })
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {
@@ -199,6 +200,7 @@ function openRedisConnection (redisURI) {
     bluebird.promisifyAll(redis)
     proofs.setRedis(redis)
     hashes.setRedis(redis)
+    config.setRedis(redis)
     console.log('Redis connection established')
   })
   redis.on('error', async (err) => {
@@ -207,6 +209,7 @@ function openRedisConnection (redisURI) {
     redis = null
     proofs.setRedis(null)
     hashes.setRedis(null)
+    config.setRedis(null)
     console.error('Cannot establish Redis connection. Retrying...')
     await utils.sleep(5000)
     openRedisConnection(redisURI)
@@ -247,6 +250,19 @@ function startWatches () {
     console.error('regNodesLimitWatch error: ', err)
   })
 
+  // Continuous watch on the consul key holding the moat recent audit challenge key.
+  var recentChallengeKeyWatch = consul.watch({ method: consul.kv.get, options: { key: env.AUDIT_CHALLENGE_RECENT_KEY } })
+
+  // Store the updated regNodesLimit count on change
+  recentChallengeKeyWatch.on('change', function (data, res) {
+    // process only if a value has been returned
+    if (data && data.Value) config.setMostRecentChallengeKey(data.Value)
+  })
+
+  recentChallengeKeyWatch.on('error', function (err) {
+    console.error('recentChallengeKeyWatch error: ', err)
+  })
+
   consul.kv.get(env.REG_NODES_LIMIT_KEY, function (err, result) {
     if (err) {
       console.error(err)
@@ -279,6 +295,7 @@ async function start () {
   try {
     // init consul
     consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
+    config.setConsul(consul)
     console.log('Consul connection established')
     // init Redis
     openRedisConnection(env.REDIS_CONNECT_URI)
