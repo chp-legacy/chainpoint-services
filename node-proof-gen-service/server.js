@@ -272,7 +272,6 @@ async function openStorageConnectionAsync () {
     } catch (error) {
       // catch errors when attempting to establish connection
       console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      console.error(error)
       await utils.sleep(5000)
     }
   }
