@@ -1,3 +1,19 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('btc-mon')
 
@@ -17,9 +33,9 @@ const merkleTools = new MerkleTools()
 // This value is set once the connection has been established
 var amqpChannel = null
 
-// initialize blockchainanchor object
+// Initialize BlockchainAnchor object
 let anchor = new BlockchainAnchor({
-  btcUseTestnet: true, // todo: revert back to false when INSIGHT_API_BASE_URI point to mainnet node
+  btcUseTestnet: !env.isProduction,
   service: 'insightapi',
   insightApiBase: env.INSIGHT_API_BASE_URI,
   insightFallback: true
@@ -46,18 +62,35 @@ let monitorTransactionsAsync = async () => {
 
   // process each set of btctxid data
   let btcTxIdsToMonitor = BTCTXIDS.splice(0)
-  console.log(`Btc Tx montoring process starting for ${btcTxIdsToMonitor.length} transaction(s)`)
+  console.log(`Btc Tx monitoring process starting for ${btcTxIdsToMonitor.length} transaction(s)`)
 
   for (let index = 0; index < btcTxIdsToMonitor.length; index++) {
     let btcTxIdObj = btcTxIdsToMonitor[index]
 
     try {
       // Get BTC Transaction Stats
-      let txStats = await anchor.btcGetTxStatsAsync(btcTxIdObj.tx_id)
-      if (txStats.confirmations < env.MIN_BTC_CONFIRMS) throw new Error(`transaction ${txStats.id} not ready`)
+      let txStats
+      try {
+        txStats = await anchor.btcGetTxStatsAsync(btcTxIdObj.tx_id)
+      } catch (error) {
+        console.error(`Could not get stats for transaction ${btcTxIdObj.tx_id}`)
+        throw new Error(error.message)
+      }
+      if (txStats.confirmations < env.MIN_BTC_CONFIRMS) {
+        // nack consumption of this message
+        amqpChannel.nack(btcTxIdObj.msg)
+        console.log(`${txStats.id} monitoring requeued: ${txStats.confirmations} of ${env.MIN_BTC_CONFIRMS} confirmations`)
+        continue
+      }
 
       // if ready, Get BTC Block Stats with Transaction Ids
-      let blockStats = await anchor.btcGetBlockStatsAsync(txStats.blockHash)
+      let blockStats
+      try {
+        blockStats = await anchor.btcGetBlockStatsAsync(txStats.blockHash)
+      } catch (error) {
+        console.error(`Could not get stats for block ${txStats.blockHeight} (${txStats.blockHash})`)
+        throw new Error(error.message)
+      }
       let txIndex = blockStats.txIds.indexOf(txStats.id)
       if (txIndex === -1) throw new Error(`transaction ${txStats.id} not found in block ${txStats.blockHeight}`)
       // adjusting for endieness, reverse txids for further processing
@@ -73,7 +106,7 @@ let monitorTransactionsAsync = async () => {
       merkleTools.makeBTCTree(true)
       let rootValueBuffer = merkleTools.getMerkleRoot()
       // re-adjust for endieness, reverse and convert back to hex
-      let rootValueHex = rootValueBuffer.reverse().toString('hex')
+      let rootValueHex = rootValueBuffer.toString('hex').match(/.{2}/g).reverse().join('')
       if (rootValueHex !== blockStats.merkleRoot) throw new Error(`calculated merkle root (${rootValueHex}) does not match block merkle root (${blockStats.merkleRoot}) for tx ${txStats.id}`)
       // get proof path from tx to block root
       let proofPath = merkleTools.getProof(txIndex)
@@ -85,15 +118,15 @@ let monitorTransactionsAsync = async () => {
       messageObj.path = proofPath
       try {
         await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(messageObj)), { persistent: true, type: 'btcmon' })
-        console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[btcmon] publish message acked')
+        console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[btcmon] publish message acked', messageObj.btctx_id)
       } catch (error) {
-        console.error(env.RMQ_WORK_OUT_CAL_QUEUE, '[btcmon] publish message nacked')
+        console.error(env.RMQ_WORK_OUT_CAL_QUEUE, '[btcmon] publish message nacked', messageObj.btctx_id)
         throw new Error(error.message)
       }
       // if minimim confirms have been achieved and return message to calendar published, ack consumption of this message
       amqpChannel.ack(btcTxIdObj.msg)
       console.log(btcTxIdObj.tx_id + ' confirmed and processed')
-      console.log(env.RMQ_WORK_IN_BTCMON_QUEUE, 'consume message acked')
+      // console.log(env.RMQ_WORK_IN_BTCMON_QUEUE, 'consume message acked')
     } catch (error) {
       console.error(error.message)
       // nack consumption of this message
@@ -102,7 +135,7 @@ let monitorTransactionsAsync = async () => {
     }
   }
 
-  console.log(`Btc Tx montoring process complete`)
+  console.log(`Btc Tx monitoring process complete`)
 }
 
 /**
@@ -160,8 +193,8 @@ async function start () {
     // init interval functions
     startIntervals()
     console.log('startup completed successfully')
-  } catch (err) {
-    console.error(`An error has occurred on startup: ${err}`)
+  } catch (error) {
+    console.error(`An error has occurred on startup: ${error.message}`)
     process.exit(1)
   }
 }

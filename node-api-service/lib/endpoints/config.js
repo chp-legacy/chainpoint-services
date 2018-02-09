@@ -1,11 +1,24 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 const env = require('../parse-env.js')('api')
 
 const calendarBlock = require('../models/CalendarBlock.js')
+const cachedAuditChallenge = require('../models/cachedAuditChallenge.js')
 const restify = require('restify')
-
-// The redis connection used for all redis communication
-// This value is set once the connection has been established
-let redis = null
 
 let CalendarBlock = calendarBlock.CalendarBlock
 
@@ -15,6 +28,9 @@ function getCorePublicKeyList () {
     'fcbc2ba6c808': 'UWJSQwBjlvlkSirJcdFKP4zGQIq1mfrk7j0xV0CZ9yI='
   }
 }
+
+// get the first entry in the ETH_TNT_LISTEN_ADDRS CSV to publicize
+let coreEthAddress = env.ETH_TNT_LISTEN_ADDRS.split(',')[0]
 
 /**
  * GET /config handler
@@ -27,15 +43,7 @@ async function getConfigInfoV1Async (req, res, next) {
     let topCoreBlock = await CalendarBlock.findOne({ attributes: ['id'], order: [['id', 'DESC']] })
     if (!topCoreBlock) throw new Error('no blocks found on calendar')
 
-    let latestChallengeKey = await redis.getAsync(`calendar_audit_challenge:latest_key`)
-    let latestChallenge = await redis.getAsync(latestChallengeKey)
-
-    // the challenge value contains the solution in the last segment, remove it before adding to teh response
-    if (latestChallenge) {
-      let challengeSegments = latestChallenge.split(':')
-      challengeSegments.pop()
-      latestChallenge = challengeSegments.join(':')
-    }
+    let mostRecentChallenge = await cachedAuditChallenge.getMostRecentChallengeDataSolutionRemovedAsync()
 
     result = {
       chainpoint_core_base_uri: env.CHAINPOINT_CORE_BASE_URI,
@@ -43,27 +51,30 @@ async function getConfigInfoV1Async (req, res, next) {
       anchor_eth: env.ANCHOR_ETH,
       proof_expire_minutes: env.PROOF_EXPIRE_MINUTES,
       get_proofs_max_rest: env.GET_PROOFS_MAX_REST,
-      get_proofs_max_ws: env.GET_PROOFS_MAX_WS,
       post_verify_proofs_max: env.POST_VERIFY_PROOFS_MAX,
-      get_calendar_blocks_max: env.GET_CALENDAR_BLOCKS_MAX,
-      time: new Date().toISOString(),
+      get_calendar_blocks_max: 1000,
       public_keys: getCorePublicKeyList(),
       calendar: {
         height: parseInt(topCoreBlock.id),
-        audit_challenge: latestChallenge || undefined
-      }
+        audit_challenge: mostRecentChallenge || undefined
+      },
+      core_eth_address: coreEthAddress
     }
   } catch (error) {
-    console.error(`could not generate config object : ${error}`)
+    console.error(`Could not generate config object: ${error.message}`)
     return next(new restify.InternalServerError('server error'))
   }
 
+  res.cache('public', { maxAge: 60 })
   res.send(result)
   return next()
 }
 
 module.exports = {
   getConfigInfoV1Async: getConfigInfoV1Async,
-  setRedis: (redisClient) => { redis = redisClient },
-  setCalendarBlock: (calBlock) => { CalendarBlock = calBlock }
+  setCalendarBlock: (calBlock) => { CalendarBlock = calBlock },
+  setRedis: (r) => { cachedAuditChallenge.setRedis(r) },
+  setConsul: (c) => { cachedAuditChallenge.setConsul(c) },
+  setMostRecentChallengeKey: (key) => { cachedAuditChallenge.setMostRecentChallengeKey(key) },
+  getAuditChallengeSequelize: () => { return cachedAuditChallenge.getAuditChallengeSequelize() }
 }

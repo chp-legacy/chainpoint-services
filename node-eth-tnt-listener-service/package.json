@@ -8,13 +8,15 @@
     "start": "node server.js"
   },
   "author": "",
-  "license": "ISC",
+  "license": "AGPL-3.0",
   "dependencies": {
-    "bignumber.js": "^4.0.3",
+    "bignumber.js": "^4.0.4",
     "envalid": "^3.1.1",
     "ethereumjs-wallet": "^0.6.0",
+    "lodash": "^4.17.4",
+    "sequelize": "^4.22.6",
     "sequelize-cockroachdb": "^1.0.2",
-    "truffle-contract": "^2.0.4",
+    "truffle-contract": "^2.0.5",
     "web3": "^0.19.1",
     "web3-provider-engine": "^13.2.8"
   }

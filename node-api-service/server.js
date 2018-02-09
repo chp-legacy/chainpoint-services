@@ -1,75 +1,64 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('api')
 
 const { promisify } = require('util')
 const utils = require('./lib/utils.js')
 const amqp = require('amqplib')
-const async = require('async')
-const cachedCalendarBlock = require('./lib/models/CachedCalendarBlock.js')
 const restify = require('restify')
 const corsMiddleware = require('restify-cors-middleware')
-const webSocket = require('ws')
 const hashes = require('./lib/endpoints/hashes.js')
 const nodes = require('./lib/endpoints/nodes.js')
 const proofs = require('./lib/endpoints/proofs.js')
 const verify = require('./lib/endpoints/verify.js')
 const calendar = require('./lib/endpoints/calendar.js')
 const config = require('./lib/endpoints/config.js')
-const subscribe = require('./lib/endpoints/subscribe.js')
 const root = require('./lib/endpoints/root.js')
 const r = require('redis')
 const bluebird = require('bluebird')
 const cnsl = require('consul')
 
-// The channel used for all amqp communication
-// This value is set once the connection has been established
-let amqpChannel = null
-
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
 let redis = null
 
-// Generate a v1 UUID (time-based)
-// see: https://github.com/broofa/node-uuid
-const uuidv1 = require('uuid/v1')
+const bunyan = require('bunyan')
 
-// Set a unique identifier for this instance of API Service
-// This is used to associate API Service instances with websocket connections
-const APIServiceInstanceId = uuidv1()
-
-// Initial an object that will hold all open websocket connections
-let WebSocketConnections = {}
+var logger = bunyan.createLogger({
+  name: 'audit',
+  stream: process.stdout
+})
 
 // RESTIFY SETUP
 // 'version' : all routes will default to this version
 let server = restify.createServer({
   name: 'chainpoint',
-  version: '1.0.0'
+  version: '1.0.0',
+  log: logger
 })
+
+// LOG EVERY REQUEST
+// server.pre(function (request, response, next) {
+//   request.log.info({ req: [request.url, request.method, request.rawHeaders] }, 'API-REQUEST')
+//   next()
+// })
 
 let consul = null
-
-// Create a WS server to run in association with the Restify server
-let webSocketServer = new webSocket.Server({ server: server.server })
-// Handle new web socket connections
-webSocketServer.on('connection', (ws) => {
-  // set up ping to keep connection open over long periods of inactivity
-  let pingInterval = setInterval(() => { ws.ping('ping') }, 1000 * 45)
-  // retrieve the unique identifier for this connection
-  let wsConnectionId = ws.upgradeReq.headers['sec-websocket-key']
-  // save this connection to the open connection registry
-  WebSocketConnections[wsConnectionId] = ws
-  // when a message is received, process it as a subscription request
-  ws.on('message', (hashIds) => subscribe.subscribeForProofs(APIServiceInstanceId, ws, wsConnectionId, hashIds))
-  // when a connection closes, remove it from the open connection registry
-  ws.on('close', () => {
-    // remove this connection from the open connections object
-    delete WebSocketConnections[wsConnectionId]
-    // remove ping interval
-    clearInterval(pingInterval)
-  })
-  ws.on('error', (e) => console.error(e))
-})
 
 // Clean up sloppy paths like //todo//////1//
 server.pre(restify.pre.sanitizePath())
@@ -88,7 +77,7 @@ server.pre(restify.pre.userAgentConnection())
 // curl \
 // --verbose \
 // --request OPTIONS \
-// http://127.0.0.1:8080/hash \
+// http://127.0.0.1:8080/hashes \
 // --header 'Origin: http://localhost:9292' \
 // --header 'Access-Control-Request-Headers: Origin, Accept, Content-Type' \
 // --header 'Access-Control-Request-Method: POST'
@@ -116,73 +105,30 @@ server.get({ path: '/proofs/:hash_id', version: '1.0.0' }, proofs.getProofsByIDV
 server.get({ path: '/proofs', version: '1.0.0' }, proofs.getProofsByIDV1Async)
 // verify one or more proofs
 server.post({ path: '/verify', version: '1.0.0' }, verify.postProofsForVerificationV1)
+// get the block objects for the calendar in the specified block range
+server.get({ path: '/calendar/blockrange/:index', version: '1.0.0' }, calendar.getCalBlockRangeV2Async)
 // get the block hash for the calendar at the specified hieght
-server.get({ path: '/calendar/:height/hash', version: '1.0.0' }, calendar.getCalBlockHashByHeightV1)
+server.get({ path: '/calendar/:height/hash', version: '1.0.0' }, calendar.getCalBlockHashByHeightV1Async)
 // get the dataVal item for the calendar at the specified hieght
-server.get({ path: '/calendar/:height/data', version: '1.0.0' }, calendar.getCalBlockDataByHeightV1)
+server.get({ path: '/calendar/:height/data', version: '1.0.0' }, calendar.getCalBlockDataByHeightV1Async)
 // get the block object for the calendar at the specified hieght
-server.get({ path: '/calendar/:height', version: '1.0.0' }, calendar.getCalBlockByHeightV1)
-// get the block objects for the calendar in the specified range, incusive
-server.get({ path: '/calendar/:fromHeight/:toHeight', version: '1.0.0' }, calendar.getCalBlockRangeV1)
+server.get({ path: '/calendar/:height', version: '1.0.0' }, calendar.getCalBlockByHeightV1Async)
+// get random subset of nodes list
+server.get({ path: '/nodes/random', version: '1.0.0' }, nodes.getNodesRandomV1Async)
+// get nodes blacklist
+server.get({ path: '/nodes/blacklist', version: '1.0.0' }, nodes.getNodesBlacklistV1Async)
 // get nodes list
-server.get({ path: '/nodes', version: '1.0.0' }, nodes.getNodesV1Async)
+// server.get({ path: '/nodes/:tnt_addr', version: '1.0.0' }, nodes.getNodeByTNTAddrV1Async)
 // register a new node
 server.post({ path: '/nodes', version: '1.0.0' }, nodes.postNodeV1Async)
 // update an existing node
 server.put({ path: '/nodes/:tnt_addr', version: '1.0.0' }, nodes.putNodeV1Async)
 // get configuration information for this stack
 server.get({ path: '/config', version: '1.0.0' }, config.getConfigInfoV1Async)
+// get heartbeat
+server.get({ path: '/heartbeat', version: '1.0.0' }, root.getHeartbeatV1)
 // teapot
 server.get({ path: '/', version: '1.0.0' }, root.getV1)
-
-/**
-* Parses a proof message and performs the required work for that message
-*
-* @param {amqp message object} msg - The AMQP message received from the queue
-*/
-function processProofMessage (msg) {
-  if (msg !== null) {
-    if (redis) {
-      let proofReadyObj = JSON.parse(msg.content.toString())
-
-      async.waterfall([
-        (callback) => {
-          // get the target websocket if it is on this instance, otherwise null
-          let targetWebsocket = WebSocketConnections[proofReadyObj.cx_id] || null
-          // if the target websocket is not on this instance, there is no work to do, return
-          if (targetWebsocket === null) return callback(null)
-          // get the proof for the given hashId
-          redis.get(proofReadyObj.hash_id, (err, proofBase64) => {
-            if (err) return callback(err)
-            // if proof is not found, return null to skip the rest of the process
-            if (proofBase64 == null) return callback(null)
-            // deliver proof over websocket if websocket was found on this instance
-            let proofResponse = {
-              hash_id: proofReadyObj.hash_id,
-              proof: proofBase64
-            }
-            targetWebsocket.send(JSON.stringify(proofResponse))
-            return callback(null)
-          })
-        }
-      ], (err) => {
-        if (err) {
-          amqpChannel.nack(msg)
-          console.log(env.RMQ_WORK_IN_API_QUEUE, 'consume message nacked')
-        } else {
-          amqpChannel.ack(msg)
-          console.log(env.RMQ_WORK_IN_API_QUEUE, 'consume message acked')
-        }
-      })
-    } else {
-      // redis is not initialized, nack and requeue 5 seconds later
-      setTimeout(() => {
-        amqpChannel.nack(msg)
-        console.log(env.RMQ_WORK_IN_API_QUEUE, 'consume message nacked - redis null')
-      }, 5000)
-    }
-  }
-}
 
 /**
  * Opens a storage connection
@@ -191,11 +137,12 @@ async function openStorageConnectionAsync () {
   let dbConnected = false
   while (!dbConnected) {
     try {
-      await cachedCalendarBlock.getSequelize().sync({ logging: false })
       await hashes.getSequelize().sync({ logging: false })
       await nodes.getRegisteredNodeSequelize().sync({ logging: false })
+      await calendar.getCalendarBlockSequelize().sync({ logging: false })
+      await verify.getCalendarBlockSequelize().sync({ logging: false })
       await nodes.getNodeAuditLogSequelize().sync({ logging: false })
-      await proofs.getSequelize().sync({ logging: false })
+      await config.getAuditChallengeSequelize().sync({ logging: false })
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {
@@ -224,20 +171,10 @@ async function openRMQConnectionAsync (connectionString) {
       chan.assertQueue(env.RMQ_WORK_OUT_AGG_QUEUE, { durable: true })
       chan.prefetch(env.RMQ_PREFETCH_COUNT_API)
       // set 'amqpChannel' so that publishers have access to the channel
-      amqpChannel = chan
       hashes.setAMQPChannel(chan)
-      // assert headers exchange for receiving proofs
-      chan.assertExchange(env.RMQ_INCOMING_EXCHANGE, 'headers', { durable: true })
-      let q = chan.assertQueue('', { durable: true })
-      let opts = { 'api_id': APIServiceInstanceId, 'x-match': 'all' }
-      chan.bindQueue(q.queue, env.RMQ_INCOMING_EXCHANGE, '', opts)
-      chan.consume(q.queue, (msg) => {
-        processProofMessage(msg)
-      })
       // if the channel closes for any reason, attempt to reconnect
       conn.on('close', async () => {
         console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
-        amqpChannel = null
         hashes.setAMQPChannel(null)
         await utils.sleep(5000)
         await openRMQConnectionAsync(connectionString)
@@ -262,23 +199,18 @@ function openRedisConnection (redisURI) {
   redis.on('ready', () => {
     bluebird.promisifyAll(redis)
     proofs.setRedis(redis)
-    subscribe.setRedis(redis)
-    cachedCalendarBlock.setRedis(redis)
-    verify.setRedis(redis)
-    calendar.setRedis(redis)
+    hashes.setRedis(redis)
     config.setRedis(redis)
     console.log('Redis connection established')
   })
-  redis.on('error', async () => {
+  redis.on('error', async (err) => {
+    console.error(`A redis error has ocurred: ${err}`)
     redis.quit()
     redis = null
     proofs.setRedis(null)
-    subscribe.setRedis(null)
-    cachedCalendarBlock.setRedis(null)
-    verify.setRedis(null)
-    calendar.setRedis(null)
+    hashes.setRedis(null)
     config.setRedis(null)
-    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
+    console.error('Cannot establish Redis connection. Retrying...')
     await utils.sleep(5000)
     openRedisConnection(redisURI)
   })
@@ -302,6 +234,48 @@ function startWatches () {
   nistWatch.on('error', function (err) {
     console.error('nistWatch error: ', err)
   })
+
+  // Continuous watch on the consul key holding the regNodesLimit count.
+  var regNodesLimitWatch = consul.watch({ method: consul.kv.get, options: { key: env.REG_NODES_LIMIT_KEY } })
+
+  // Store the updated regNodesLimit count on change
+  regNodesLimitWatch.on('change', function (data, res) {
+    // process only if a value has been returned
+    if (data && data.Value) {
+      nodes.setRegNodesLimit(data.Value)
+    }
+  })
+
+  regNodesLimitWatch.on('error', function (err) {
+    console.error('regNodesLimitWatch error: ', err)
+  })
+
+  // Continuous watch on the consul key holding the moat recent audit challenge key.
+  var recentChallengeKeyWatch = consul.watch({ method: consul.kv.get, options: { key: env.AUDIT_CHALLENGE_RECENT_KEY } })
+
+  // Store the updated regNodesLimit count on change
+  recentChallengeKeyWatch.on('change', function (data, res) {
+    // process only if a value has been returned
+    if (data && data.Value) config.setMostRecentChallengeKey(data.Value)
+  })
+
+  recentChallengeKeyWatch.on('error', function (err) {
+    console.error('recentChallengeKeyWatch error: ', err)
+  })
+
+  consul.kv.get(env.REG_NODES_LIMIT_KEY, function (err, result) {
+    if (err) {
+      console.error(err)
+    } else {
+      // Only create key if it doesn't exist or has no value, default value of 0
+      if (!result) {
+        consul.kv.set(env.REG_NODES_LIMIT_KEY, '0', function (err, result) {
+          if (err) throw err
+          console.log(`Created ${env.REG_NODES_LIMIT_KEY} key`)
+        })
+      }
+    }
+  })
 }
 
 // Instruct REST server to begin listening for request
@@ -321,6 +295,7 @@ async function start () {
   try {
     // init consul
     consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
+    config.setConsul(consul)
     console.log('Consul connection established')
     // init Redis
     openRedisConnection(env.REDIS_CONNECT_URI)
@@ -333,8 +308,8 @@ async function start () {
     // Init Restify
     await listenRestifyAsync()
     console.log('startup completed successfully')
-  } catch (err) {
-    console.error(`An error has occurred on startup: ${err}`)
+  } catch (error) {
+    console.error(`An error has occurred on startup: ${error.message}`)
     process.exit(1)
   }
 }
@@ -344,16 +319,20 @@ start()
 
 // export these functions for testing purposes
 module.exports = {
-  setRedis: (redisClient) => { redis = redisClient },
+  setRedis: (redisClient) => {
+    redis = redisClient
+    proofs.setRedis(redis)
+    hashes.setRedis(redis)
+  },
   setAMQPChannel: (chan) => {
-    amqpChannel = chan
     hashes.setAMQPChannel(chan)
   },
   setNistLatest: (val) => { hashes.setNistLatest(val) },
   setHashesRegisteredNode: (regNode) => { hashes.setHashesRegisteredNode(regNode) },
   setNodesRegisteredNode: (regNode) => { nodes.setNodesRegisteredNode(regNode) },
   setNodesNodeAuditLog: (nodeAuditLog) => { nodes.setNodesNodeAuditLog(nodeAuditLog) },
-  setProofsRegisteredNode: (regNode) => { proofs.setProofsRegisteredNode(regNode) },
   server: server,
-  config: config
+  config: config,
+  setRegNodesLimit: (val) => { nodes.setLimitDirect(val) },
+  overrideGetTNTGrainsBalanceForAddressAsync: (func) => { nodes.overrideGetTNTGrainsBalanceForAddressAsync(func) }
 }

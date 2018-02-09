@@ -1,6 +1,9 @@
 /* global describe, it */
 
 process.env.NODE_ENV = 'test'
+process.env.MIN_NODE_VERSION_EXISTING = '1.2.0'
+process.env.MIN_NODE_VERSION_NEW = '1.2.0'
+process.env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD = 500000000000
 
 // test related packages
 const expect = require('chai').expect
@@ -37,114 +40,10 @@ describe('Home Controller', () => {
 
 describe('Proofs Controller', () => {
   describe('GET /proofs/hash_id', () => {
-    it('should return proper error with bad authorization value, one string', (done) => {
-      request(server)
-        .get('/proofs/d4f0dc90-2f55-11e7-b598-41e628860234')
-        .set('Authorization', 'qweqwe')
-        .send({ name: 'Manny' })
-        .expect('Content-type', /json/)
-        .expect(401)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidCredentials')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('authorization denied: bad authorization value')
-          done()
-        })
-    })
-
-    it('should return proper error with bad authorization value, one string', (done) => {
-      request(server)
-        .get('/proofs/d4f0dc90-2f55-11e7-b598-41e628860234')
-        .set('Authorization', 'qweqwe')
-        .send({ name: 'Manny' })
-        .expect('Content-type', /json/)
-        .expect(401)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidCredentials')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('authorization denied: bad authorization value')
-          done()
-        })
-    })
-
-    it('should return proper error with bad authorization value, no bearer', (done) => {
-      request(server)
-        .get('/proofs/d4f0dc90-2f55-11e7-b598-41e628860234')
-        .set('Authorization', 'qweqwe ababababab')
-        .send({ name: 'Manny' })
-        .expect('Content-type', /json/)
-        .expect(401)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidCredentials')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('authorization denied: bad authorization value')
-          done()
-        })
-    })
-
-    it('should return proper error with bad authorization value, missing tnt-address', (done) => {
-      request(server)
-        .get('/proofs/d4f0dc90-2f55-11e7-b598-41e628860234')
-        .set('Authorization', 'bearer ababab121212')
-        .send({ name: 'Manny' })
-        .expect('Content-type', /json/)
-        .expect(401)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidCredentials')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('authorization denied: missing tnt-address key')
-          done()
-        })
-    })
-
-    it('should return proper error with bad authorization value, bad tnt-address', (done) => {
-      request(server)
-        .get('/proofs/d4f0dc90-2f55-11e7-b598-41e628860234')
-        .set('Authorization', 'bearer ababab121212')
-        .set('tnt-address', '0xbad')
-        .send({ name: 'Manny' })
-        .expect('Content-type', /json/)
-        .expect(401)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidCredentials')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('authorization denied: invalid tnt-address value')
-          done()
-        })
-    })
-
     it('should return proper error with bad hash_id', (done) => {
-      let tntAddr = '0x1234567890123456789012345678901234567890'
-
-      let hmacKey = crypto.randomBytes(32).toString('hex')
-      let hash = crypto.createHmac('sha256', hmacKey)
-      let hmac = hash.update(tntAddr).digest('hex')
-
       request(server)
         .get('/proofs/badid')
         .set('Content-type', 'text/plain')
-        .set('Authorization', `bearer ${hmac}`)
-        .set('tnt-address', tntAddr)
         .expect('Content-type', /json/)
         .expect(409)
         .end((err, res) => {
@@ -166,27 +65,9 @@ describe('Proofs Controller', () => {
         }
       })
 
-      let tntAddr = '0x1234567890123456789012345678901234567890'
-
-      let hmacKey = crypto.randomBytes(32).toString('hex')
-      let hash = crypto.createHmac('sha256', hmacKey)
-      let hmac = hash.update(tntAddr).digest('hex')
-
-      app.setProofsRegisteredNode({
-        findOne: (params) => {
-          return {
-            tntAddr: tntAddr,
-            hmacKey: hmacKey,
-            tntCredit: 10
-          }
-        }
-      })
-
       request(server)
         .get('/proofs/d4f0dc90-2f55-11e7-b598-41e628860234')
         .set('Content-type', 'text/plain')
-        .set('Authorization', `bearer ${hmac}`)
-        .set('tnt-address', tntAddr)
         .expect('Content-type', /json/)
         .expect(200)
         .end((err, res) => {
@@ -206,8 +87,6 @@ describe('Proofs Controller', () => {
       request(server)
         .get('/proofs/')
         .set('Content-type', 'text/plain')
-        .set('Authorization', 'bearer ababab121212')
-        .set('tnt-address', '0x1234567890123456789012345678901234567890')
         .expect('Content-type', /json/)
         .expect(409)
         .end((err, res) => {
@@ -232,8 +111,6 @@ describe('Proofs Controller', () => {
         'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
         'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
         'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a')
-        .set('Authorization', 'bearer ababab121212')
-        .set('tnt-address', '0x1234567890123456789012345678901234567890')
         .expect('Content-type', /json/)
         .expect(409)
         .end((err, res) => {
@@ -248,84 +125,6 @@ describe('Proofs Controller', () => {
         })
     })
 
-    it('should return proper error with unknown tnt-address', (done) => {
-      app.setRedis({
-        get: (id, callback) => {
-          callback(null, '{ "chainpoint": "proof" }')
-        }
-      })
-
-      let tntAddr = '0x1234567890123456789012345678901234567890'
-
-      let hmacKey = crypto.randomBytes(32).toString('hex')
-      let hash = crypto.createHmac('sha256', hmacKey)
-      let hmac = hash.update('bad').digest('hex')
-
-      app.setProofsRegisteredNode({
-        findOne: (params) => {
-          return null
-        }
-      })
-      request(server)
-        .get('/proofs/')
-        .set('Authorization', `bearer ${hmac}`)
-        .set('tnt-address', tntAddr)
-        .set('hashids', 'd4f0dc90-2f55-11e7-b598-41e628860234')
-        .expect('Content-type', /json/)
-        .expect(401)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidCredentials')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('authorization denied: unknown tnt-address')
-          done()
-        })
-    })
-
-    it('should return proper error with bad hmac value', (done) => {
-      app.setRedis({
-        get: (id, callback) => {
-          callback(null, '{ "chainpoint": "proof" }')
-        }
-      })
-
-      let tntAddr = '0x1234567890123456789012345678901234567890'
-
-      let hmacKey = crypto.randomBytes(32).toString('hex')
-      let hash = crypto.createHmac('sha256', hmacKey)
-      let hmac = hash.update('bad').digest('hex')
-
-      app.setProofsRegisteredNode({
-        findOne: (params) => {
-          return {
-            tntAddr: tntAddr,
-            hmacKey: hmacKey,
-            tntCredit: 10
-          }
-        }
-      })
-      request(server)
-        .get('/proofs/')
-        .set('Authorization', `bearer ${hmac}`)
-        .set('tnt-address', tntAddr)
-        .set('hashids', 'd4f0dc90-2f55-11e7-b598-41e628860234')
-        .expect('Content-type', /json/)
-        .expect(401)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidCredentials')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('authorization denied: bad hmac value')
-          done()
-        })
-    })
-
     it('should return success with one valid hash_id in hashids', (done) => {
       app.setRedis({
         get: (id, callback) => {
@@ -333,28 +132,10 @@ describe('Proofs Controller', () => {
         }
       })
 
-      let tntAddr = '0x1234567890123456789012345678901234567890'
-
-      let hmacKey = crypto.randomBytes(32).toString('hex')
-      let hash = crypto.createHmac('sha256', hmacKey)
-      let hmac = hash.update(tntAddr).digest('hex')
-
-      app.setProofsRegisteredNode({
-        findOne: (params) => {
-          return {
-            tntAddr: tntAddr,
-            hmacKey: hmacKey,
-            tntCredit: 10
-          }
-        }
-      })
-
       request(server)
         .get('/proofs/')
         .set('Content-type', 'text/plain')
         .set('hashids', 'd4f0dc90-2f55-11e7-b598-41e628860234')
-        .set('Authorization', `bearer ${hmac}`)
-        .set('tnt-address', tntAddr)
         .expect('Content-type', /json/)
         .expect(200)
         .end((err, res) => {
@@ -375,27 +156,9 @@ describe('Proofs Controller', () => {
         }
       })
 
-      let tntAddr = '0x1234567890123456789012345678901234567890'
-
-      let hmacKey = crypto.randomBytes(32).toString('hex')
-      let hash = crypto.createHmac('sha256', hmacKey)
-      let hmac = hash.update(tntAddr).digest('hex')
-
-      app.setProofsRegisteredNode({
-        findOne: (params) => {
-          return {
-            tntAddr: tntAddr,
-            hmacKey: hmacKey,
-            tntCredit: 10
-          }
-        }
-      })
-
       request(server)
         .get('/proofs/')
         .set('Content-type', 'text/plain')
-        .set('Authorization', `bearer ${hmac}`)
-        .set('tnt-address', tntAddr)
         .set('hashids', 'd4f0dc90-2f55-11e7-b598-41e628860234, d4f0dc90-2f55-11e7-b598-41e628860234')
         .expect('Content-type', /json/)
         .expect(200)
@@ -640,6 +403,12 @@ describe('Hashes Controller', () => {
         sendToQueue: function () { }
       })
 
+      app.setRedis({
+        hgetallAsync: (key) => { return null },
+        hmsetAsync: (key, value) => { return null },
+        expire: (key, ms) => { return null }
+      })
+
       app.setNistLatest('1400585240:8E00C0AF2B68E33CC453BF45A1689A6804700C083478FEB34E4694422999B6F745C2F837D7BA983F9D7BA52F7CC62965B8E1B7384CD8177003B5D3A0D099D93C')
       app.setHashesRegisteredNode({
         findOne: (params) => {
@@ -668,6 +437,12 @@ describe('Hashes Controller', () => {
     it('should return proper error with bad hmac value', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
+      })
+
+      app.setRedis({
+        hgetallAsync: (key) => { return null },
+        hmsetAsync: (key, value) => { return null },
+        expire: (key, ms) => { return null }
       })
 
       let tntAddr = '0x1234567890123456789012345678901234567890'
@@ -705,49 +480,56 @@ describe('Hashes Controller', () => {
         })
     })
 
-    it('should return proper error with zero balance', (done) => {
-      app.setAMQPChannel({
-        sendToQueue: function () { }
-      })
+    // TEMP DISABLE WHILE CREDIT CHECK TURNED OFF
+    // it('should return proper error with zero balance', (done) => {
+    //   app.setAMQPChannel({
+    //     sendToQueue: function () { }
+    //   })
 
-      let tntAddr = '0x1234567890123456789012345678901234567890'
+    //   let tntAddr = '0x1234567890123456789012345678901234567890'
 
-      let hmacKey = crypto.randomBytes(32).toString('hex')
-      let hash = crypto.createHmac('sha256', hmacKey)
-      let hmac = hash.update(tntAddr).digest('hex')
+    //   let hmacKey = crypto.randomBytes(32).toString('hex')
+    //   let hash = crypto.createHmac('sha256', hmacKey)
+    //   let hmac = hash.update(tntAddr).digest('hex')
 
-      app.setNistLatest('1400585240:8E00C0AF2B68E33CC453BF45A1689A6804700C083478FEB34E4694422999B6F745C2F837D7BA983F9D7BA52F7CC62965B8E1B7384CD8177003B5D3A0D099D93C')
-      app.setHashesRegisteredNode({
-        findOne: (params) => {
-          return {
-            tntAddr: tntAddr,
-            hmacKey: hmacKey,
-            tntCredit: 0
-          }
-        }
-      })
-      request(server)
-        .post('/hashes')
-        .set('Authorization', `bearer ${hmac}`)
-        .set('tnt-address', tntAddr)
-        .send({ hash: 'ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12' })
-        .expect('Content-type', /json/)
-        .expect(403)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('NotAuthorized')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('insufficient tntCredit remaining : 0')
-          done()
-        })
-    })
+    //   app.setNistLatest('1400585240:8E00C0AF2B68E33CC453BF45A1689A6804700C083478FEB34E4694422999B6F745C2F837D7BA983F9D7BA52F7CC62965B8E1B7384CD8177003B5D3A0D099D93C')
+    //   app.setHashesRegisteredNode({
+    //     findOne: (params) => {
+    //       return {
+    //         tntAddr: tntAddr,
+    //         hmacKey: hmacKey,
+    //         tntCredit: 0
+    //       }
+    //     }
+    //   })
+    //   request(server)
+    //     .post('/hashes')
+    //     .set('Authorization', `bearer ${hmac}`)
+    //     .set('tnt-address', tntAddr)
+    //     .send({ hash: 'ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12' })
+    //     .expect('Content-type', /json/)
+    //     .expect(403)
+    //     .end((err, res) => {
+    //       expect(err).to.equal(null)
+    //       expect(res.body).to.have.property('code')
+    //         .and.to.be.a('string')
+    //         .and.to.equal('NotAuthorized')
+    //       expect(res.body).to.have.property('message')
+    //         .and.to.be.a('string')
+    //         .and.to.equal('insufficient tntCredit remaining: 0')
+    //       done()
+    //     })
+    // })
 
     it('should return a matched set of metadata and UUID embedded timestamps', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
+      })
+
+      app.setRedis({
+        hgetallAsync: (key) => { return null },
+        hmsetAsync: (key, value) => { return null },
+        expire: (key, ms) => { return null }
       })
 
       let tntAddr = '0x1234567890123456789012345678901234567890'
@@ -780,7 +562,7 @@ describe('Hashes Controller', () => {
           expect(res.body).to.have.property('submitted_at')
           // The UUID timestamp has ms level precision, ISO8601 only to the second.
           // Check that they are within 1000ms of each other.
-          expect(uuidTime.v1(res.body.hash_id) - Date.parse(res.body.submitted_at)).to.be.within(0, 1000)
+          expect(parseInt(uuidTime.v1(res.body.hash_id)) - Date.parse(res.body.submitted_at)).to.be.within(0, 1000)
           done()
         })
     })
@@ -788,6 +570,12 @@ describe('Hashes Controller', () => {
     it('should return a v1 UUID node embedded with a partial SHA256 over timestamp and hash', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
+      })
+
+      app.setRedis({
+        hgetallAsync: (key) => { return null },
+        hmsetAsync: (key, value) => { return null },
+        expire: (key, ms) => { return null }
       })
 
       let tntAddr = '0x1234567890123456789012345678901234567890'
@@ -822,7 +610,7 @@ describe('Hashes Controller', () => {
           // you should be able to calculate whether the UUID 'Node ID'
           // data segment is the 5 byte BLAKE2s hash of the timestamp
           // embedded in the UUID and the hash submitted to get this UUID.
-          let t = uuidTime.v1(res.body.hash_id)
+          let t = parseInt(uuidTime.v1(res.body.hash_id))
 
           // 5 byte length BLAKE2s hash w/ personalization
           let h = new BLAKE2s(5, { personalization: Buffer.from('CHAINPNT') })
@@ -846,6 +634,12 @@ describe('Hashes Controller', () => {
     it('should return proper result with valid call', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
+      })
+
+      app.setRedis({
+        hgetallAsync: (key) => { return null },
+        hmsetAsync: (key, value) => { return null },
+        expire: (key, ms) => { return null }
       })
 
       let tntAddr = '0x1234567890123456789012345678901234567890'
@@ -1005,115 +799,6 @@ describe('Calendar Controller', () => {
         })
     })
   })
-
-  describe('GET /calendar/fromHeight/toHeight', () => {
-    it('should return proper error with bad fromheight', (done) => {
-      request(server)
-        .get('/calendar/badheight/3')
-        .set('Content-type', 'text/plain')
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid request, fromHeight must be a positive integer')
-          done()
-        })
-    })
-
-    it('should return proper error with negative fromheight', (done) => {
-      request(server)
-        .get('/calendar/-1/3')
-        .set('Content-type', 'text/plain')
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid request, fromHeight must be a positive integer')
-          done()
-        })
-    })
-
-    it('should return proper error with bad toheight', (done) => {
-      request(server)
-        .get('/calendar/1/badheight')
-        .set('Content-type', 'text/plain')
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid request, toHeight must be a positive integer')
-          done()
-        })
-    })
-    it('should return proper error with negative toheight', (done) => {
-      request(server)
-        .get('/calendar/1/-1')
-        .set('Content-type', 'text/plain')
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid request, toHeight must be a positive integer')
-          done()
-        })
-    })
-
-    it('should return proper error with from > to', (done) => {
-      request(server)
-        .get('/calendar/100/50')
-        .set('Content-type', 'text/plain')
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid request, toHeight must be greater or equal to fromHeight')
-          done()
-        })
-    })
-
-    it('should return proper error with range too large', (done) => {
-      request(server)
-        .get('/calendar/1/9999')
-        .set('Content-type', 'text/plain')
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid request, requested range may not exceed 1000 blocks')
-          done()
-        })
-    })
-  })
 })
 
 describe('Verify Controller', () => {
@@ -1215,10 +900,17 @@ describe('Verify Controller', () => {
   })
 })
 
+/* TODO: Re-enable using cachedAuditChallenge
 describe('Config Controller', () => {
-  app.config.setRedis({
-    getAsync: async () => {
-      return 'qwe:qwe:qwe:qwe:qwe'
+  app.config.setAuditChallenge({
+    findOne: async () => {
+      return {
+        time: 1504898081430,
+        minBlock: 9661,
+        maxBlock: 10483,
+        nonce: 'd9a52b6e1e4cdc46d03b58c6b4b58a01e0eb7b252a83ee5346314a1240561c4d',
+        solution: '57d17352247cbbdd2551d5b2401c85c54cb47e92265ac034ada2577cb00f012d'
+      }
     }
   })
   app.config.setCalendarBlock({
@@ -1240,19 +932,17 @@ describe('Config Controller', () => {
           expect(res.body).to.have.property('anchor_eth')
           expect(res.body).to.have.property('proof_expire_minutes')
           expect(res.body).to.have.property('get_proofs_max_rest')
-          expect(res.body).to.have.property('get_proofs_max_ws')
           expect(res.body).to.have.property('post_verify_proofs_max')
-          expect(res.body).to.have.property('get_calendar_blocks_max')
-          expect(res.body).to.have.property('time')
           expect(res.body).to.have.property('public_keys')
           expect(res.body).to.have.property('calendar')
           expect(res.body.calendar).to.have.property('height')
-          expect(res.body.calendar).to.have.property('audit_challenge')
+          expect(res.body.calendar).to.have.property('audit_challenge').and.to.equal('1504898081430:9661:10483:d9a52b6e1e4cdc46d03b58c6b4b58a01e0eb7b252a83ee5346314a1240561c4d')
+          expect(res.body).to.have.property('core_eth_address')
           done()
         })
     })
   })
-})
+}) */
 
 describe('Nodes Controller', () => {
   describe('POST /nodes', () => {
@@ -1274,10 +964,67 @@ describe('Nodes Controller', () => {
         })
     })
 
+    it('should return error with missing node version', (done) => {
+      request(server)
+        .post('/nodes')
+        .send({ public_uri: 'http://65.198.32.187' })
+        .expect('Content-type', /json/)
+        .expect(426)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('UpgradeRequiredError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_NEW} or greater required`)
+          done()
+        })
+    })
+
+    it('should return error with bad node version', (done) => {
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', 'bad+version')
+        .send({ public_uri: 'http://65.198.32.187' })
+        .expect('Content-type', /json/)
+        .expect(426)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('UpgradeRequiredError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_NEW} or greater required`)
+          done()
+        })
+    })
+
+    it('should return error with low node version', (done) => {
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', '1.1.9')
+        .send({ public_uri: 'http://65.198.32.187' })
+        .expect('Content-type', /json/)
+        .expect(426)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('UpgradeRequiredError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_NEW} or greater required`)
+          done()
+        })
+    })
+
     it('should return error with no tnt_addr', (done) => {
       request(server)
         .post('/nodes')
-        .send({ public_uri: 'http://127.0.0.1' })
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+        .send({ public_uri: 'http://65.198.32.187' })
         .expect('Content-type', /json/)
         .expect(409)
         .end((err, res) => {
@@ -1295,7 +1042,8 @@ describe('Nodes Controller', () => {
     it('should return error with empty tnt_addr', (done) => {
       request(server)
         .post('/nodes')
-        .send({ tnt_addr: '', public_uri: 'http://127.0.0.1' })
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+        .send({ tnt_addr: '', public_uri: 'http://65.198.32.187' })
         .expect('Content-type', /json/)
         .expect(409)
         .end((err, res) => {
@@ -1313,7 +1061,8 @@ describe('Nodes Controller', () => {
     it('should return error with malformed tnt_addr', (done) => {
       request(server)
         .post('/nodes')
-        .send({ tnt_addr: '0xabc', public_uri: 'http://127.0.0.1' })
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+        .send({ tnt_addr: '0xabc', public_uri: 'http://65.198.32.187' })
         .expect('Content-type', /json/)
         .expect(409)
         .end((err, res) => {
@@ -1328,10 +1077,11 @@ describe('Nodes Controller', () => {
         })
     })
 
-    it('should return error with empty public_uri', (done) => {
+    it('should return error with bad public_uri', (done) => {
       request(server)
         .post('/nodes')
-        .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: '' })
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+        .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'badval' })
         .expect('Content-type', /json/)
         .expect(409)
         .end((err, res) => {
@@ -1341,23 +1091,114 @@ describe('Nodes Controller', () => {
             .and.to.equal('InvalidArgument')
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
-            .and.to.equal('invalid JSON body, invalid empty public_uri, remove if non-public IP')
+            .and.to.equal('invalid JSON body, invalid public_uri')
+          done()
+        })
+    })
+
+    it('should return error with non-IP public_uri', (done) => {
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+        .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'http://www.chainpoint.org' })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('public_uri hostname must be an IP')
+          done()
+        })
+    })
+
+    it('should return error with private public_uri', (done) => {
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+        .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'http://127.0.0.1' })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('public_uri hostname must not be a private IP')
+          done()
+        })
+    })
+
+    it('should return error with 0.0.0.0 public_uri', (done) => {
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+        .send({ tnt_addr: '0x' + crypto.randomBytes(20).toString('hex'), public_uri: 'http://0.0.0.0' })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('0.0.0.0 not allowed in public_uri')
+          done()
+        })
+    })
+
+    it('should return error with low TNT balance', (done) => {
+      let publicUri = 'http://65.198.32.187'
+      let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
+
+      app.setRegNodesLimit(10)
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 100000000000 })
+
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+        .send({ tnt_addr: tntAddr1, public_uri: publicUri })
+        .expect('Content-type', /json/)
+        .expect(403)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('ForbiddenError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`TNT address ${tntAddr1} does not have the minimum balance of ${process.env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD / 100000000} TNT for Node operation`)
           done()
         })
     })
 
     it('should return error if a tnt_addr already exists', (done) => {
-      let publicUri = 'http://127.0.0.1'
+      let publicUri = 'http://65.198.32.187'
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
 
       let data = []
 
       app.setNodesRegisteredNode({
         count: (params) => {
-          let matches = data.filter((row) => {
-            return row.tntAddr === params.where.tntAddr
-          })
-          return matches.length
+          if (!params) return data.length
+          if (params.where.tntAddr) {
+            let matches = data.filter((row) => {
+              return row.tntAddr === params.where.tntAddr
+            })
+            return matches.length
+          }
+          if (params.where.publicUri) {
+            let matches = data.filter((row) => {
+              return row.publicUri === params.where.publicUri
+            })
+            return matches.length
+          }
         },
         create: (params) => {
           let row = {
@@ -1370,14 +1211,19 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.setRegNodesLimit(10)
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri })
         .expect(200)
         .end((err, res) => {
           expect(err).to.equal(null)
           request(server)
             .post('/nodes')
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
             .send({ tnt_addr: tntAddr1, public_uri: publicUri })
             .expect(409)
             .end((err, res) => {
@@ -1387,14 +1233,14 @@ describe('Nodes Controller', () => {
                 .and.to.equal('ConflictError')
               expect(res.body).to.have.property('message')
                 .and.to.be.a('string')
-                .and.to.equal('tnt_addr : address already exists')
+                .and.to.equal('the Ethereum address provided is already registered')
               done()
             })
         })
     })
 
-    it('should be OK if a public_uri is registered twice', (done) => {
-      let publicUri = 'http://127.0.0.1'
+    it('should not allow public_uri to be registered twice', (done) => {
+      let publicUri = 'http://65.198.32.187'
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
       let tntAddr2 = '0x' + crypto.randomBytes(20).toString('hex')
 
@@ -1402,10 +1248,19 @@ describe('Nodes Controller', () => {
 
       app.setNodesRegisteredNode({
         count: (params) => {
-          let matches = data.filter((row) => {
-            return row.tntAddr === params.where.tntAddr
-          })
-          return matches.length
+          if (!params) return data.length
+          if (params.where.tntAddr) {
+            let matches = data.filter((row) => {
+              return row.tntAddr === params.where.tntAddr
+            })
+            return matches.length
+          }
+          if (params.where.publicUri) {
+            let matches = data.filter((row) => {
+              return row.publicUri === params.where.publicUri
+            })
+            return matches.length
+          }
         },
         create: (params) => {
           let row = {
@@ -1418,25 +1273,36 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.setRegNodesLimit(10)
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri })
         .expect(200)
         .end((err, res) => {
           expect(err).to.equal(null)
           request(server)
             .post('/nodes')
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
             .send({ tnt_addr: tntAddr2, public_uri: publicUri })
-            .expect(200)
+            .expect(409)
             .end((err, res) => {
               expect(err).to.equal(null)
+              expect(res.body).to.have.property('code')
+                .and.to.be.a('string')
+                .and.to.equal('ConflictError')
+              expect(res.body).to.have.property('message')
+                .and.to.be.a('string')
+                .and.to.equal('the public URI provided is already registered')
               done()
             })
         })
     })
 
     it('should return OK for valid request', (done) => {
-      let publicUri = 'http://127.0.0.1'
+      let publicUri = 'http://65.198.32.187'
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
@@ -1444,10 +1310,19 @@ describe('Nodes Controller', () => {
 
       app.setNodesRegisteredNode({
         count: (params) => {
-          let matches = data.filter((row) => {
-            return row.tntAddr === params.where.tntAddr
-          })
-          return matches.length
+          if (!params) return data.length
+          if (params.where.tntAddr) {
+            let matches = data.filter((row) => {
+              return row.tntAddr === params.where.tntAddr
+            })
+            return matches.length
+          }
+          if (params.where.publicUri) {
+            let matches = data.filter((row) => {
+              return row.publicUri === params.where.publicUri
+            })
+            return matches.length
+          }
         },
         create: (params) => {
           let row = {
@@ -1460,8 +1335,12 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.setRegNodesLimit(10)
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(200)
@@ -1496,12 +1375,75 @@ describe('Nodes Controller', () => {
         })
     })
 
-    it('should return error with malformed tnt_addr', (done) => {
-      let randTntAddr = '0xzxczxc'
+    it('should return error with missing node version', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
 
       request(server)
         .put('/nodes/' + randTntAddr)
-        .send({ public_uri: 'http://127.0.0.1' })
+        .set('Content-type', 'application/json')
+        .expect('Content-type', /json/)
+        .expect(426)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('UpgradeRequiredError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_EXISTING} or greater required`)
+          done()
+        })
+    })
+
+    it('should return error with bad node version', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', 'bad+version')
+        .set('Content-type', 'application/json')
+        .expect('Content-type', /json/)
+        .expect(426)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('UpgradeRequiredError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_EXISTING} or greater required`)
+          done()
+        })
+    })
+
+    it('should return error with low node version', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', '1.1.1')
+        .set('Content-type', 'application/json')
+        .expect('Content-type', /json/)
+        .expect(426)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('UpgradeRequiredError')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal(`Node version ${process.env.MIN_NODE_VERSION_EXISTING} or greater required`)
+          done()
+        })
+    })
+
+    it('should return error with malformed tnt_addr', (done) => {
+      let randTntAddr = '0xzxczxc'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 100000000000 })
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+        .send({ public_uri: 'http://65.198.32.187' })
         .expect('Content-type', /json/)
         .expect(409)
         .end((err, res) => {
@@ -1519,9 +1461,11 @@ describe('Nodes Controller', () => {
     it('should return error with malformed public_uri', (done) => {
       let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
       let publicUri = 'baduri'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1537,12 +1481,83 @@ describe('Nodes Controller', () => {
         })
     })
 
-    it('should return error with missing hmac', (done) => {
+    it('should return error with non-IP public_uri', (done) => {
       let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
-      let publicUri = 'http://127.0.0.1'
+      let publicUri = 'http://www.chainpoint.org'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+        .send({ public_uri: publicUri })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('public_uri hostname must be an IP')
+          done()
+        })
+    })
+
+    it('should return error with private public_uri', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://127.0.0.1'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+        .send({ public_uri: publicUri })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('public_uri hostname must not be a private IP')
+          done()
+        })
+    })
+
+    it('should return error with 0.0.0.0 public_uri', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://0.0.0.0'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+        .send({ public_uri: publicUri })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('0.0.0.0 not allowed in public_uri')
+          done()
+        })
+    })
+
+    it('should return error with missing hmac', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://65.198.32.187'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1560,10 +1575,12 @@ describe('Nodes Controller', () => {
 
     it('should return error with empty hmac', (done) => {
       let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
-      let publicUri = 'http://127.0.0.1'
+      let publicUri = 'http://65.198.32.187'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri, hmac: '' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1581,10 +1598,35 @@ describe('Nodes Controller', () => {
 
     it('should return error with invalid hmac', (done) => {
       let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
-      let publicUri = 'http://127.0.0.1'
+      let publicUri = 'http://65.198.32.187'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
         .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+        .send({ public_uri: publicUri, hmac: '!badhmac' })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('invalid JSON body, invalid hmac')
+          done()
+        })
+    })
+
+    it('should return error with invalid hmac', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://65.198.32.187'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri, hmac: '!badhmac' })
         .expect('Content-type', /json/)
         .expect(409)
@@ -1605,7 +1647,7 @@ describe('Nodes Controller', () => {
         sendToQueue: function () { }
       })
 
-      let publicUri1 = 'http://127.0.0.1'
+      let publicUri1 = 'http://65.198.32.187'
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
@@ -1635,8 +1677,11 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .put('/nodes/' + tntAddr1)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
         .send({ public_uri: publicUri1, hmac: crypto.randomBytes(32).toString('hex') })
         .expect('Content-type', /json/)
         .expect(404)
@@ -1644,10 +1689,10 @@ describe('Nodes Controller', () => {
           expect(err).to.equal(null)
           expect(res.body).to.have.property('code')
             .and.to.be.a('string')
-            .and.to.equal('ResourceNotFound')
+            .and.to.equal('NotFoundError')
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
-            .and.to.equal('not found')
+            .and.to.equal('could not find registered Node')
           done()
         })
     })
@@ -1657,7 +1702,7 @@ describe('Nodes Controller', () => {
         sendToQueue: function () { }
       })
 
-      let publicUri1 = 'http://127.0.0.1'
+      let publicUri1 = 'http://65.198.32.187'
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
@@ -1687,8 +1732,11 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
         .expect(200)
         .end((err, res) => {
@@ -1696,6 +1744,7 @@ describe('Nodes Controller', () => {
 
           request(server)
             .put('/nodes/' + tntAddr1)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
             .send({ public_uri: publicUri1, hmac: crypto.randomBytes(32).toString('hex') })
             .expect('Content-type', /json/)
             .expect(409)
@@ -1706,18 +1755,18 @@ describe('Nodes Controller', () => {
                 .and.to.equal('InvalidArgument')
               expect(res.body).to.have.property('message')
                 .and.to.be.a('string')
-                .and.to.equal('incorrect hmac')
+                .and.to.equal('Invalid authentication HMAC provided - Try NTP sync')
               done()
             })
         })
     })
 
-    it('should return OK for valid PUT no change to tnt or IP', (done) => {
+    it('should return error for low balance', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
       })
 
-      let publicUri = 'http://127.0.0.1'
+      let publicUri = 'http://65.198.32.187'
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
@@ -1747,8 +1796,11 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri })
         .expect(200)
         .end((err, res) => {
@@ -1760,17 +1812,21 @@ describe('Nodes Controller', () => {
           let hmacTxt = [tntAddr1, publicUri, formattedDate].join('')
           let calculatedHMAC = hash.update(hmacTxt).digest('hex')
 
+          app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 100000000000 })
           request(server)
             .put('/nodes/' + tntAddr1)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
             .send({ public_uri: publicUri, hmac: calculatedHMAC })
             .expect('Content-type', /json/)
-            .expect(200)
+            .expect(403)
             .end((err, res) => {
               expect(err).to.equal(null)
-              expect(res.body).to.have.property('tnt_addr')
-                .and.to.equal(tntAddr1)
-              expect(res.body).to.have.property('public_uri')
-                .and.to.equal(publicUri)
+              expect(res.body).to.have.property('code')
+                .and.to.be.a('string')
+                .and.to.equal('ForbiddenError')
+              expect(res.body).to.have.property('message')
+                .and.to.be.a('string')
+                .and.to.equal(`TNT address ${tntAddr1} does not have the minimum balance of ${process.env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD / 100000000} TNT for Node operation`)
               done()
             })
         })
@@ -1781,8 +1837,8 @@ describe('Nodes Controller', () => {
         sendToQueue: function () { }
       })
 
-      let publicUri1 = 'http://127.0.0.1'
-      let publicUri2 = 'http://127.0.0.2'
+      let publicUri1 = 'http://65.198.32.187'
+      let publicUri2 = 'http://65.198.32.188'
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
@@ -1812,8 +1868,11 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
         .expect(200)
         .end((err, res) => {
@@ -1826,6 +1885,75 @@ describe('Nodes Controller', () => {
 
           request(server)
             .put('/nodes/' + tntAddr1)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+            .send({ public_uri: publicUri2, hmac: calculatedHMAC })
+            .expect('Content-type', /json/)
+            .expect(200)
+            .end((err, res) => {
+              expect(err).to.equal(null)
+              expect(res.body).to.have.property('tnt_addr')
+                .and.to.equal(tntAddr1)
+              expect(res.body).to.have.property('public_uri')
+                .and.to.equal(publicUri2)
+              done()
+            })
+        })
+    })
+
+    it('should return OK for valid PUT no change to tnt and updated IP', (done) => {
+      app.setAMQPChannel({
+        sendToQueue: function () { }
+      })
+
+      let publicUri1 = 'http://65.198.32.187'
+      let publicUri2 = 'http://65.198.32.188'
+      let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
+      let hmacKey = crypto.randomBytes(32).toString('hex')
+
+      let data = []
+      let regNode = null
+
+      app.setNodesRegisteredNode({
+        count: (params) => {
+          let matches = data.filter((row) => {
+            return row.tntAddr === params.where.tntAddr
+          })
+          return matches.length
+        },
+        create: (params) => {
+          let row = {
+            tntAddr: params.tntAddr,
+            publicUri: params.publicUri,
+            hmacKey: hmacKey
+          }
+          data.push(row)
+          return row
+        },
+        find: (params) => {
+          regNode = data.find((item) => { return item.tntAddr === params.where.tntAddr })
+          if (regNode) regNode.save = () => { }
+          return regNode
+        }
+      })
+
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+        .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
+        .expect(200)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          // HMAC-SHA256(hmac-key, TNT_ADDRESS|IP|YYYYMMDDHHMM)
+          let hash = crypto.createHmac('sha256', res.body.hmac_key)
+          let formattedDate = moment().utc().format('YYYYMMDDHHmm')
+          let hmacTxt = [tntAddr1, publicUri2, formattedDate].join('')
+          let calculatedHMAC = hash.update(hmacTxt).digest('hex')
+
+          request(server)
+            .put('/nodes/' + tntAddr1)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
             .send({ public_uri: publicUri2, hmac: calculatedHMAC })
             .expect('Content-type', /json/)
             .expect(200)
@@ -1845,7 +1973,7 @@ describe('Nodes Controller', () => {
         sendToQueue: function () { }
       })
 
-      let publicUri1 = 'http://127.0.0.1'
+      let publicUri1 = 'http://65.198.32.187'
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
@@ -1875,8 +2003,11 @@ describe('Nodes Controller', () => {
         }
       })
 
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
       request(server)
         .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
         .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
         .expect(200)
         .end((err, res) => {
@@ -1889,6 +2020,7 @@ describe('Nodes Controller', () => {
 
           request(server)
             .put('/nodes/' + tntAddr1)
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
             .send({ hmac: calculatedHMAC })
             .expect('Content-type', /json/)
             .expect(200)
@@ -1898,6 +2030,101 @@ describe('Nodes Controller', () => {
                 .and.to.equal(tntAddr1)
               expect(res.body).to.not.have.property('public_uri')
               done()
+            })
+        })
+    })
+
+    it('should return error for valid PUT no change to tnt and in use IP', (done) => {
+      app.setAMQPChannel({
+        sendToQueue: function () { }
+      })
+
+      let publicUri1 = 'http://65.198.32.187'
+      let publicUri2 = 'http://65.198.32.188'
+      let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
+      let tntAddr2 = '0x' + crypto.randomBytes(20).toString('hex')
+      let hmacKey = crypto.randomBytes(32).toString('hex')
+
+      let data = []
+      let regNode = null
+
+      app.setNodesRegisteredNode({
+        count: (params) => {
+          if (!params) return data.length
+          if (params.where.tntAddr && params.where.publicUri) {
+            let matches = data.filter((row) => {
+              return (row.publicUri === params.where.publicUri && row.tntAddr !== params.where.tntAddr)
+            })
+            return matches.length
+          }
+          if (params.where.tntAddr) {
+            let matches = data.filter((row) => {
+              return row.tntAddr === params.where.tntAddr
+            })
+            return matches.length
+          }
+          if (params.where.publicUri) {
+            let matches = data.filter((row) => {
+              return row.publicUri === params.where.publicUri
+            })
+            return matches.length
+          }
+        },
+        create: (params) => {
+          let row = {
+            tntAddr: params.tntAddr,
+            publicUri: params.publicUri,
+            hmacKey: hmacKey
+          }
+          data.push(row)
+          return row
+        },
+        find: (params) => {
+          regNode = data.find((item) => { return item.tntAddr === params.where.tntAddr })
+          if (regNode) regNode.save = () => { }
+          return regNode
+        }
+      })
+
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .post('/nodes')
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+        .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
+        .expect(200)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+
+          request(server)
+            .post('/nodes')
+            .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
+            .send({ tnt_addr: tntAddr2, public_uri: publicUri2 })
+            .expect(200)
+            .end((err, res) => {
+              expect(err).to.equal(null)
+              // HMAC-SHA256(hmac-key, TNT_ADDRESS|IP|YYYYMMDDHHMM)
+              let hash = crypto.createHmac('sha256', res.body.hmac_key)
+              let formattedDate = moment().utc().format('YYYYMMDDHHmm')
+              let hmacTxt = [tntAddr1, publicUri2, formattedDate].join('')
+              let calculatedHMAC = hash.update(hmacTxt).digest('hex')
+
+              request(server)
+                .put('/nodes/' + tntAddr1)
+                .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+                .send({ public_uri: publicUri2, hmac: calculatedHMAC })
+                .expect('Content-type', /json/)
+                .expect(409)
+                .end((err, res) => {
+                  expect(err).to.equal(null)
+                  expect(res.body).to.have.property('code')
+                    .and.to.be.a('string')
+                    .and.to.equal('ConflictError')
+                  expect(res.body).to.have.property('message')
+                    .and.to.be.a('string')
+                    .and.to.equal('the public URI provided is already registered')
+                  done()
+                })
             })
         })
     })

@@ -7,8 +7,6 @@ RUN yarn
 RUN mkdir /home/node/app/lib/endpoints
 COPY ./lib/endpoints/*.js /home/node/app/lib/endpoints/
 
-COPY ./lib/models/*.js /home/node/app/lib/models/
-
 COPY server.js /home/node/app/
 
 EXPOSE 8080

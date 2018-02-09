@@ -1,3 +1,19 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('btc-tx')
 
@@ -14,9 +30,9 @@ let amqpChannel = null
 let sequelize = btcTxLog.sequelize
 let BtcTxLog = btcTxLog.BtcTxLog
 
-// initialize blockchainanchor object
+// Initialize BlockchainAnchor object
 let anchor = new BlockchainAnchor({
-  btcUseTestnet: true, // TODO: revert back to false when INSIGHT_API_BASE_URI point to mainnet node
+  btcUseTestnet: !env.isProduction,
   service: 'insightapi',
   insightApiBase: env.INSIGHT_API_BASE_URI,
   insightFallback: true
@@ -34,10 +50,10 @@ let logBtcTxDataAsync = async (txResult) => {
 
   try {
     let newRow = await BtcTxLog.create(row)
-    console.log(`$BTC log : tx_id : ${newRow.get({ plain: true }).txId}`)
+    console.log(`$BTC log: tx_id: ${newRow.get({ plain: true }).txId}`)
     return newRow.get({ plain: true })
   } catch (error) {
-    throw new Error(`BTC log create error: ${error.message} : ${error.stack}`)
+    throw new Error(`BTC log create error: ${error.message}: ${error.stack}`)
   }
 }
 
@@ -64,7 +80,7 @@ const sendTxToBTCAsync = async (hash) => {
     let averageTxInBytes = 235 // 235 represents the average btc anchor transaction size in bytes
     feeTotalSatoshi = feeSatPerByte * averageTxInBytes
   } catch (error) {
-    throw new Error(`Error retrieving estimated fee : ${error.message}`)
+    throw new Error(`Error retrieving estimated fee: ${error.message}`)
   }
 
   let txResult
@@ -75,7 +91,7 @@ const sendTxToBTCAsync = async (hash) => {
     txResult.feePaidSatoshi = feeTotalSatoshi
     return txResult
   } catch (error) {
-    throw new Error(`Error sending anchor transaction : ${error.message}`)
+    throw new Error(`Error sending anchor transaction: ${error.message}`)
   }
 }
 
@@ -92,35 +108,46 @@ async function processIncomingAnchorBTCJobAsync (msg) {
 
     // if amqpChannel is null for any reason, dont bother sending transaction until that is resolved, return error
     if (!amqpChannel) throw new Error('no amqpConnection available')
-    // create and publish the transaction
 
     try {
-      let txResult = await sendTxToBTCAsync(anchorData)
+      // create and publish the transaction
+      let txResult
+      try {
+        txResult = await sendTxToBTCAsync(anchorData)
+      } catch (error) {
+        throw new Error(`Unable to publish BTC transaction: ${error.message}`)
+      }
+
       // log the btc tx transaction
-      let newLogEntry = await logBtcTxDataAsync(txResult)
-      console.log(newLogEntry)
+      let newLogEntry
+      try {
+        newLogEntry = await logBtcTxDataAsync(txResult)
+        console.log(newLogEntry)
+      } catch (error) {
+        throw new Error(`Unable to log BTC transaction: ${error.message}`)
+      }
+
       // queue return message for calendar containing the new transaction information
       // adding btc transaction id and full transaction body to original message and returning
       messageObj.btctx_id = txResult.txId
       messageObj.btctx_body = txResult.rawTx
-      amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(messageObj)), { persistent: true, type: 'btctx' },
-        (err, ok) => {
-          if (err !== null) {
-            console.error(env.RMQ_WORK_OUT_CAL_QUEUE, '[calendar] publish message nacked')
-            throw new Error(err)
-          } else {
-            console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[calendar] publish message acked')
-            amqpChannel.ack(msg)
-          }
-        })
+      try {
+        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(messageObj)), { persistent: true, type: 'btctx' })
+        console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[btctx] publish message acked', messageObj.btctx_id)
+      } catch (error) {
+        console.error(env.RMQ_WORK_OUT_CAL_QUEUE, '[btctx] publish message nacked', messageObj.btctx_id)
+        throw new Error(`Unable to publish to RMQ_WORK_OUT_CAL_QUEUE: ${error.message}`)
+      }
+      amqpChannel.ack(msg)
     } catch (error) {
       // An error has occurred publishing the transaction, nack consumption of message
       // set a 30 second delay for nacking this message to prevent a flood of retries hitting insight api
-      console.error(error.message)
+      let retryMS = 30000
+      console.error(`Unable to process BTC anchor message: ${error.message}: Retrying in ${retryMS / 1000} seconds`)
       setTimeout(() => {
         amqpChannel.nack(msg)
         console.error(env.RMQ_WORK_IN_BTCTX_QUEUE, 'consume message nacked')
-      }, 30000)
+      }, retryMS)
     }
   }
 }
@@ -192,8 +219,8 @@ async function start () {
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     console.log('startup completed successfully')
-  } catch (err) {
-    console.error(`An error has occurred on startup: ${err}`)
+  } catch (error) {
+    console.error(`An error has occurred on startup: ${error.message}`)
     process.exit(1)
   }
 }

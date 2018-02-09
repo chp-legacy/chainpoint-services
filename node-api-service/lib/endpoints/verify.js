@@ -1,9 +1,29 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 const _ = require('lodash')
 const chpParse = require('chainpoint-parse')
 const restify = require('restify')
 const env = require('../parse-env.js')('api')
 const async = require('async')
-const cachedCalendarBlock = require('../models/CachedCalendarBlock.js')
+const calendarBlock = require('../models/CalendarBlock.js')
+
+// pull in variables defined in shared CalendarBlock module
+let sequelize = calendarBlock.sequelize
+let CalendarBlock = calendarBlock.CalendarBlock
 
 function ProcessVerifyTasks (verifyTasks, callback) {
   let processedTasks = []
@@ -70,20 +90,16 @@ function ProcessVerifyTasks (verifyTasks, callback) {
 function BuildVerifyTaskList (proofs) {
   let results = []
   let proofIndex = 0
-  let parseObj = null
   // extract id, time, anchors, and calculate expected values
-  _.forEach(proofs, function (proof) {
-    if (typeof (proof) === 'string') { // then this should be a binary proof
-      chpParse.parseBinary(proof, function (err, result) {
-        if (!err) parseObj = result
-      })
-    } else if (typeof (proof) === 'object') { // then this should be a JSON proof
-      chpParse.parseObject(proof, function (err, result) {
-        if (!err) parseObj = result
-      })
+  _.forEach(proofs, (proof) => {
+    let parseObj
+    try {
+      parseObj = chpParse.parse(proof)
+    } catch (error) {
+      parseObj = null
     }
 
-    let hash = parseObj !== null ? parseObj.hash : undefined
+    let hash = parseObj ? parseObj.hash : undefined
     let hashIdNode = parseObj !== null ? parseObj.hash_id_node : undefined
     let hashSubmittedNodeAt = parseObj !== null ? parseObj.hash_submitted_node_at : undefined
     let hashIdCore = parseObj !== null ? parseObj.hash_id_core : undefined
@@ -109,17 +125,20 @@ function confirmExpectedValue (anchorInfo, callback) {
   let expectedValue = anchorInfo.expected_value
   switch (anchorInfo.type) {
     case 'cal':
-      cachedCalendarBlock.getCalBlockConfirmDataByDataId(anchorId, (err, hash) => {
-        if (err) return callback(err)
-        return callback(null, hash === expectedValue)
+      CalendarBlock.findOne({ where: { type: 'cal', data_id: anchorId }, attributes: ['hash'] }).then((block) => {
+        if (!block) return callback(null, null)
+        return callback(null, block.hash === expectedValue)
+      }).catch((err) => {
+        return callback(err)
       })
       break
     case 'btc':
-      cachedCalendarBlock.getBtcCBlockConfirmDataByDataId(anchorId, (err, dataVal) => {
-        if (err) return callback(err)
-        if (!dataVal) return callback(null, null)
-        let blockRoot = dataVal.match(/.{2}/g).reverse().join('')
+      CalendarBlock.findOne({ where: { type: 'btc-c', dataId: anchorId }, attributes: ['dataVal'] }).then((block) => {
+        if (!block) return callback(null, null)
+        let blockRoot = block.dataVal.match(/.{2}/g).reverse().join('')
         return callback(null, blockRoot === expectedValue)
+      }).catch((err) => {
+        return callback(err)
       })
       break
     case 'eth':
@@ -196,6 +215,6 @@ function postProofsForVerificationV1 (req, res, next) {
 }
 
 module.exports = {
-  postProofsForVerificationV1: postProofsForVerificationV1,
-  setRedis: (r) => { cachedCalendarBlock.setRedis = r }
+  getCalendarBlockSequelize: () => { return sequelize },
+  postProofsForVerificationV1: postProofsForVerificationV1
 }

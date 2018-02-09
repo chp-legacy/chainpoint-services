@@ -1,4 +1,4 @@
-# chainpoint-node-audit-service
+# chainpoint-node-audit-consumer-service
 
 Audit Tierion Network Nodes that have registered
 as being publicly available.

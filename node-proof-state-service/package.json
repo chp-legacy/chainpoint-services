@@ -3,17 +3,16 @@
   "version": "0.0.1",
   "description": "Chainpoint proof state service.",
   "author": "Glenn Rempe <glenn@tierion.com>",
-  "license": "MIT",
+  "license": "AGPL-3.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "amqplib": "^0.5.1",
-    "async": "^2.3.0",
     "envalid": "^3.1.1",
-    "pg": "^6.1.5",
+    "pg": "^7.4.0",
     "pg-hstore": "^2.3.2",
-    "sequelize": "^4.4.3"
+    "sequelize": "^4.22.6"
   }
 }

@@ -1,3 +1,19 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 const Sequelize = require('sequelize-cockroachdb')
 
 const envalid = require('envalid')
@@ -14,12 +30,23 @@ const env = envalid.cleanEnv(process.env, {
   COCKROACH_TLS_CLIENT_CRT: envalid.str({ devDefault: '', desc: 'CockroachDB TLS Client Cert' })
 })
 
+const pg = require('pg')
+const pgClientPool = new pg.Pool({
+  user: env.COCKROACH_DB_USER,
+  host: env.COCKROACH_HOST,
+  database: env.COCKROACH_DB_NAME,
+  port: env.COCKROACH_PORT,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000
+})
+
 // Connect to CockroachDB through Sequelize.
 let sequelizeOptions = {
   dialect: 'postgres',
   host: env.COCKROACH_HOST,
   port: env.COCKROACH_PORT,
-  logging: false
+  logging: false,
+  operatorsAliases: false
 }
 
 // Present TLS client certificate to production cluster
@@ -140,10 +167,17 @@ var CalendarBlock = sequelize.define(env.COCKROACH_CAL_TABLE_NAME,
     // if you don't want that, set the following
     freezeTableName: true,
     indexes: [
-      // Create a unique index on type
+      {
+        unique: true,
+        fields: [{ attribute: 'id', order: 'DESC' }, 'hash']
+      },
       {
         unique: false,
-        fields: ['type']
+        fields: ['type', 'data_id']
+      },
+      {
+        unique: false,
+        fields: ['type', 'stack_id']
       }
     ]
   }
@@ -151,5 +185,6 @@ var CalendarBlock = sequelize.define(env.COCKROACH_CAL_TABLE_NAME,
 
 module.exports = {
   sequelize: sequelize,
-  CalendarBlock: CalendarBlock
+  CalendarBlock: CalendarBlock,
+  pgClientPool: pgClientPool
 }

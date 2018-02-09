@@ -1,3 +1,19 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('nist')
 
@@ -25,8 +41,8 @@ let getNistLatest = () => {
             console.error(err)
           } else {
             // Only write to the key if the value changed.
-            if (timeAndSeed !== result) {
-              console.log(timeAndSeed)
+            if (!result || result.Value !== timeAndSeed) {
+              console.log(`New NIST value received: ${timeAndSeed}`)
               consul.kv.set(env.NIST_KEY, timeAndSeed, function (err, result) {
                 if (err) throw err
               })
@@ -42,8 +58,8 @@ function startIntervals () {
   setInterval(() => {
     try {
       getNistLatest()
-    } catch (err) {
-      console.error('getNistLatest : caught err : ', err.message)
+    } catch (error) {
+      console.error('getNistLatest: caught err: ', error.message)
     }
   }, env.NIST_INTERVAL_MS)
 }
@@ -59,8 +75,8 @@ async function start () {
     // init interval functions
     startIntervals()
     console.log('startup completed successfully')
-  } catch (err) {
-    console.error(`An error has occurred on startup: ${err}`)
+  } catch (error) {
+    console.error(`An error has occurred on startup: ${error.message}`)
     process.exit(1)
   }
 }

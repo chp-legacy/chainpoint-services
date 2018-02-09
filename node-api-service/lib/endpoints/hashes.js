@@ -1,3 +1,19 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 const restify = require('restify')
 const env = require('../parse-env.js')('api')
 const utils = require('../utils.js')
@@ -6,7 +22,12 @@ const _ = require('lodash')
 const crypto = require('crypto')
 const registeredNode = require('../models/RegisteredNode.js')
 
-const TNT_CREDIT_COST_POST_HASH = 1
+// Disable temporarily
+// const TNT_CREDIT_COST_POST_HASH = 1
+
+// The redis connection used for all redis communication
+// This value is set once the connection has been established
+let redis = null
 
 // Generate a v1 UUID (time-based)
 // see: https://github.com/broofa/node-uuid
@@ -146,8 +167,11 @@ async function postHashV1Async (req, res, next) {
   }
 
   // validate tnt-address value
+  let tntAddrHeaderParam
   if (!/^0x[0-9a-f]{40}$/i.test(req.headers['tnt-address'])) {
     return next(new restify.InvalidCredentialsError('authorization denied: invalid tnt-address value'))
+  } else {
+    tntAddrHeaderParam = req.headers['tnt-address'].toLowerCase()
   }
 
   // validate params has parse a 'hash' key
@@ -170,8 +194,8 @@ async function postHashV1Async (req, res, next) {
   if (nistLatest) {
     let NTPEpoch = Math.ceil(Date.now() / 1000) + 1 // round up and add 1 second forgiveness in time sync
     if (NTPEpoch < nistLatestEpoch) {
-      // this shoud not occur, log and return error to initiate retry
-      console.error(`Bad NTP time generated in UUID : NTP ${NTPEpoch} < NIST ${nistLatestEpoch}`)
+      // this shoud never occur, log and return error
+      console.error(`Bad NTP time generated in UUID: NTP ${NTPEpoch} < NIST ${nistLatestEpoch}`)
       return next(new restify.InternalServerError('Bad NTP time'))
     }
   }
@@ -181,25 +205,47 @@ async function postHashV1Async (req, res, next) {
     return next(new restify.InternalServerError('Message could not be delivered'))
   }
 
-  // validate the calculated hmac
+  // Validate the calculated HMAC
   let regNode = null
   try {
-    regNode = await RegisteredNode.findOne({ where: { tntAddr: req.headers['tnt-address'] }, attributes: ['tntAddr', 'hmacKey', 'tntCredit'] })
-    if (!regNode) {
-      return next(new restify.InvalidCredentialsError('authorization denied: unknown tnt-address'))
+    // Try to retrieve from Redis cache first
+    try {
+      regNode = await redis.hgetallAsync(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`)
+    } catch (error) {
+      console.error(error.message)
     }
+
+    // If Redis cache had no value, retrieve from CRDB instead
+    if (_.isEmpty(regNode)) {
+      regNode = await RegisteredNode.findOne({ where: { tntAddr: tntAddrHeaderParam }, attributes: ['tntAddr', 'hmacKey', 'tntCredit'] })
+      if (_.isEmpty(regNode)) {
+        return next(new restify.InvalidCredentialsError('authorization denied: unknown tnt-address'))
+      }
+
+      // Set the found Node in cache, expiring in 24 hours, for next time
+      try {
+        await redis.hmsetAsync(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, {tntAddr: regNode.tntAddr, hmacKey: regNode.hmacKey, tntCredit: regNode.tntCredit})
+        await redis.expire(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, 60 * 60 * 24)
+      } catch (error) {
+        console.error(error.message)
+      }
+    }
+
     let hash = crypto.createHmac('sha256', regNode.hmacKey)
     let hmac = hash.update(regNode.tntAddr).digest('hex')
     if (authValueSegments[1] !== hmac) {
       return next(new restify.InvalidCredentialsError('authorization denied: bad hmac value'))
     }
-    if (regNode.tntCredit < TNT_CREDIT_COST_POST_HASH) {
-      return next(new restify.NotAuthorizedError(`insufficient tntCredit remaining : ${regNode.tntCredit}`))
-    }
+
+    // Disable temporarily
+    // if (regNode.tntCredit < TNT_CREDIT_COST_POST_HASH) {
+    //   return next(new restify.NotAuthorizedError(`insufficient tntCredit remaining: ${regNode.tntCredit}`))
+    // }
+
+    // Disable temporarily
     // decrement tntCredit by TNT_CREDIT_COST_POST_HASH
-    await regNode.decrement({ tntCredit: TNT_CREDIT_COST_POST_HASH })
+    // await regNode.decrement({ tntCredit: TNT_CREDIT_COST_POST_HASH })
   } catch (error) {
-    console.error(error)
     return next(new restify.InvalidCredentialsError(`authorization denied: ${error.message}`))
   }
 
@@ -211,15 +257,13 @@ async function postHashV1Async (req, res, next) {
     nist: responseObj.nist
   }
 
-  amqpChannel.sendToQueue(env.RMQ_WORK_OUT_AGG_QUEUE, Buffer.from(JSON.stringify(hashObj)), { persistent: true },
-    (err) => {
-      if (err !== null) {
-        console.error(env.RMQ_WORK_OUT_AGG_QUEUE, 'publish message nacked')
-        return next(new restify.InternalServerError('Message could not be delivered'))
-      } else {
-        console.log(env.RMQ_WORK_OUT_AGG_QUEUE, 'publish message acked')
-      }
-    })
+  try {
+    await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_AGG_QUEUE, Buffer.from(JSON.stringify(hashObj)), { persistent: true })
+  } catch (error) {
+    console.error(env.RMQ_WORK_OUT_AGG_QUEUE, 'publish message nacked')
+    return next(new restify.InternalServerError('Message could not be delivered'))
+  }
+  // console.log(env.RMQ_WORK_OUT_AGG_QUEUE, 'publish message acked')
 
   res.send(responseObj)
   return next()
@@ -247,5 +291,6 @@ module.exports = {
   setAMQPChannel: (chan) => { amqpChannel = chan },
   getNistLatest: () => { return nistLatest },
   setNistLatest: (val) => { updateNistVars(val) },
-  setHashesRegisteredNode: (regNode) => { RegisteredNode = regNode }
+  setHashesRegisteredNode: (regNode) => { RegisteredNode = regNode },
+  setRedis: (redisClient) => { redis = redisClient }
 }

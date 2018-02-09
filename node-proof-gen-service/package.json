@@ -3,18 +3,21 @@
   "version": "0.0.1",
   "description": "Chainpoint proof generator service.",
   "author": "Glenn Rempe <glenn@tierion.com>",
-  "license": "MIT",
+  "license": "AGPL-3.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "amqplib": "^0.5.1",
-    "async": "^2.3.0",
+    "bluebird": "^3.5.0",
     "chainpoint-binary": "^4.0.0",
     "chainpoint-proof-json-schema": "^1.0.0",
     "envalid": "^3.1.1",
+    "pg": "^7.4.0",
+    "pg-hstore": "^2.3.2",
     "redis": "^2.7.1",
+    "sequelize": "^4.22.6",
     "uuid-time": "^1.0.0"
   }
 }

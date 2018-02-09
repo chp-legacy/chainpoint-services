@@ -1,3 +1,19 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('eth-tnt-tx')
 
@@ -42,7 +58,7 @@ let isEthereumAddr = (address) => {
   return /^0x[0-9a-fA-F]{40}$/i.test(address)
 }
 
-// get the TNT balance of node
+// get the TNT balance of node in grains
 server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, (req, res, next) => {
   // Verify address
   if (!req.params.hasOwnProperty('tnt_addr')) {
@@ -73,7 +89,7 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, (req, res, next) =
   })
 })
 
-// send TNT to an address
+// send TNT grains to an address
 server.post({ path: '/transfer/', version: '1.0.0' }, (req, res, next) => {
   if (req.contentType() !== 'application/json') {
     return next(new restify.InvalidArgumentError('invalid content type'))
@@ -153,8 +169,8 @@ async function start () {
     await listenRestifyAsync()
 
     console.log('startup completed successfully')
-  } catch (err) {
-    console.error(`An error has occurred on startup: ${err}`)
+  } catch (error) {
+    console.error(`An error has occurred on startup: ${error.message}`)
     process.exit(1)
   }
 }

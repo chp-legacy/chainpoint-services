@@ -1,20 +1,32 @@
-# chainpoint-services
+# Chainpoint Services
 
-Chainpoint Services is the Core of the Tierion Network and
-a modern [microservices architecture](https://martinfowler.com/articles/microservices.html)
-that implements the [chainpoint.org](https://chainpoint.org) API.
+[![JavaScript Style Guide](https://cdn.rawgit.com/feross/standard/master/badge.svg)](https://github.com/feross/standard)
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+
+Chainpoint Services is at the Core of the Tierion Network and
+built as a modern [microservices architecture](https://martinfowler.com/articles/microservices.html).
 
 The services provided are generally composed of Node.js applications
 running within Alpine Linux Docker containers. These containers,
 while intended to be run within a full Docker orchestration
 system such as Kubernetes in production, run well on a single host
 using [Docker Compose](https://docs.docker.com/compose/overview/).
-This run method is suitable for light production use and development.
+This run method is suitable for development only.
+
+## Important Notice
+
+This software is intended to be run as the Core of the Tierion Network. It is not for end users. If you are interested in running a Tierion Node, or installing a copy of our command line interface please instead visit:
+
+[https://github.com/chainpoint/chainpoint-node](https://github.com/chainpoint/chainpoint-node)
+
+[https://github.com/chainpoint/chainpoint-cli](https://github.com/chainpoint/chainpoint-cli)
+
 
 ## TL;DR
 
-Build and start the whole system locally. After the first run of `make` try `make help`
-to see additional helper commands available. Shut it all down with `make down`.
+Build and start the whole system locally with `make up`. Running `make help`
+will display additional `Makefile` commands that are available.
 
 ```
 git clone https://github.com/chainpoint/chainpoint-services
@@ -37,37 +49,6 @@ installation package which can be found [here](https://www.docker.com/docker-mac
 On Linux systems you may need to [install](https://docs.docker.com/compose/install/) `docker-compose`
 separately in addition to Docker.
 
-### Setup PATH
-
-For your convenience we provide most of the other dependencies you might need
-as shell script wrappers that let you use containerized applications
-with no need to install them locally.
-
-These wrappers are provided in the `./bin` directory.
-
-You can execute them by calling them directly:
-
-```
-./bin/yarn -h
-```
-
-Or by adding the `./bin` directory to the beginning of your `$PATH`
-environment variable. This will ensure that these packaged commands,
-which will be locked to the same versions we developed with, will
-be available to you as well.
-
-```
-export PATH="$PWD/bin:$PATH"
-```
-
-You'll need to apply that `export` statement to
-every open terminal shell you intend to use, or
-you can add it to a config file like `~/.bash_profile`.
-
-If you do add that directory to your path any
-references to `./bin/COMMAND` that you see below
-can be shorted to just the command name.
-
 ### Setup Environment Variables
 
 You will need to set up environment variables before building.
@@ -78,163 +59,25 @@ You can modify the `.env` as needed, any changes will be ignored by Git.
 
 ## Startup
 
-Running `make` should build and start all services for you.
+Running `make up` should build and start all services for you.
 
-## Examples
+## License
 
-The following examples use `curl` to submit requests.
-
-### Retrieve a Base64 encoded Binary Proof for a Hash ID
-
-Proofs can be retrieved in the supported
-[Chainpoint binary](https://github.com/chainpoint/chainpoint-binary) format by passing
-an appropriate `Accept` header with your request.
+[GNU Affero General Public License v3.0](http://www.gnu.org/licenses/agpl-3.0.txt)
 
 ```
-curl -s -H 'Accept: application/vnd.chainpoint.api.v1.base64+json' 127.0.0.1/proofs/cb1980c0-4d53-11e7-88fb-870abcce3652
-```
+Copyright (C) 2017 Tierion
 
-sample output (prettified with [jq](https://stedolan.github.io/jq/)):
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-```
-[
-  {
-    "hash_id": "358d14f0-4e2e-11e7-87be-37208b69c348",
-    "proof": "eJyNUruO1EAQ/BkIvZ7unqejlfgFIpLVPHqwpWVt2T4e4YJEQnREpMct2oPsJFL4j/0bxnunQxAg0prqruqaen+zjv1u5tfzz3aeh6mp61fUpVU/Pq9j67vd0He7uX5Jh/nNwN+ePECH1k/taR1CRp05aiCfExiTvMiSlJAoLCTNClOImbWPFCx5ReyJkVyZMirI47Jm06XTI1I2gcyikoxcAbCprAlckSmbgnaRpL09s6eL8KKbZ04bP39HAaYSugLxFLGR1CA9uwmj38WWp8u3X7Y+8PY2+u1mgfpxc/d23Q/Tp/3V9v9095/74Ti1vkKll6EPIJ0BkgpFkzPoxGicDtqqoKRIiWxSSRPGgFEKg+AzOy1jEp6cR19Sk6SlxTJmSzYW2QrwwumEZQtlxSpFJXKOYIMDQTpQSpmVI0ghg0Qgo1RO6m9vP4o12dz708Ipogaacv+Cyf3VeFpnH3S5OIrolHDlesHSWoxkyj8Za0xBjXVBowflRHEEwaOUicEb1n8qHu9inS7fnRtyXZS+3ifdpcOiebgYu+nj6fHSr1IvvyqU1e9unau28Oqx7+cHWvgn7RdSPeSX"
-  }
-]
-```
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
 
-### Retrieve a JSON-LD Proof for a Hash ID
-
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ```
-curl -s 127.0.0.1/proofs/cb1980c0-4d53-11e7-88fb-870abcce3652
-```
-
-sample output (prettified with [jq](https://stedolan.github.io/jq/)):
-
-```
-[
-  {
-    "hash_id": "cb1980c0-4d53-11e7-88fb-870abcce3652",
-    "proof": {
-      "@context": "https://w3id.org/chainpoint/v3",
-      "type": "Chainpoint",
-      "hash": "bbf26fec613afd177da0f435042081d6e52dbcfe6ac3b83a53ea3e23926f75b4",
-      "hash_id_node": "cb1980c0-4d53-11e7-88fb-870abcce3652", 
-      "hash_submitted_node_at": "2017-06-09T20:39:54Z", 
-      "hash_id_core": "cb1980c0-4d53-11e7-88fb-870abcce3652",
-      "hash_submitted_core_at": "2017-06-09T20:39:54Z",
-      "branches": [
-        {
-          "label": "cal_anchor_branch",
-          "ops": [
-            {
-              "l": "cb1980c0-4d53-11e7-88fb-870abcce3652"
-            },
-            {
-              "op": "sha-256"
-            },
-            {
-              "l": "1497040740:4a36ee199dab91eaff325f0bb11bdae8334b7c417242ee9c9ef6037d4ac6a7e3bdbd2693f87156a459725d8b43db729e34f08b290d7c1a80136dfc14445a1f37"
-            },
-            {
-              "op": "sha-256"
-            },
-            {
-              "l": "3:1497040797308:1:cal:3"
-            },
-            {
-              "r": "f20890f778b2f5452fbf5a1358dee62f1f4e68658bf7177e8cb28409fe47eb80"
-            },
-            {
-              "op": "sha-256"
-            },
-            {
-              "anchors": [
-                {
-                  "type": "cal",
-                  "anchor_id": "3",
-                  "uris": [
-                    "http://a.cal.chainpoint.org/3/hash"
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  }
-]
-```
-
-### Verify a Proof
-
-```
-curl -X POST \
-  http://104.198.1.217/verify \
-  -H 'cache-control: no-cache' \
-  -H 'content-type: application/json' \
-  -d '{
-    "proofs": [
-        {
-            "@context": "https://w3id.org/chainpoint/v3",
-            "type": "Chainpoint",
-            "hash": "bbf26fec613afd177da0f435042081d6e52dbcfe6ac3b83a53ea3e23926f75b4",
-            "hash_id_node": "cb1980c0-4d53-11e7-88fb-870abcce3652", 
-            "hash_submitted_node_at": "2017-06-09T20:39:54Z", 
-            "hash_id_core": "cb1980c0-4d53-11e7-88fb-870abcce3652",
-            "hash_submitted_core_at": "2017-06-09T20:39:54Z",
-            "branches": [{
-                "label": "cal_anchor_branch",
-                "ops": [{
-                    "l": "69b06800-4e23-11e7-87be-37208b69c348"
-                }, {
-                    "op": "sha-256"
-                }, {
-                    "l": "1497129900:58a0e3c8b0411b2b394a72633621d8fe232be71fd80513007f8cfd48db1da3025496ac6497c191598d0a1af3254d90e90e7e000a8df73319e04f0e538c834a53"
-                }, {
-                    "op": "sha-256"
-                }, {
-                    "l": "1408:1497129967524:1:cal:1408"
-                }, {
-                    "r": "aa9ab1c2d4a794f00594ce61ef208abfabf6e1dbb181692241b8679d3700bea7"
-                }, {
-                    "op": "sha-256"
-                }, {
-                    "anchors": [{
-                        "type": "cal",
-                        "anchor_id": "1408",
-                        "uris": ["http://a.cal.chainpoint.org/1408/root", "http://b.cal.chainpoint.org/1408/root"]
-                    }]
-                }]
-            }]
-        }
-    ]
-}'
-```
-
-sample output (prettified with [jq](https://stedolan.github.io/jq/)):
-
-```
-[
-    {
-        "proof_index": 0,
-        "hash": "bbf26fec613afd177da0f435042081d6e52dbcfe6ac3b83a53ea3e23926f75b4",
-        "hash_id_node": "cb1980c0-4d53-11e7-88fb-870abcce3652", 
-        "hash_submitted_node_at": "2017-06-09T20:39:54Z", 
-        "hash_id_core": "cb1980c0-4d53-11e7-88fb-870abcce3652",
-        "hash_submitted_core_at": "2017-06-09T20:39:54Z",
-        "anchors": [
-            {
-                "branch": "cal_anchor_branch",
-                "type": "cal",
-                "valid": true
-            }
-        ],
-        "status": "verified"
-    }
-]
-```
-

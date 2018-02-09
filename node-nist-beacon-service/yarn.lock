@@ -77,9 +77,9 @@ combined-stream@^1.0.5, combined-stream@~1.0.5:
   dependencies:
     delayed-stream "~1.0.0"
 
-consul@^0.29.0:
-  version "0.29.0"
-  resolved "https://registry.yarnpkg.com/consul/-/consul-0.29.0.tgz#b1d8748700ca84e6d86d7ddf28d263a7ce808181"
+consul@^0.30.0:
+  version "0.30.0"
+  resolved "https://registry.yarnpkg.com/consul/-/consul-0.30.0.tgz#8ae6719b46674dd15a95b7614881bfc5b9e4eac3"
   dependencies:
     papi "^0.27.0"
 
@@ -241,9 +241,9 @@ mime-types@^2.1.12, mime-types@~2.1.7:
   dependencies:
     mime-db "~1.29.0"
 
-nist-randomness-beacon@^1.2.0:
-  version "1.2.1"
-  resolved "https://registry.yarnpkg.com/nist-randomness-beacon/-/nist-randomness-beacon-1.2.1.tgz#70cb7c4994cc2bca030a85cac972514a4ca6ba48"
+nist-randomness-beacon@^1.2.2:
+  version "1.2.2"
+  resolved "https://registry.yarnpkg.com/nist-randomness-beacon/-/nist-randomness-beacon-1.2.2.tgz#8385cccdbb4e7f430d6a9d84b6f22c568b96de64"
   dependencies:
     int64-buffer "^0.1.9"
     request "^2.81.0"

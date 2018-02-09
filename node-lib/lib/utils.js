@@ -1,3 +1,19 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 /**
  * Sleep for a specified number of milliseconds
  *
@@ -52,10 +68,23 @@ function isHex (value) {
   return isHex
 }
 
+/**
+ * Checks if value is a valid IP
+ *
+ * @param {string} value - The value to check
+ * @returns {bool} true if value is a valid IP, otherwise false
+ */
+function isIP (value) {
+  var ipRegex = /\b(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\b/
+  var isIP = ipRegex.test(value)
+  return isIP
+}
+
 module.exports = {
   sleep: sleep,
   addMinutes: addMinutes,
   addSeconds: addSeconds,
   formatDateISO8601NoMs: formatDateISO8601NoMs,
-  isHex: isHex
+  isHex: isHex,
+  isIP: isIP
 }

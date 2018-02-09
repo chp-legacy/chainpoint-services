@@ -3,11 +3,11 @@
 # A base container that all chainpoint node based
 # services will inherit from.
 
-# Node.js on Alpine Linux
+# Node.js LTS on Alpine Linux
 # see: https://github.com/nodejs/LTS
 # see: https://hub.docker.com/_/node/
 # see: https://alpinelinux.org/
-FROM node:8.1.4-alpine
+FROM node:8.9.0-alpine
 
 LABEL MAINTAINER="Glenn Rempe <glenn@tierion.com>"
 

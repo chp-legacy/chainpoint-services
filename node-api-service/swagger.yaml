@@ -7,8 +7,8 @@ info:
   contact:
     email: 'team@chainpoint.org'
   license:
-    name: "MIT"
-    url: 'https://tldrlegal.com/license/mit-license'
+    name: 'AGPL-3.0'
+    url: 'http://www.gnu.org/licenses/agpl-3.0.txt'
 host: "chainpoint.org"
 basePath: "/v3"
 tags:
@@ -422,15 +422,6 @@ definitions:
             sig:
               type: string
               example: "lfdvO6fOeRo+wAj9n3Ca9GHMsRsosawRdZ6o2fkvdgIjMkaAa83RkTX/iveK5ogTs7FdNrxnnjmvC9bR5ayLACn3K8f65uUE0QgKwgaxSdbL2MohtLvQrF6eRCE6UhZa"
-      start:
-        type: integer
-        example: 729 
-      end:
-        type: integer
-        example: 729 
-      height:
-        type: integer
-        example: 32876
   GetConfigResponse:
     type: object
     properties:       
@@ -449,13 +440,7 @@ definitions:
       get_proofs_max_rest:
         type: integer
         example: 250
-      get_proofs_max_ws:
-        type: integer
-        example: 250
       post_verify_proofs_max:
-        type: integer
-        example: 1000
-      get_calendar_blocks_max:
         type: integer
         example: 1000
       time:

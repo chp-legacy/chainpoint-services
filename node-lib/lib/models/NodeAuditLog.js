@@ -1,3 +1,19 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 const Sequelize = require('sequelize-cockroachdb')
 
 const envalid = require('envalid')
@@ -19,7 +35,8 @@ let sequelizeOptions = {
   dialect: 'postgres',
   host: env.COCKROACH_HOST,
   port: env.COCKROACH_PORT,
-  logging: false
+  logging: false,
+  operatorsAliases: false
 }
 
 // Present TLS client certificate to production cluster
@@ -42,7 +59,7 @@ var NodeAuditLog = sequelize.define(env.COCKROACH_AUDIT_TABLE_NAME,
       comment: 'A seemingly valid Ethereum address that the Node will send TNT from, or receive rewards with.',
       type: Sequelize.STRING,
       validate: {
-        is: ['^0x[0-9a-f]{40}$', 'i']
+        is: ['^0x[0-9a-f]{40}$']
       },
       field: 'tnt_addr',
       allowNull: false
@@ -71,6 +88,15 @@ var NodeAuditLog = sequelize.define(env.COCKROACH_AUDIT_TABLE_NAME,
       field: 'public_ip_pass',
       allowNull: false
     },
+    nodeMSDelta: {
+      comment: 'The number of milliseconds difference between Node time and Core time.',
+      type: Sequelize.INTEGER, // is 64 bit in CockroachDB
+      validate: {
+        isInt: true
+      },
+      field: 'node_ms_delta',
+      allowNull: true
+    },
     timePass: {
       comment: 'Boolean logging if the Node reported time was verified to be in tolerance by Core.',
       type: Sequelize.BOOLEAN,
@@ -82,6 +108,24 @@ var NodeAuditLog = sequelize.define(env.COCKROACH_AUDIT_TABLE_NAME,
       type: Sequelize.BOOLEAN,
       field: 'cal_state_pass',
       allowNull: false
+    },
+    minCreditsPass: {
+      comment: 'Boolean logging if the Node has the minimum credit balance for reward eligibility.',
+      type: Sequelize.BOOLEAN,
+      field: 'min_credits_pass',
+      allowNull: false
+    },
+    nodeVersion: {
+      comment: 'The reported version of the Node.',
+      type: Sequelize.STRING,
+      field: 'node_version',
+      allowNull: true
+    },
+    nodeVersionPass: {
+      comment: 'Boolean logging if the reported Node version was equal to or above the minimum required version.',
+      type: Sequelize.BOOLEAN,
+      field: 'node_version_pass',
+      allowNull: false
     }
   },
   {
@@ -92,10 +136,25 @@ var NodeAuditLog = sequelize.define(env.COCKROACH_AUDIT_TABLE_NAME,
     // if you don't want that, set the following
     freezeTableName: true,
     indexes: [
-      // Create a unique index on audit_at
+      {
+        unique: false,
+        fields: [
+          'tnt_addr',
+          'public_ip_pass',
+          'time_pass',
+          'cal_state_pass',
+          'min_credits_pass',
+          'node_version_pass',
+          { attribute: 'audit_at', order: 'DESC' }
+        ]
+      },
       {
         unique: false,
         fields: ['audit_at']
+      },
+      {
+        unique: false,
+        fields: ['node_version']
       }
     ]
   }

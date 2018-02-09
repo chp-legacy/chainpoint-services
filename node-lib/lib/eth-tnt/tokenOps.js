@@ -1,4 +1,20 @@
 
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 /**
  * This class can be used to interact with the TierionNetworkToken token on the blockchain.
  */
@@ -15,11 +31,11 @@ class TokenOps {
    * The "From" address signing the transaction will be the default account set in the web3 object.
    *
    * @param {*} sendToAddr - Target address
-   * @param {*} amt - base units to transfer... If the contract has 18 decimals, 1 token => Math.pow(10, 18) => 1000000000000000000
-   * @param {*} callback - Called after the transaction is broadcasted
+   * @param {*} amt - base units to transfer (TNT Grains, 8 decimals), 1 TNT => Math.pow(10, 8) => 100000000 Grains
+   * @param {*} callback - Called after the transaction is broadcast
    */
   sendTokens (sendToAddr, amt, callback) {
-    return this.tokenContract.transfer(sendToAddr, amt, callback)
+    return this.tokenContract.transfer(sendToAddr, amt, {gas: 500000}, callback)
   }
 
   /**

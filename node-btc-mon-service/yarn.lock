@@ -531,9 +531,9 @@ bl@^1.0.0:
   dependencies:
     readable-stream "^2.0.5"
 
-blockchain-anchor@^2.2.2:
-  version "2.2.2"
-  resolved "https://registry.yarnpkg.com/blockchain-anchor/-/blockchain-anchor-2.2.2.tgz#c59da4c33a31986c6a3bcee278c0fb7c886bac5a"
+blockchain-anchor@^2.3.2:
+  version "2.3.2"
+  resolved "https://registry.yarnpkg.com/blockchain-anchor/-/blockchain-anchor-2.3.2.tgz#f56c83f8685a5dc30e0ddd738c35faf9c793932e"
   dependencies:
     bitcoinjs-lib "^3.1.1"
     ethereumjs-tx "^1.3.3"

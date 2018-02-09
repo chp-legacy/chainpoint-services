@@ -1,15 +1,14 @@
-# chainpoint-node-proof-state-service
+# chainpoint-lib
 
-## Storage Adapters
+## Proof State Models
 
-Storage adapters allow the service to write to persistent storage. All adapters conform to a common interface, allowing easy code-based or programmatic switching between different storage providers.
+Proof state models allow the service to write to persistent storage. All adapters conform to a common interface, allowing easy code-based or programmatic switching between different storage providers.
 
 The following is a description of methods that must be defined in a storage adapter: 
 
 | Name           | Description  | Returns  |
 | :------------- |:-------------|:-------------|
 | openConnectionAsync()       | opens the connection to the underlying storage provider | boolean indicating success |
-| getHashIdCountByAggIdAsync(aggId)     | gets all count of hash objects for a given agg_id currently in the database | integer |
 | getHashIdsByAggIdAsync(aggId)     | gets all hash ids associated with an aggregation event | result array containing hash id objects |
 | getHashIdsByBtcTxIdAsync(btcTxId)     | gets all hash ids associated with a btcTxId | result array containing hash id objects |
 | getAggStateObjectByHashIdAsync(hashId)     | gets the agg state object for a given hash id | an agg state object |
@@ -23,11 +22,15 @@ The following is a description of methods that must be defined in a storage adap
 | getBTCTxStateObjectsByBTCTxIdAsync(btcTxId)     | gets all btctx state data for a given btctx id | result array containing btctx state objects |
 | getBTCHeadStateObjectsByBTCHeadIdAsync(btcHeadId)     | gets all btchead state data for a given btchead id | result array containing btchead state objects |
 | writeAggStateObjectAsync(stateObject)     | write the agg state object to storage | boolean indicating success |
+| writeAggStateObjectsAsync(stateObjects)     | write multiple agg state objects to storage individually within a loop| boolean indicating success |
+| writeAggStateObjectsBulkAsync(stateObjects, transaction)     | write multiple agg state objects to storage in one bulk insert | boolean indicating success |
 | writeCalStateObjectAsync(stateObject)     | write the cal state object to storage | boolean indicating success |
 | writeAnchorBTCAggStateObjectAsync(stateObject)     | write the anchor agg state object to storage | boolean indicating success |
 | writeBTCTxStateObjectAsync(stateObject)     | write the btctx state object to storage | boolean indicating success |
 | writeBTCHeadStateObjectAsync(stateObject)     | write the btchead state object to storage | boolean indicating success |
-| logAggregationEventForHashIdAsync(hashId)     | log an aggregation event for the given hash id to the hash tracker | boolean indicating success |
+| logAggregationEventForHashIdAsync(hashId, hash)     | log an aggregation event for the given hash id to the hash tracker | boolean indicating success |
+| logAggregationEventForHashIdsAsync(hashesInfo)     | log multiple aggregation events for the given hash ids to the hash tracker individually within a loop| boolean indicating success |
+| logAggregationEventForHashIdsBulkAsync(hashesInfo, transaction)     | log multiple aggregation events for the given hash ids to the hash tracker in one bulk insert | boolean indicating success |
 | logCalendarEventForHashIdAsync(hashId)     | log a calendar event for the given hash id to the hash tracker | boolean indicating success |
 | logEthEventForHashIdAsync(hashId)     | log an eth event for the given hash id to the hash tracker | boolean indicating success |
 | logBtcEventForHashIdAsync(hashId)     | log a btc event for the given hash id to the hash tracker | boolean indicating success |
@@ -39,7 +42,7 @@ The following is a description of methods that must be defined in a storage adap
 | deleteBtcHeadStatesWithNoRemainingBtcTxStatesAsync()     | prune records from btchead\_states table | integer |
 
 
-## PostregSQL Adapter Configuration
+## Proof State Models Configuration
 Configuration parameters will be stored in environment variables. Environment variables can be overridden throught the use of a .env file. 
 
 The following are the descriptions of the configuration parameters:
@@ -53,7 +56,7 @@ The following are the descriptions of the configuration parameters:
 | POSTGRES\_CONNECT\_PORT       | the PostgreSQL connection port | 5432 |
 | POSTGRES\_CONNECT\_DB       | the PostgreSQL connection database name | 'chainpoint' |
 
-## PostregSQL Adapter Schema
+## Proof State Models Schema
 
 ### agg\_states
 | Column         | Type         | Description  | Indexed |

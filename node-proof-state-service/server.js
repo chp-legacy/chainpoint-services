@@ -1,11 +1,26 @@
+/* Copyright (C) 2017 Tierion
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('state')
 
 const amqp = require('amqplib')
-const async = require('async')
 const utils = require('./lib/utils.js')
 
-const storageClient = require('./storage-adapters/postgres.js')
+const storageClient = require('./lib/models/ProofStateModels.js')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -18,28 +33,65 @@ var amqpChannel = null
 */
 async function ConsumeAggregationMessageAsync (msg) {
   let messageObj = JSON.parse(msg.content.toString())
-  let stateObj = {}
-  stateObj.hash_id = messageObj.hash_id
-  stateObj.hash = messageObj.hash
-  stateObj.agg_id = messageObj.agg_id
-  stateObj.agg_state = messageObj.agg_state
+
+  let stateObjects = []
+  for (let x = 0; x < messageObj.proofData.length; x++) {
+    let stateObj = {}
+    stateObj.hash_id = messageObj.proofData[x].hash_id
+    stateObj.hash = messageObj.proofData[x].hash
+    stateObj.agg_id = messageObj.agg_id
+    stateObj.agg_state = {}
+    stateObj.agg_state.ops = messageObj.proofData[x].proof
+    stateObjects.push(stateObj)
+  }
+
+  let transaction
+  try {
+    transaction = await storageClient.sequelize.transaction()
+  } catch (error) {
+    amqpChannel.nack(msg)
+    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: Unable to initialize transaction: ${error.message}`)
+    return
+  }
 
   try {
     // Store this state information
-    await storageClient.writeAggStateObjectAsync(stateObj)
+    await storageClient.writeAggStateObjectsBulkAsync(stateObjects, transaction)
     // logs the aggregation event
-    await storageClient.logAggregatorEventForHashIdAsync(stateObj.hash_id)
-    // New message has been published and event logged, ack consumption of original message
+    let hashesInfo = stateObjects.map((hashInfo) => {
+      return {
+        hash_id: hashInfo.hash_id,
+        hash: hashInfo.hash
+      }
+    })
+    await storageClient.logAggregatorEventsForHashIdsBulkAsync(hashesInfo, transaction)
+
+    let aggObj = {}
+    aggObj.agg_id = messageObj.agg_id
+    aggObj.agg_root = messageObj.agg_root
+
+    try {
+      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(aggObj)), { persistent: true, type: 'aggregator' })
+      console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[aggregator] publish message acked', aggObj.agg_id)
+    } catch (error) {
+      console.error(`${env.RMQ_WORK_OUT_CAL_QUEUE} [aggregator] publish message nacked ${aggObj.agg_id}`)
+      throw new Error(error.message)
+    }
+
+    await transaction.commit()
+
+    // New states has been written, events logged, and cal message queued, ack consumption of original message
     amqpChannel.ack(msg)
-    console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
+    console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
   } catch (error) {
+    await transaction.rollback()
     amqpChannel.nack(msg)
-    console.error(msg.fields.routingKey, '[' + msg.properties.type + '] consume message nacked - ' + JSON.stringify(error))
+    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
   }
 }
 
 /**
-* Writes the state data to persistent storage and queues proof ready messages bound for the proof state service
+* Writes the state data to persistent storage and queues proof ready messages bound for the proof gen
 *
 * @param {amqp message object} msg - The AMQP message received from the queue
 */
@@ -51,61 +103,30 @@ async function ConsumeCalendarMessageAsync (msg) {
   stateObj.cal_state = messageObj.cal_state
 
   try {
-    // get hash id count for a given agg_id
-    let count = await storageClient.getHashIdCountByAggIdAsync(stateObj.agg_id)
-    if (count < messageObj.agg_hash_count) throw new Error('unable to read all hash data')
     let rows = await storageClient.getHashIdsByAggIdAsync(stateObj.agg_id)
     await storageClient.writeCalStateObjectAsync(stateObj)
 
-    async.waterfall([
-      async.constant(rows),
-      (rows, callback) => {
-        async.eachLimit(rows, 10, (hashIdRow, eachCallback) => {
-          // construct a calendar 'proof ready' message for a given hash
-          let dataOutObj = {}
-          dataOutObj.type = 'cal'
-          dataOutObj.hash_id = hashIdRow.hash_id
-          // Publish a proof ready object for consumption by the proof state service
-          amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'state' },
-            (err, ok) => {
-              if (err !== null) {
-                // An error as occurred publishing a message
-                console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[state] publish message nacked')
-                return eachCallback(err)
-              } else {
-                // New message has been published
-                console.log(env.RMQ_WORK_OUT_STATE_QUEUE, '[state] publish message acked')
-                return eachCallback(null)
-              }
-            })
-        }, (err) => {
-          if (err) return callback(err)
-          return callback(null)
-        })
+    for (let x = 0; x < rows.length; x++) {
+      let hashIdRow = rows[x]
+      // construct a calendar 'proof ready' message for a given hash
+      let dataOutObj = {}
+      dataOutObj.type = 'cal'
+      dataOutObj.hash_id = hashIdRow.hash_id
+      try {
+        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'cal' })
+      } catch (error) {
+        console.error(env.RMQ_WORK_OUT_GEN_QUEUE, '[cal] publish message nacked')
+        throw new Error(error.message)
       }
-    ], (err) => {
-      if (err) {
-        throw new Error(err.message)
-      } else {
-        // New messages have been published, ack consumption of original message
-        amqpChannel.ack(msg)
-        console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
-      }
-    })
-  } catch (error) {
-    console.error('error consuming calendar message', error.message)
-    // An error as occurred publishing a message, nack consumption of original message
-    if (error.message === 'unable to read all hash data') {
-      // delay the nack for 1000ms to slightly delay requeuing to prevent a flood of retries
-      // until the data is read, in cases of hash data not being fully readable yet
-      setTimeout(() => {
-        amqpChannel.nack(msg)
-        console.error(msg.fields.routingKey, '[' + msg.properties.type + '] consume message nacked - ' + error.message)
-      }, 1000)
-    } else {
-      amqpChannel.nack(msg)
-      console.error(msg.fields.routingKey, '[' + msg.properties.type + '] consume message nacked - ' + error.message)
     }
+    // New messages have been published, ack consumption of original message
+    amqpChannel.ack(msg)
+    console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
+  } catch (error) {
+    console.error(`Unable to process calendar message: ${error.message}`)
+    // An error as occurred publishing a message, nack consumption of original message
+    amqpChannel.nack(msg)
+    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
   }
 }
 
@@ -125,10 +146,10 @@ async function ConsumeAnchorBTCAggMessageAsync (msg) {
     await storageClient.writeAnchorBTCAggStateObjectAsync(stateObj)
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
-    console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
+    console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
   } catch (error) {
     amqpChannel.nack(msg)
-    console.error(msg.fields.routingKey, '[' + msg.properties.type + '] consume message nacked - ' + JSON.stringify(error))
+    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
   }
 }
 
@@ -148,10 +169,10 @@ async function ConsumeBtcTxMessageAsync (msg) {
     await storageClient.writeBTCTxStateObjectAsync(stateObj)
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
-    console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
+    console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
   } catch (error) {
     amqpChannel.nack(msg)
-    console.error(msg.fields.routingKey, '[' + msg.properties.type + '] consume message nacked - ' + JSON.stringify(error))
+    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
   }
 }
 
@@ -171,151 +192,27 @@ async function ConsumeBtcMonMessageAsync (msg) {
     let rows = await storageClient.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
     await storageClient.writeBTCHeadStateObjectAsync(stateObj)
 
-    async.waterfall([
-      async.constant(rows),
-      (rows, callback) => {
-        async.eachLimit(rows, 10, (hashIdRow, eachCallback) => {
-          // construct a calendar 'proof ready' message for a given hash
-          let dataOutObj = {}
-          dataOutObj.type = 'btc'
-          dataOutObj.hash_id = hashIdRow.hash_id
-          // Publish a proof ready object for consumption by the proof state service
-          amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'state' },
-            (err, ok) => {
-              if (err !== null) {
-                // An error as occurred publishing a message
-                console.error(env.RMQ_WORK_OUT_STATE_QUEUE, '[state] publish message nacked')
-                return eachCallback(err)
-              } else {
-                // New message has been published
-                console.log(env.RMQ_WORK_OUT_STATE_QUEUE, '[state] publish message acked')
-                return eachCallback(null)
-              }
-            })
-        }, (err) => {
-          if (err) return callback(err)
-          return callback(null)
-        })
+    for (let x = 0; x < rows.length; x++) {
+      let hashIdRow = rows[x]
+      // construct a calendar 'proof ready' message for a given hash
+      let dataOutObj = {}
+      dataOutObj.type = 'btc'
+      dataOutObj.hash_id = hashIdRow.hash_id
+      try {
+        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'btc' })
+      } catch (error) {
+        console.error(env.RMQ_WORK_OUT_GEN_QUEUE, '[btc] publish message nacked')
+        throw new Error(error.message)
       }
-    ], (err) => {
-      if (err) {
-        throw new Error(err)
-      } else {
-        // New messages have been published, ack consumption of original message
-        amqpChannel.ack(msg)
-        console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
-      }
-    })
+    }
+    // New messages have been published, ack consumption of original message
+    amqpChannel.ack(msg)
+    console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
   } catch (error) {
-    console.error('error consuming calendar message', error)
+    console.error(`Unable to process btc mon message: ${error.message}`)
     // An error as occurred publishing a message, nack consumption of original message
     amqpChannel.nack(msg)
-    console.error(msg.fields.routingKey, '[' + msg.properties.type + '] consume message nacked - ' + JSON.stringify(error))
-  }
-}
-
-/**
-* Retrieves all proof state data for a given hash and publishes message bound for the proof generator service
-*
-* @param {amqp message object} msg - The AMQP message received from the queue
-*/
-async function ConsumeProofReadyMessageAsync (msg) {
-  let messageObj = JSON.parse(msg.content.toString())
-
-  switch (messageObj.type) {
-    case 'cal':
-      try {
-        let aggStateRow = await storageClient.getAggStateObjectByHashIdAsync(messageObj.hash_id)
-        if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
-        let calStateRow = await storageClient.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
-        if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
-
-        let dataOutObj = {}
-        dataOutObj.type = 'cal'
-        dataOutObj.hash_id = aggStateRow.hash_id
-        dataOutObj.hash = aggStateRow.hash
-        dataOutObj.agg_state = JSON.parse(aggStateRow.agg_state)
-        dataOutObj.cal_state = JSON.parse(calStateRow.cal_state)
-
-        // Publish a proof data object for consumption by the proof generation service
-        amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'cal' },
-          async (err, ok) => {
-            if (err !== null) {
-              // An error as occurred publishing a message
-              console.error(env.RMQ_WORK_OUT_GEN_QUEUE, '[cal] publish message nacked')
-              throw new Error(err)
-            } else {
-              // New message has been published
-              console.log(env.RMQ_WORK_OUT_GEN_QUEUE, '[cal] publish message acked')
-              // logs the calendar proof event
-              await storageClient.logCalendarEventForHashIdAsync(aggStateRow.hash_id)
-              // Proof ready message has been consumed, ack consumption of original message
-              amqpChannel.ack(msg)
-              console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
-            }
-          })
-      } catch (error) {
-        console.error('error consuming proof ready message', error)
-        // An error as occurred consuming a message, nack consumption of original message
-        amqpChannel.nack(msg)
-        console.error(msg.fields.routingKey, '[' + msg.properties.type + '] consume message nacked - ' + JSON.stringify(error))
-      }
-      break
-    case 'btc':
-      try {
-        // get the agg_state object for the hash_id
-        let aggStateRow = await storageClient.getAggStateObjectByHashIdAsync(messageObj.hash_id)
-        if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
-        // get the cal_state object for the agg_id
-        let calStateRow = await storageClient.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
-        if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
-        // get the anchorBTCAgg_state object for the cal_id
-        let anchorBTCAggStateRow = await storageClient.getAnchorBTCAggStateObjectByCalIdAsync(calStateRow.cal_id)
-        if (!anchorBTCAggStateRow) throw new Error(new Date().toISOString() + ' no matching anchor_btc_agg_state data found')
-        // get the btctx_state object for the anchor_btc_agg_id
-        let btcTxStateRow = await storageClient.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggStateRow.anchor_btc_agg_id)
-        if (!btcTxStateRow) throw new Error(new Date().toISOString() + ' no matching btctx_state data found')
-        // get the btcthead_state object for the btctx_id
-        let btcHeadStateRow = await storageClient.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
-        if (!btcHeadStateRow) throw new Error(new Date().toISOString() + ' no matching btchead_state data found')
-
-        let dataOutObj = {}
-        dataOutObj.type = 'btc'
-        dataOutObj.hash_id = aggStateRow.hash_id
-        dataOutObj.hash = aggStateRow.hash
-        dataOutObj.agg_state = JSON.parse(aggStateRow.agg_state)
-        dataOutObj.cal_state = JSON.parse(calStateRow.cal_state)
-        dataOutObj.anchor_btc_agg_state = JSON.parse(anchorBTCAggStateRow.anchor_btc_agg_state)
-        dataOutObj.btctx_state = JSON.parse(btcTxStateRow.btctx_state)
-        dataOutObj.btchead_state = JSON.parse(btcHeadStateRow.btchead_state)
-
-        // Publish a proof data object for consumption by the proof generation service
-        amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'btc' },
-          async (err, ok) => {
-            if (err !== null) {
-              // An error as occurred publishing a message
-              console.error(env.RMQ_WORK_OUT_GEN_QUEUE, '[btc] publish message nacked')
-              throw new Error(err)
-            } else {
-              // New message has been published
-              console.log(env.RMQ_WORK_OUT_GEN_QUEUE, '[btc] publish message acked')
-              // logs the btc proof event
-              await storageClient.logBtcEventForHashIdAsync(aggStateRow.hash_id)
-              // Proof ready message has been consumed, ack consumption of original message
-              amqpChannel.ack(msg)
-              console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
-            }
-          })
-      } catch (error) {
-        console.error('error consuming proof ready message', error)
-        // An error as occurred consuming a message, nack consumption of original message
-        amqpChannel.nack(msg)
-        console.error(msg.fields.routingKey, '[' + msg.properties.type + '] consume message nacked - ' + JSON.stringify(error))
-      }
-      break
-    default:
-      // This is an unknown proof ready type
-      console.error('Unknown proof ready type', messageObj.type)
+    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
   }
 }
 
@@ -327,27 +224,26 @@ async function ConsumeProofReadyMessageAsync (msg) {
 */
 async function PruneStateDataAsync () {
   try {
-    // remove all rows from agg_states that have been processed and from which proofs have been generated
-    let rowCount = await storageClient.deleteProcessedHashesFromAggStatesAsync()
-    console.log(`Pruned agg_states - ${rowCount} row(s) deleted`)
-    // remove all rows from hash_tracker_logs for the hashes that have been processed and from which proofs have been generated
-    rowCount = await storageClient.deleteHashTrackerLogEntriesAsync()
-    console.log(`Pruned hash_tracker_logs - ${rowCount} row(s) deleted`)
-    // remove all rows from cal_states whose agg_states children have all been deleted
-    rowCount = await storageClient.deleteCalStatesWithNoRemainingAggStatesAsync()
-    console.log(`Pruned cal_states - ${rowCount} row(s) deleted`)
-    // remove all rows from anchor_btc_agg_states whose cal_states children have all been deleted
-    rowCount = await storageClient.deleteAnchorBTCAggStatesWithNoRemainingCalStatesAsync()
-    console.log(`Pruned anchor_btc_agg_states - ${rowCount} row(s) deleted`)
-    // remove all rows from btctx_states whose anchor_btc_agg_states children have all been deleted
-    rowCount = await storageClient.deleteBtcTxStatesWithNoRemainingAnchorBTCAggStatesAsync()
-    console.log(`Pruned btctx_states - ${rowCount} row(s) deleted`)
-    // remove all rows from btchead_states whose btctx_states children have all been deleted
-    rowCount = await storageClient.deleteBtcHeadStatesWithNoRemainingBtcTxStatesAsync()
-    console.log(`Pruned btcheadstates - ${rowCount} row(s) deleted`)
-    console.log('Pruning complete')
+    // remove all rows from agg_states that are older than the expiration age
+    let rowCount = await storageClient.pruneAggStatesAsync()
+    if (rowCount) console.log(`Pruned agg_states - ${rowCount} row(s) deleted`)
+    // remove all rows from hash_tracker_logs that are older than the expiration age
+    rowCount = await storageClient.pruneHashTrackerLogsAsync()
+    if (rowCount) console.log(`Pruned hash_tracker_logs - ${rowCount} row(s) deleted`)
+    // remove all rows from cal_states that are older than the expiration age
+    rowCount = await storageClient.pruneCalStatesAsync()
+    if (rowCount) console.log(`Pruned cal_states - ${rowCount} row(s) deleted`)
+    // remove all rows from anchor_btc_agg_states that are older than the expiration age
+    rowCount = await storageClient.pruneAnchorBTCAggStatesAsync()
+    if (rowCount) console.log(`Pruned anchor_btc_agg_states - ${rowCount} row(s) deleted`)
+    // remove all rows from btctx_states that are older than the expiration age
+    rowCount = await storageClient.pruneBtcTxStatesAsync()
+    if (rowCount) console.log(`Pruned btctx_states - ${rowCount} row(s) deleted`)
+    // remove all rows from btchead_states that are older than the expiration age
+    rowCount = await storageClient.pruneBtcHeadStatesAsync()
+    if (rowCount) console.log(`Pruned btcheadstates - ${rowCount} row(s) deleted`)
   } catch (error) {
-    console.error('error with pruning', error)
+    console.error(`Unable to complete pruning process: ${error.message}`)
   }
 }
 
@@ -385,14 +281,11 @@ function processMessage (msg) {
         // Stores state information for btcmon events
         ConsumeBtcMonMessageAsync(msg)
         break
-      case 'state':
-        // Consumes a proof ready message from the proof state service
-        // Retrieves all proof state data for a given hash, publishes message bound for the proof generator service, and logs event in hash tracker
-        ConsumeProofReadyMessageAsync(msg)
-        break
       default:
         // This is an unknown state type
-        console.error('Unknown state type', msg.properties.type)
+        console.error(`Unknown state type: ${msg.properties.type}`)
+        // cannot handle unknown type messages, ack message and do nothing
+        amqpChannel.ack(msg)
     }
   }
 }
@@ -404,7 +297,7 @@ async function openStorageConnectionAsync () {
   let dbConnected = false
   while (!dbConnected) {
     try {
-      await await storageClient.openConnectionAsync()
+      await storageClient.openConnectionAsync()
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {
@@ -430,8 +323,8 @@ async function openRMQConnectionAsync (connectionString) {
       let chan = await conn.createConfirmChannel()
       // the connection and channel have been established
       chan.assertQueue(env.RMQ_WORK_IN_STATE_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_STATE_QUEUE, { durable: true })
       chan.assertQueue(env.RMQ_WORK_OUT_GEN_QUEUE, { durable: true })
+      chan.assertQueue(env.RMQ_WORK_OUT_CAL_QUEUE, { durable: true })
       chan.prefetch(env.RMQ_PREFETCH_COUNT_STATE)
       amqpChannel = chan
       // Continuously load the HASHES from RMQ with hash objects to process
@@ -470,8 +363,8 @@ async function start () {
     // Init intervals
     startIntervals()
     console.log('startup completed successfully')
-  } catch (err) {
-    console.error(`An error has occurred on startup: ${err}`)
+  } catch (error) {
+    console.error(`An error has occurred on startup: ${error.message}`)
     process.exit(1)
   }
 }

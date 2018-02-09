@@ -1,4 +1,4 @@
-version: '2'
+version: '2.1'
 
 networks:
   chainpoint:
@@ -60,6 +60,7 @@ services:
       - roach1
       - redis
       - rabbitmq
+      - consul
     networks:
       - chainpoint
     environment:
@@ -67,6 +68,7 @@ services:
       CHAINPOINT_CORE_BASE_URI: ${CHAINPOINT_CORE_BASE_URI}
       ANCHOR_BTC: ${ANCHOR_BTC}
       ANCHOR_ETH: ${ANCHOR_ETH}
+      ETH_TNT_LISTEN_ADDRS: ${ETH_TNT_LISTEN_ADDRS}    
       VIRTUAL_HOST: api.local
 
   api-test:
@@ -79,6 +81,7 @@ services:
       - roach1
       - redis
       - rabbitmq
+      - consul
     networks:
       - chainpoint
     environment:
@@ -86,6 +89,7 @@ services:
       CHAINPOINT_CORE_BASE_URI: http://test.chainpoint.org
       ANCHOR_BTC: ${ANCHOR_BTC}
       ANCHOR_ETH: ${ANCHOR_ETH}
+      ETH_TNT_LISTEN_ADDRS: ${ETH_TNT_LISTEN_ADDRS}    
       VIRTUAL_HOST: api.local
 
   # Aggregator
@@ -136,6 +140,7 @@ services:
     container_name: nist-beacon-core
     depends_on:
       - redis
+      - consul
     networks:
       - chainpoint
     environment:
@@ -158,6 +163,7 @@ services:
     depends_on:
       - roach1
       - rabbitmq
+      - consul
     networks:
       - chainpoint
     environment:
@@ -166,6 +172,11 @@ services:
       ANCHOR_BTC: ${ANCHOR_BTC}
       ANCHOR_ETH: ${ANCHOR_ETH}
       SIGNING_SECRET_KEY: ${SIGNING_SECRET_KEY}
+      DEBUG: "calendar:*"
+      DEBUG_HIDE_DATE: "false"
+      # DEBUG_COLORS: "true"
+      DEBUG_DEPTH: 10
+      DEBUG_SHOW_HIDDEN: "enabled"
 
   # Bitcoin Transmit
   # Send Calendar Block Merkle roots to be embedded in a BTC transaction.
@@ -178,7 +189,6 @@ services:
     container_name: btc-tx-core
     depends_on:
       - roach1
-      - consul
       - rabbitmq
     networks:
       - chainpoint
@@ -243,13 +253,29 @@ services:
   # Responsible for auditing the availability, time, and calendar state
   # of public Tierion Network Nodes
   #
-  audit:
+  audit-consumer:
     restart: always
-    image: quay.io/chainpoint/node-audit-service:${DOCKER_TAG}
+    image: quay.io/chainpoint/node-audit-consumer-service:${DOCKER_TAG}
     build:
-      context: ./node-audit-service
+      context: ./node-audit-consumer-service
     depends_on:
       - roach1
+      - rabbitmq
+    networks:
+      - chainpoint
+    environment:
+      NODE_ENV: development
+
+  audit-producer:
+    restart: always
+    image: quay.io/chainpoint/node-audit-producer-service:${DOCKER_TAG}
+    build:
+      context: ./node-audit-producer-service
+    container_name: audit-producer
+    depends_on:
+      - roach1
+      - rabbitmq
+      - consul
     networks:
       - chainpoint
     environment:
@@ -291,7 +317,7 @@ services:
   #
   rabbitmq:
     restart: always
-    image: rabbitmq:3.6.9-management-alpine
+    image: rabbitmq:3.6.11-management-alpine
     container_name: rabbitmq-core
     hostname: rabbitmq
     ports:
@@ -305,15 +331,12 @@ services:
 
   # Redis
   #
-  # LOCAL PORTS:
-  # redis : 6380 (+1 over default)
-  #
   redis:
     restart: always
-    image: redis:4.0.1-alpine
+    image: redis:4.0.2-alpine
     container_name: redis-core
     ports:
-      - "6380:6379"
+      - "6382:6379"
     volumes:
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
       - ./data/redis:/data
@@ -329,7 +352,7 @@ services:
   #
   consul:
     restart: always
-    image: consul:0.8.5
+    image: consul:1.0.0
     container_name: consul-core
     ports:
       - "8300:8300"
@@ -344,9 +367,12 @@ services:
   #
   # CockroachDB Admin UI: http://127.0.0.1:8080
   #
+  # Enable slow query logging with COCKROACH_TRACE_SQL and:
+  #   SET CLUSTER SETTING sql.trace.log_statement_execute = true;
+  #
   roach1:
     restart: always
-    image: cockroachdb/cockroach:v1.0.5
+    image: cockroachdb/cockroach:v1.1.5
     container_name: roach1-core
     ports:
       - "26257:26257"
@@ -358,9 +384,11 @@ services:
       - --insecure
     networks:
       - chainpoint
+    environment:
+      COCKROACH_TRACE_SQL: "1000ms"
 
-# Testing Ethereum blockchain service
-#
+  # Testing Ethereum blockchain service
+  #
   testrpc:
     image: quay.io/chainpoint/testrpc:${DOCKER_TAG}
     build:
@@ -416,8 +444,8 @@ services:
       LISTEN_TX_PORT: 8085
       ETH_TNT_TOKEN_ADDR: ${ETH_TNT_TOKEN_ADDR}
       # Standard Ethereum Keystore encrypted private key file
-      # ETH_WALLET: '{"version":3,"id":"899fdc72-7afe-4d04-83c7-89d46b201c7f","address":"5467972599d1c388b875dd9a54b9ea80b2a5b108","crypto":{"ciphertext":"1e05c56af4766441493e71788cbd63baccc9ba90ee069bc80e5cdde2c45857bc","cipherparams":{"iv":"f25baeb791bec69a19b1eb35d84e4a82"},"cipher":"aes-128-ctr","kdf":"scrypt","kdfparams":{"dklen":32,"salt":"af22507b690ff0e1212a4e5df87005216d2ca6da1c71f5cf7840dc081d2ea73d","n":262144,"r":8,"p":1},"mac":"d2d868d31654fb17938d74a14648b7798d7651058fce7e4f3c92bee19a2412c4"}}'
-      # ETH_WALLET_PASSWORD: 'test-password'
+      ETH_WALLET: ${ETH_WALLET}
+      ETH_WALLET_PASSWORD: ${ETH_WALLET_PASSWORD}
     ports:
       - "8085:8085" # REST API
     command: yarn start
@@ -470,6 +498,7 @@ services:
     depends_on:
       - eth-tnt-tx-service
       - rabbitmq
+      - consul
     networks:
       - chainpoint
     environment:
