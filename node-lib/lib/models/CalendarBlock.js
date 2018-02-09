@@ -31,14 +31,14 @@ const env = envalid.cleanEnv(process.env, {
 })
 
 const pg = require('pg')
-const pgClientPool = new pg.Pool({
+let pgConfig = {
   user: env.COCKROACH_DB_USER,
   host: env.COCKROACH_HOST,
   database: env.COCKROACH_DB_NAME,
   port: env.COCKROACH_PORT,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000
-})
+}
 
 // Connect to CockroachDB through Sequelize.
 let sequelizeOptions = {
@@ -59,7 +59,15 @@ if (env.isProduction) {
       cert: env.COCKROACH_TLS_CLIENT_CRT
     }
   }
+  pgConfig.ssl = {
+    rejectUnauthorized: false,
+    ca: env.COCKROACH_TLS_CA_CRT,
+    key: env.COCKROACH_TLS_CLIENT_KEY,
+    cert: env.COCKROACH_TLS_CLIENT_CRT
+  }
 }
+
+const pgClientPool = new pg.Pool(pgConfig)
 
 let sequelize = new Sequelize(env.COCKROACH_DB_NAME, env.COCKROACH_DB_USER, env.COCKROACH_DB_PASS, sequelizeOptions)
 
