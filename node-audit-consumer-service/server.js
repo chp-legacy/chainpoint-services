@@ -148,7 +148,8 @@ async function processIncomingAuditJobAsync (msg) {
 
         // check if the Node challenge solution is correct
         if (coreAuditChallenge) {
-          let coreChallengeSolution = nacl.util.decodeUTF8(coreAuditChallenge.solution)
+          let coreAuditChallengeSolution = coreAuditChallenge.split(':')[4].toString()
+          let coreChallengeSolution = nacl.util.decodeUTF8(coreAuditChallengeSolution)
           nodeAuditResponseSolution = nacl.util.decodeUTF8(nodeAuditResponseSolution)
 
           if (nacl.verify(nodeAuditResponseSolution, coreChallengeSolution)) {
