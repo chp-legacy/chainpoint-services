@@ -153,35 +153,6 @@ let BtcHeadStates = sequelize.define('btchead_states', {
   underscored: true
 })
 
-let HashTrackerLog = sequelize.define('hash_tracker_log', {
-  hash_id: { type: Sequelize.UUID, primaryKey: true },
-  hash: { type: Sequelize.STRING },
-  aggregator_at: { type: Sequelize.DATE },
-  calendar_at: { type: Sequelize.DATE },
-  btc_at: { type: Sequelize.DATE },
-  eth_at: { type: Sequelize.DATE },
-  steps_complete: { type: Sequelize.INTEGER }
-}, {
-  indexes: [
-    {
-      fields: ['steps_complete']
-    },
-    {
-      name: 'hash_id_and_steps_complete',
-      fields: ['hash_id', 'steps_complete']
-    },
-    {
-      unique: false,
-      fields: ['created_at']
-    }
-  ],
-    // enable timestamps
-  timestamps: true,
-    // don't use camelcase for automatically added attributes but underscore style
-    // so updatedAt will be updated_at
-  underscored: true
-})
-
 async function openConnectionAsync () {
   // test to see if the service is ready by making a authenticate request to it
   await sequelize.authenticate()
@@ -386,90 +357,9 @@ async function writeBTCHeadStateObjectAsync (stateObject) {
   return true
 }
 
-async function logAggregatorEventForHashIdAsync (hashId, hash) {
-  await sequelize.query(`INSERT INTO hash_tracker_logs (hash_id, hash, aggregator_at, steps_complete, created_at, updated_at)
-    VALUES ('${hashId}', '${hash}', clock_timestamp(), 1, clock_timestamp(), clock_timestamp())
-    ON CONFLICT (hash_id)
-    DO UPDATE SET (hash, aggregator_at, steps_complete, updated_at) = ('${hash}', clock_timestamp(), hash_tracker_logs.steps_complete + 1, clock_timestamp())
-    WHERE hash_tracker_logs.hash_id = '${hashId}'`)
-  return true
-}
-
-async function logAggregatorEventsForHashIdsAsync (hashesInfo) {
-  let writeTime = new Date()
-  let newHashesInfo = hashesInfo.map((hashInfo) => {
-    return {
-      hash_id: hashInfo.hash_id,
-      hash: hashInfo.hash,
-      aggregator_at: writeTime,
-      steps_complete: 1,
-      created_at: writeTime,
-      updated_at: writeTime
-    }
-  })
-  for (let x = 0; x < newHashesInfo.length; x++) {
-    await sequelize.query(`INSERT INTO hash_tracker_logs (hash_id, hash, aggregator_at, steps_complete, created_at, updated_at)
-    VALUES ('${newHashesInfo[x].hash_id}', '${newHashesInfo[x].hash}', clock_timestamp(), 1, clock_timestamp(), clock_timestamp())
-    ON CONFLICT (hash_id)
-    DO UPDATE SET (hash, aggregator_at, steps_complete, updated_at) = ('${newHashesInfo[x].hash}', clock_timestamp(), hash_tracker_logs.steps_complete + 1, clock_timestamp())
-    WHERE hash_tracker_logs.hash_id = '${newHashesInfo[x].hash_id}'`)
-  }
-  return true
-}
-
-async function logAggregatorEventsForHashIdsBulkAsync (hashesInfo, transaction) {
-  let writeTime = new Date()
-  let newHashTrackerLogs = hashesInfo.map((hashInfo) => {
-    return {
-      hash_id: hashInfo.hash_id,
-      hash: hashInfo.hash,
-      aggregator_at: writeTime,
-      calendar_at: null,
-      btc_at: null,
-      eth_at: null,
-      steps_complete: 1
-    }
-  })
-  await HashTrackerLog.bulkCreate(newHashTrackerLogs, { transaction: transaction })
-  return true
-}
-
-async function logCalendarEventForHashIdAsync (hashId) {
-  await sequelize.query(`INSERT INTO hash_tracker_logs (hash_id, calendar_at, steps_complete, created_at, updated_at)
-    VALUES ('${hashId}', clock_timestamp(), 1, clock_timestamp(), clock_timestamp())
-    ON CONFLICT (hash_id)
-    DO UPDATE SET (calendar_at, steps_complete, updated_at) = (clock_timestamp(), hash_tracker_logs.steps_complete + 1, clock_timestamp())
-    WHERE hash_tracker_logs.hash_id = '${hashId}'`)
-  return true
-}
-
-async function logBtcEventForHashIdAsync (hashId) {
-  await sequelize.query(`INSERT INTO hash_tracker_logs (hash_id, btc_at, steps_complete, created_at, updated_at)
-    VALUES ('${hashId}', clock_timestamp(), 1, clock_timestamp(), clock_timestamp())
-    ON CONFLICT (hash_id)
-    DO UPDATE SET (btc_at, steps_complete, updated_at) = (clock_timestamp(), hash_tracker_logs.steps_complete + 1, clock_timestamp())
-    WHERE hash_tracker_logs.hash_id = '${hashId}'`)
-  return true
-}
-
-async function logEthEventForHashIdAsync (hashId) {
-  await sequelize.query(`INSERT INTO hash_tracker_logs (hash_id, eth_at, steps_complete, created_at, updated_at)
-    VALUES ('${hashId}', clock_timestamp(), 1, clock_timestamp(), clock_timestamp())
-    ON CONFLICT (hash_id)
-    DO UPDATE SET (eth_at, steps_complete, updated_at) = (clock_timestamp(), hash_tracker_logs.steps_complete + 1, clock_timestamp())
-    WHERE hash_tracker_logs.hash_id = '${hashId}'`)
-  return true
-}
-
 async function pruneAggStatesAsync () {
   let cutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
   let resultCount = await AggStates.destroy({ where: { updated_at: { [Op.lt]: cutoffDate } } })
-  return resultCount
-}
-
-async function pruneHashTrackerLogsAsync () {
-  let cutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
-  let resultCount = await HashTrackerLog.destroy({ where: { created_at: { [Op.lt]: cutoffDate } } })
   return resultCount
 }
 
@@ -518,14 +408,7 @@ module.exports = {
   writeAnchorBTCAggStateObjectAsync: writeAnchorBTCAggStateObjectAsync,
   writeBTCTxStateObjectAsync: writeBTCTxStateObjectAsync,
   writeBTCHeadStateObjectAsync: writeBTCHeadStateObjectAsync,
-  logAggregatorEventForHashIdAsync: logAggregatorEventForHashIdAsync,
-  logAggregatorEventsForHashIdsBulkAsync: logAggregatorEventsForHashIdsBulkAsync,
-  logAggregatorEventsForHashIdsAsync: logAggregatorEventsForHashIdsAsync,
-  logCalendarEventForHashIdAsync: logCalendarEventForHashIdAsync,
-  logBtcEventForHashIdAsync: logBtcEventForHashIdAsync,
-  logEthEventForHashIdAsync: logEthEventForHashIdAsync,
   pruneAggStatesAsync: pruneAggStatesAsync,
-  pruneHashTrackerLogsAsync: pruneHashTrackerLogsAsync,
   pruneCalStatesAsync: pruneCalStatesAsync,
   pruneAnchorBTCAggStatesAsync: pruneAnchorBTCAggStatesAsync,
   pruneBtcTxStatesAsync: pruneBtcTxStatesAsync,

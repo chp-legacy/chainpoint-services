@@ -57,14 +57,6 @@ async function ConsumeAggregationMessageAsync (msg) {
   try {
     // Store this state information
     await storageClient.writeAggStateObjectsBulkAsync(stateObjects, transaction)
-    // logs the aggregation event
-    let hashesInfo = stateObjects.map((hashInfo) => {
-      return {
-        hash_id: hashInfo.hash_id,
-        hash: hashInfo.hash
-      }
-    })
-    await storageClient.logAggregatorEventsForHashIdsBulkAsync(hashesInfo, transaction)
 
     let aggObj = {}
     aggObj.agg_id = messageObj.agg_id
@@ -227,9 +219,6 @@ async function PruneStateDataAsync () {
     // remove all rows from agg_states that are older than the expiration age
     let rowCount = await storageClient.pruneAggStatesAsync()
     if (rowCount) console.log(`Pruned agg_states - ${rowCount} row(s) deleted`)
-    // remove all rows from hash_tracker_logs that are older than the expiration age
-    rowCount = await storageClient.pruneHashTrackerLogsAsync()
-    if (rowCount) console.log(`Pruned hash_tracker_logs - ${rowCount} row(s) deleted`)
     // remove all rows from cal_states that are older than the expiration age
     rowCount = await storageClient.pruneCalStatesAsync()
     if (rowCount) console.log(`Pruned cal_states - ${rowCount} row(s) deleted`)
