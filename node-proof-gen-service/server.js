@@ -24,7 +24,7 @@ const chpBinary = require('chainpoint-binary')
 const utils = require('./lib/utils.js')
 const bluebird = require('bluebird')
 
-const storageClient = require('./crdbproofstate.js')
+const storageClient = require('./lib/models/cachedProofStateModels.js')
 
 const r = require('redis')
 
