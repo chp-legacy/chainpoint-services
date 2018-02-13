@@ -20,7 +20,7 @@ const env = require('./lib/parse-env.js')('state')
 const amqp = require('amqplib')
 const utils = require('./lib/utils.js')
 
-const storageClient = require('./lib/models/ProofStateModels.js')
+const storageClient = require('./crdbproofstate.js')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
