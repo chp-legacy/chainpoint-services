@@ -53,8 +53,18 @@ if (env.isProduction) {
 let sequelize = new Sequelize(env.COCKROACH_DB_NAME, env.COCKROACH_DB_USER, env.COCKROACH_DB_PASS, sequelizeOptions)
 let Op = sequelize.Op
 
+const CAL_STATE_KEY_PREFIX = 'CalState'
+const ANCHOR_BTC_AGG_STATE_KEY_PREFIX = 'AnchorBTCAggState'
+const BTC_TX_STATE_KEY_PREFIX = 'BtcTxState'
+const BTC_HEAD_STATE_KEY_PREFIX = 'BtcHeadState'
+
+// The redis connection used for all redis communication
+// This value is set once the connection has been established
+let redis = null
+
 // How many hours any piece of proof state data is retained until pruned
 const PROOF_STATE_EXPIRE_HOURS = 12
+const PROOF_STATE_CACHE_EXPIRE_MINUTES = PROOF_STATE_EXPIRE_HOURS * 60
 
 // table for state data connecting individual hashes to aggregation roots
 let AggStates = sequelize.define('chainpoint_proof_agg_states', {
@@ -240,38 +250,82 @@ async function getAggStateObjectByHashIdAsync (hashId) {
 }
 
 async function getCalStateObjectByAggIdAsync (aggId) {
+  let redisKey = `${CAL_STATE_KEY_PREFIX}:${aggId}`
+  if (redis) {
+    let cacheResult = await redis.getAsync(redisKey)
+    if (cacheResult) return JSON.parse(cacheResult)
+  }
   let result = await CalStates.findOne({
     where: {
       agg_id: aggId
     }
   })
+  // We've made it this far, so either redis is null,
+  // or more likely, there was no cache hit and the database was queried.
+  // Store the query result in redis to cache for next request
+  if (redis) {
+    await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+  }
   return result
 }
 
 async function getAnchorBTCAggStateObjectByCalIdAsync (calId) {
+  let redisKey = `${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${calId}`
+  if (redis) {
+    let cacheResult = await redis.getAsync(redisKey)
+    if (cacheResult) return JSON.parse(cacheResult)
+  }
   let result = await AnchorBTCAggStates.findOne({
     where: {
       cal_id: calId
     }
   })
+  // We've made it this far, so either redis is null,
+  // or more likely, there was no cache hit and the database was queried.
+  // Store the query result in redis to cache for next request
+  if (redis) {
+    await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+  }
   return result
 }
 
 async function getBTCTxStateObjectByAnchorBTCAggIdAsync (anchorBTCAggId) {
+  let redisKey = `${BTC_TX_STATE_KEY_PREFIX}:${anchorBTCAggId}`
+  if (redis) {
+    let cacheResult = await redis.getAsync(redisKey)
+    if (cacheResult) return JSON.parse(cacheResult)
+  }
   let result = await BtcTxStates.findOne({
     where: {
       anchor_btc_agg_id: anchorBTCAggId
     }
   })
+  // We've made it this far, so either redis is null,
+  // or more likely, there was no cache hit and the database was queried.
+  // Store the query result in redis to cache for next request
+  if (redis) {
+    await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+  }
   return result
 }
 
 async function getBTCHeadStateObjectByBTCTxIdAsync (btcTxId) {
+  let redisKey = `${BTC_HEAD_STATE_KEY_PREFIX}:${btcTxId}`
+  if (redis) {
+    let cacheResult = await redis.getAsync(redisKey)
+    if (cacheResult) return JSON.parse(cacheResult)
+  }
   let result = await BtcHeadStates.findOne({
     where: {
       btctx_id: btcTxId
     }
   })
+  // We've made it this far, so either redis is null,
+  // or more likely, there was no cache hit and the database was queried.
+  // Store the query result in redis to cache for next request
+  if (redis) {
+    await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+  }
   return result
 }
 
@@ -297,6 +351,11 @@ async function writeCalStateObjectAsync (stateObject) {
     cal_state: JSON.stringify(stateObject.cal_state)
   }
   await CalStates.upsert(calStateObject)
+  // Store the state object in redis to cache for next request
+  if (redis) {
+    let redisKey = `${CAL_STATE_KEY_PREFIX}:${stateObject.agg_id}`
+    await redis.setAsync(redisKey, JSON.stringify(calStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+  }
   return true
 }
 
@@ -309,28 +368,43 @@ async function writeAnchorBTCAggStateObjectAsync (stateObject) {
     anchor_btc_agg_state: JSON.stringify(stateObject.anchor_btc_agg_state)
   }
   await AnchorBTCAggStates.upsert(anchorBTCAggStateObject)
+  // Store the state object in redis to cache for next request
+  if (redis) {
+    let redisKey = `${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObject.calId}`
+    await redis.setAsync(redisKey, JSON.stringify(anchorBTCAggStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+  }
   return true
 }
 
 async function writeBTCTxStateObjectAsync (stateObject) {
-  let BTCTxStateObject = {
+  let btcTxStateObject = {
     anchor_btc_agg_id: stateObject.anchor_btc_agg_id,
     btctx_id: stateObject.btctx_id,
     btctx_state: JSON.stringify(stateObject.btctx_state)
   }
-  await BtcTxStates.upsert(BTCTxStateObject)
+  await BtcTxStates.upsert(btcTxStateObject)
+  // Store the state object in redis to cache for next request
+  if (redis) {
+    let redisKey = `${BTC_TX_STATE_KEY_PREFIX}:${stateObject.anchor_btc_agg_id}`
+    await redis.setAsync(redisKey, JSON.stringify(btcTxStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+  }
   return true
 }
 
 async function writeBTCHeadStateObjectAsync (stateObject) {
   let btcHeadHeight = parseInt(stateObject.btchead_height, 10)
   if (isNaN(btcHeadHeight)) throw new Error(`btchead_height value '${stateObject.cal_id}' is not an integer`)
-  let BTCHeadStateObject = {
+  let btcHeadStateObject = {
     btctx_id: stateObject.btctx_id,
     btchead_height: btcHeadHeight,
     btchead_state: JSON.stringify(stateObject.btchead_state)
   }
-  await BtcHeadStates.upsert(BTCHeadStateObject)
+  await BtcHeadStates.upsert(btcHeadStateObject)
+  // Store the state object in redis to cache for next request
+  if (redis) {
+    let redisKey = `${BTC_HEAD_STATE_KEY_PREFIX}:${stateObject.btctx_id}`
+    await redis.setAsync(redisKey, JSON.stringify(btcHeadStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+  }
   return true
 }
 
@@ -430,5 +504,6 @@ module.exports = {
   pruneAnchorBTCAggStatesAsync: pruneAnchorBTCAggStatesAsync,
   pruneBtcTxStatesAsync: pruneBtcTxStatesAsync,
   pruneBtcHeadStatesAsync: pruneBtcHeadStatesAsync,
-  sequelize: sequelize
+  sequelize: sequelize,
+  setRedis: (r) => { redis = r }
 }

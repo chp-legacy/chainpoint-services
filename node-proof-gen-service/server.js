@@ -207,12 +207,14 @@ function openRedisConnection (redisURI) {
   redis = r.createClient(redisURI)
   redis.on('ready', () => {
     bluebird.promisifyAll(redis)
+    storageClient.setRedis(redis)
     console.log('Redis connection established')
   })
   redis.on('error', async (err) => {
     console.error(`A redis error has ocurred: ${err}`)
     redis.quit()
     redis = null
+    storageClient.setRedis(null)
     console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
     await utils.sleep(5000)
     openRedisConnection(redisURI)

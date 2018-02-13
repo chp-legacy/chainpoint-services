@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "amqplib": "^0.5.1",
+    "bluebird": "^3.5.1",
     "envalid": "^3.1.1",
     "pg": "^7.4.1",
     "pg-hstore": "^2.3.2",
+    "redis": "^2.8.0",
     "sequelize": "^4.33.3",
     "sequelize-cockroachdb": "https://github.com/cockroachdb/sequelize-cockroachdb.git#f6b15cfaf23c17882e4b813a4dfc9758a77aa5a9"
   }
