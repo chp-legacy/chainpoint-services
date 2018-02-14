@@ -515,11 +515,12 @@ async function aggregateAndAnchorBTCAsync (lastBtcAnchorBlockId) {
   try {
     // Retrieve ALL Calendar blocks since last anchor block created by any stack.
     // This will change when we determine an approach to allow only a single zone to anchor.
+    // stackId: env.CHAINPOINT_CORE_BASE_URI may be removed after single anchor implementation
 
     // Use last BTC anchor block ID from global var 'lastBtcAnchorBlockId'
     // set at top and bottom of hour just prior to requesting this lock.
     if (!lastBtcAnchorBlockId) lastBtcAnchorBlockId = -1
-    let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastBtcAnchorBlockId } }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
+    let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastBtcAnchorBlockId }, stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
     // debug.btcAnchor('aggregateAndAnchorBTCAsync : btc blocks to anchor : %o', blocks)
     debug.btcAnchor('aggregateAndAnchorBTCAsync : btc blocks.length to anchor : %d', blocks.length)
 
