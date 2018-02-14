@@ -182,35 +182,6 @@ let BtcHeadStates = sequelize.define('chainpoint_proof_btchead_states', {
   underscored: true
 })
 
-let HashTrackerLog = sequelize.define('chainpoint_proof_hash_tracker_log', {
-  hash_id: { type: Sequelize.UUID, primaryKey: true },
-  hash: { type: Sequelize.STRING },
-  aggregator_at: { type: Sequelize.DATE },
-  calendar_at: { type: Sequelize.DATE },
-  btc_at: { type: Sequelize.DATE },
-  eth_at: { type: Sequelize.DATE },
-  steps_complete: { type: Sequelize.INTEGER }
-}, {
-  indexes: [
-    {
-      fields: ['steps_complete']
-    },
-    {
-      name: 'hash_id_and_steps_complete',
-      fields: ['hash_id', 'steps_complete']
-    },
-    {
-      unique: false,
-      fields: ['created_at']
-    }
-  ],
-    // enable timestamps
-  timestamps: true,
-    // don't use camelcase for automatically added attributes but underscore style
-    // so updatedAt will be updated_at
-  underscored: true
-})
-
 async function openConnectionAsync () {
   // test to see if the service is ready by making a authenticate request to it
   await sequelize.authenticate()
@@ -408,52 +379,9 @@ async function writeBTCHeadStateObjectAsync (stateObject) {
   return true
 }
 
-async function logAggregatorEventsForHashIdsBulkAsync (hashesInfo) {
-  let logWriteTime = new Date()
-  let newHashTrackerLogs = hashesInfo.map((hashInfo) => {
-    return {
-      hash_id: hashInfo.hash_id,
-      hash: hashInfo.hash,
-      aggregator_at: logWriteTime,
-      calendar_at: null,
-      btc_at: null,
-      eth_at: null,
-      steps_complete: 1
-    }
-  })
-  await HashTrackerLog.bulkCreate(newHashTrackerLogs)
-  return true
-}
-
-async function logCalendarEventForHashIdAsync (hashId) {
-  let logWriteTime = new Date()
-  let hashTrackerLogObject = {
-    calendar_at: logWriteTime,
-    steps_complete: sequelize.literal('steps_complete + 1')
-  }
-  await HashTrackerLog.update(hashTrackerLogObject, { where: { hash_id: hashId } })
-  return true
-}
-
-async function logBtcEventForHashIdAsync (hashId) {
-  let logWriteTime = new Date()
-  let hashTrackerLogObject = {
-    btc_at: logWriteTime,
-    steps_complete: sequelize.literal('steps_complete + 1')
-  }
-  await HashTrackerLog.update(hashTrackerLogObject, { where: { hash_id: hashId } })
-  return true
-}
-
 async function pruneAggStatesAsync () {
   let cutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
   let resultCount = await AggStates.destroy({ where: { created_at: { [Op.lt]: cutoffDate } } })
-  return resultCount
-}
-
-async function pruneHashTrackerLogsAsync () {
-  let cutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
-  let resultCount = await HashTrackerLog.destroy({ where: { created_at: { [Op.lt]: cutoffDate } } })
   return resultCount
 }
 
@@ -495,11 +423,7 @@ module.exports = {
   writeAnchorBTCAggStateObjectAsync: writeAnchorBTCAggStateObjectAsync,
   writeBTCTxStateObjectAsync: writeBTCTxStateObjectAsync,
   writeBTCHeadStateObjectAsync: writeBTCHeadStateObjectAsync,
-  logAggregatorEventsForHashIdsBulkAsync: logAggregatorEventsForHashIdsBulkAsync,
-  logCalendarEventForHashIdAsync: logCalendarEventForHashIdAsync,
-  logBtcEventForHashIdAsync: logBtcEventForHashIdAsync,
   pruneAggStatesAsync: pruneAggStatesAsync,
-  pruneHashTrackerLogsAsync: pruneHashTrackerLogsAsync,
   pruneCalStatesAsync: pruneCalStatesAsync,
   pruneAnchorBTCAggStatesAsync: pruneAnchorBTCAggStatesAsync,
   pruneBtcTxStatesAsync: pruneBtcTxStatesAsync,
