@@ -19,12 +19,20 @@ const env = require('./lib/parse-env.js')('state')
 
 const amqp = require('amqplib')
 const utils = require('./lib/utils.js')
+const bluebird = require('bluebird')
 
-const storageClient = require('./lib/models/ProofStateModels.js')
+const storageClient = require('./lib/models/cachedProofStateModels.js')
+const storageClientPG = require('./lib/models/ProofStateModels.js')
+
+const r = require('redis')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
 var amqpChannel = null
+
+// The redis connection used for all redis communication
+// This value is set once the connection has been established
+let redis = null
 
 /**
 * Writes the state data to persistent storage and logs aggregation event
@@ -45,18 +53,10 @@ async function ConsumeAggregationMessageAsync (msg) {
     stateObjects.push(stateObj)
   }
 
-  let transaction
-  try {
-    transaction = await storageClient.sequelize.transaction()
-  } catch (error) {
-    amqpChannel.nack(msg)
-    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: Unable to initialize transaction: ${error.message}`)
-    return
-  }
-
   try {
     // Store this state information
-    await storageClient.writeAggStateObjectsBulkAsync(stateObjects, transaction)
+    await storageClient.writeAggStateObjectsBulkAsync(stateObjects)
+    await storageClientPG.writeAggStateObjectsBulkAsync(stateObjects)
 
     let aggObj = {}
     aggObj.agg_id = messageObj.agg_id
@@ -70,13 +70,10 @@ async function ConsumeAggregationMessageAsync (msg) {
       throw new Error(error.message)
     }
 
-    await transaction.commit()
-
     // New states has been written, events logged, and cal message queued, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
   } catch (error) {
-    await transaction.rollback()
     amqpChannel.nack(msg)
     console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
   }
@@ -95,8 +92,14 @@ async function ConsumeCalendarMessageAsync (msg) {
   stateObj.cal_state = messageObj.cal_state
 
   try {
-    let rows = await storageClient.getHashIdsByAggIdAsync(stateObj.agg_id)
+    // CRDB
+    // let rows = await storageClient.getHashIdsByAggIdAsync(stateObj.agg_id)
+
+    // PG
+    let rows = await storageClientPG.getHashIdsByAggIdAsync(stateObj.agg_id)
+
     await storageClient.writeCalStateObjectAsync(stateObj)
+    await storageClientPG.writeCalStateObjectAsync(stateObj)
 
     for (let x = 0; x < rows.length; x++) {
       let hashIdRow = rows[x]
@@ -136,6 +139,7 @@ async function ConsumeAnchorBTCAggMessageAsync (msg) {
 
   try {
     await storageClient.writeAnchorBTCAggStateObjectAsync(stateObj)
+    await storageClientPG.writeAnchorBTCAggStateObjectAsync(stateObj)
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
@@ -159,6 +163,7 @@ async function ConsumeBtcTxMessageAsync (msg) {
 
   try {
     await storageClient.writeBTCTxStateObjectAsync(stateObj)
+    await storageClientPG.writeBTCTxStateObjectAsync(stateObj)
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
@@ -181,8 +186,14 @@ async function ConsumeBtcMonMessageAsync (msg) {
   stateObj.btchead_state = messageObj.btchead_state
 
   try {
-    let rows = await storageClient.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
+    // CRDB
+    // let rows = await storageClient.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
+
+    // PG
+    let rows = await storageClientPG.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
+
     await storageClient.writeBTCHeadStateObjectAsync(stateObj)
+    await storageClientPG.writeBTCHeadStateObjectAsync(stateObj)
 
     for (let x = 0; x < rows.length; x++) {
       let hashIdRow = rows[x]
@@ -216,6 +227,7 @@ async function ConsumeBtcMonMessageAsync (msg) {
 */
 async function PruneStateDataAsync () {
   try {
+    // CRDB
     // remove all rows from agg_states that are older than the expiration age
     let rowCount = await storageClient.pruneAggStatesAsync()
     if (rowCount) console.log(`Pruned agg_states - ${rowCount} row(s) deleted`)
@@ -230,6 +242,22 @@ async function PruneStateDataAsync () {
     if (rowCount) console.log(`Pruned btctx_states - ${rowCount} row(s) deleted`)
     // remove all rows from btchead_states that are older than the expiration age
     rowCount = await storageClient.pruneBtcHeadStatesAsync()
+    if (rowCount) console.log(`Pruned btcheadstates - ${rowCount} row(s) deleted`)
+    // PG
+    // remove all rows from agg_states that are older than the expiration age
+    rowCount = await storageClientPG.pruneAggStatesAsync()
+    if (rowCount) console.log(`Pruned agg_states - ${rowCount} row(s) deleted`)
+    // remove all rows from cal_states that are older than the expiration age
+    rowCount = await storageClientPG.pruneCalStatesAsync()
+    if (rowCount) console.log(`Pruned cal_states - ${rowCount} row(s) deleted`)
+    // remove all rows from anchor_btc_agg_states that are older than the expiration age
+    rowCount = await storageClientPG.pruneAnchorBTCAggStatesAsync()
+    if (rowCount) console.log(`Pruned anchor_btc_agg_states - ${rowCount} row(s) deleted`)
+    // remove all rows from btctx_states that are older than the expiration age
+    rowCount = await storageClientPG.pruneBtcTxStatesAsync()
+    if (rowCount) console.log(`Pruned btctx_states - ${rowCount} row(s) deleted`)
+    // remove all rows from btchead_states that are older than the expiration age
+    rowCount = await storageClientPG.pruneBtcHeadStatesAsync()
     if (rowCount) console.log(`Pruned btcheadstates - ${rowCount} row(s) deleted`)
   } catch (error) {
     console.error(`Unable to complete pruning process: ${error.message}`)
@@ -287,6 +315,7 @@ async function openStorageConnectionAsync () {
   while (!dbConnected) {
     try {
       await storageClient.openConnectionAsync()
+      await storageClientPG.openConnectionAsync()
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {
@@ -296,6 +325,30 @@ async function openStorageConnectionAsync () {
     }
   }
 }
+
+/**
+ * Opens a Redis connection
+ *
+ * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ */
+function openRedisConnection (redisURI) {
+  redis = r.createClient(redisURI)
+  redis.on('ready', () => {
+    bluebird.promisifyAll(redis)
+    storageClient.setRedis(redis)
+    console.log('Redis connection established')
+  })
+  redis.on('error', async (err) => {
+    console.error(`A redis error has ocurred: ${err}`)
+    redis.quit()
+    redis = null
+    storageClient.setRedis(null)
+    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
+    await utils.sleep(5000)
+    openRedisConnection(redisURI)
+  })
+}
+
 /**
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
@@ -347,6 +400,8 @@ async function start () {
   try {
     // init DB
     await openStorageConnectionAsync()
+    // init Redis
+    openRedisConnection(env.REDIS_CONNECT_URI)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // Init intervals
