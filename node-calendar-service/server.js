@@ -820,7 +820,7 @@ async function processBtcAnchorInterval (lastBtcAnchorBlockId) {
 }
 
 async function processBtcMonMessage (msg) {
-  debug.reward(`consumeBtcMonMessageAsync : processBtcMonMessage : begin`)
+  debug.btcConfirm(`consumeBtcMonMessageAsync : processBtcMonMessage : begin`)
   try {
     let btcMonObj = JSON.parse(msg.content.toString())
     let btctxId = btcMonObj.btctx_id
@@ -840,7 +840,7 @@ async function processBtcMonMessage (msg) {
       throw new Error(`unable to create btc-c block : ${error.message}`)
     }
 
-    debug.reward(`consumeBtcMonMessageAsync : processBtcMonMessage : end`)
+    debug.btcConfirm(`consumeBtcMonMessageAsync : processBtcMonMessage : end`)
   } catch (error) {
     console.error(`consumeBtcMonMessageAsync : processBtcMonMessage : ${error.message}`)
   }
@@ -859,8 +859,6 @@ async function processRewardMessage (msg) {
     let nodeTNTGrainsRewardShare = rewardMsgObj.node.amount
     let coreRewardEthAddr = rewardMsgObj.core ? rewardMsgObj.core.address : null
     let coreTNTGrainsRewardShare = rewardMsgObj.core ? rewardMsgObj.core.amount : 0
-
-    debug.reward('consumeRewardMessageAsync : processRewardMessage : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
 
     debug.reward('consumeRewardMessageAsync : processRewardMessage : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
     nodeRewardTxId = await sendTNTRewardAsync(nodeRewardETHAddr, nodeTNTGrainsRewardShare)
