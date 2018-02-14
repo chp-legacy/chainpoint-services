@@ -22,7 +22,7 @@
     "pg-hstore": "^2.3.2",
     "request": "^2.83.0",
     "request-promise-native": "^1.0.5",
-    "sequelize": "^4.22.6",
+    "sequelize": "^4.33.3",
     "sequelize-cockroachdb": "^1.0.2",
     "tweetnacl": "^1.0.0",
     "tweetnacl-util": "^0.15.0",
