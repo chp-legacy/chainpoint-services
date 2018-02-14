@@ -118,8 +118,6 @@ async function consumeProofReadyMessageAsync (msg) {
         // store in redis
         await storeProofAsync(proof)
 
-        // logs the calendar proof event
-        await storageClient.logCalendarEventForHashIdAsync(aggStateRow.hash_id)
         // Proof ready message has been consumed, ack consumption of original message
         amqpChannel.ack(msg)
         console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
@@ -167,8 +165,6 @@ async function consumeProofReadyMessageAsync (msg) {
         // store in redis
         await storeProofAsync(proof)
 
-        // logs the btc proof event
-        await storageClient.logBtcEventForHashIdAsync(aggStateRow.hash_id)
         // Proof ready message has been consumed, ack consumption of original message
         amqpChannel.ack(msg)
         console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')

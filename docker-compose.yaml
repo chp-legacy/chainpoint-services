@@ -474,17 +474,6 @@ services:
     volumes:
       - ./data/contracts:/home/node/app/contracts:ro
 
-  testrpc:
-    image: quay.io/chainpoint/testrpc:${DOCKER_TAG}
-    build:
-      context: ./testrpc
-    container_name: testrpc-core
-    restart: unless-stopped
-    ports:
-      - "8545:8545" # RPC
-    networks:
-      - chainpoint
-      
   # TNT Reward
   # Responsible for rewarding TNT to random Nodes passing
   # requisite audit checks at regular intervals
