@@ -515,11 +515,12 @@ async function aggregateAndAnchorBTCAsync (lastBtcAnchorBlockId) {
   try {
     // Retrieve ALL Calendar blocks since last anchor block created by any stack.
     // This will change when we determine an approach to allow only a single zone to anchor.
+    // stackId: env.CHAINPOINT_CORE_BASE_URI may be removed after single anchor implementation
 
     // Use last BTC anchor block ID from global var 'lastBtcAnchorBlockId'
     // set at top and bottom of hour just prior to requesting this lock.
     if (!lastBtcAnchorBlockId) lastBtcAnchorBlockId = -1
-    let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastBtcAnchorBlockId } }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
+    let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastBtcAnchorBlockId }, stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
     // debug.btcAnchor('aggregateAndAnchorBTCAsync : btc blocks to anchor : %o', blocks)
     debug.btcAnchor('aggregateAndAnchorBTCAsync : btc blocks.length to anchor : %d', blocks.length)
 
@@ -820,7 +821,7 @@ async function processBtcAnchorInterval (lastBtcAnchorBlockId) {
 }
 
 async function processBtcMonMessage (msg) {
-  debug.reward(`consumeBtcMonMessageAsync : processBtcMonMessage : begin`)
+  debug.btcConfirm(`consumeBtcMonMessageAsync : processBtcMonMessage : begin`)
   try {
     let btcMonObj = JSON.parse(msg.content.toString())
     let btctxId = btcMonObj.btctx_id
@@ -840,7 +841,7 @@ async function processBtcMonMessage (msg) {
       throw new Error(`unable to create btc-c block : ${error.message}`)
     }
 
-    debug.reward(`consumeBtcMonMessageAsync : processBtcMonMessage : end`)
+    debug.btcConfirm(`consumeBtcMonMessageAsync : processBtcMonMessage : end`)
   } catch (error) {
     console.error(`consumeBtcMonMessageAsync : processBtcMonMessage : ${error.message}`)
   }
@@ -859,8 +860,6 @@ async function processRewardMessage (msg) {
     let nodeTNTGrainsRewardShare = rewardMsgObj.node.amount
     let coreRewardEthAddr = rewardMsgObj.core ? rewardMsgObj.core.address : null
     let coreTNTGrainsRewardShare = rewardMsgObj.core ? rewardMsgObj.core.amount : 0
-
-    debug.reward('consumeRewardMessageAsync : processRewardMessage : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
 
     debug.reward('consumeRewardMessageAsync : processRewardMessage : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
     nodeRewardTxId = await sendTNTRewardAsync(nodeRewardETHAddr, nodeTNTGrainsRewardShare)
