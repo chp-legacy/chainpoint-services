@@ -55,7 +55,11 @@ async function ConsumeAggregationMessageAsync (msg) {
 
   try {
     // Store this state information
-    await storageClient.writeAggStateObjectsBulkAsync(stateObjects)
+    try {
+      await storageClient.writeAggStateObjectsBulkAsync(stateObjects)
+    } catch (error) {
+      console.error(`ERROR : CRDB Proof state write error : ${error.message}`)
+    }
     await storageClientPG.writeAggStateObjectsBulkAsync(stateObjects)
 
     let aggObj = {}
@@ -98,7 +102,12 @@ async function ConsumeCalendarMessageAsync (msg) {
     // PG
     let rows = await storageClientPG.getHashIdsByAggIdAsync(stateObj.agg_id)
 
-    await storageClient.writeCalStateObjectAsync(stateObj)
+    try {
+      await storageClient.writeCalStateObjectAsync(stateObj)
+    } catch (error) {
+      console.error(`ERROR : CRDB Proof state write error : ${error.message}`)
+    }
+
     await storageClientPG.writeCalStateObjectAsync(stateObj)
 
     for (let x = 0; x < rows.length; x++) {
@@ -138,7 +147,11 @@ async function ConsumeAnchorBTCAggMessageAsync (msg) {
   stateObj.anchor_btc_agg_state = messageObj.anchor_btc_agg_state
 
   try {
-    await storageClient.writeAnchorBTCAggStateObjectAsync(stateObj)
+    try {
+      await storageClient.writeAnchorBTCAggStateObjectAsync(stateObj)
+    } catch (error) {
+      console.error(`ERROR : CRDB Proof state write error : ${error.message}`)
+    }
     await storageClientPG.writeAnchorBTCAggStateObjectAsync(stateObj)
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
@@ -162,7 +175,11 @@ async function ConsumeBtcTxMessageAsync (msg) {
   stateObj.btctx_state = messageObj.btctx_state
 
   try {
-    await storageClient.writeBTCTxStateObjectAsync(stateObj)
+    try {
+      await storageClient.writeBTCTxStateObjectAsync(stateObj)
+    } catch (error) {
+      console.error(`ERROR : CRDB Proof state write error : ${error.message}`)
+    }
     await storageClientPG.writeBTCTxStateObjectAsync(stateObj)
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
@@ -192,7 +209,11 @@ async function ConsumeBtcMonMessageAsync (msg) {
     // PG
     let rows = await storageClientPG.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
 
-    await storageClient.writeBTCHeadStateObjectAsync(stateObj)
+    try {
+      await storageClient.writeBTCHeadStateObjectAsync(stateObj)
+    } catch (error) {
+      console.error(`ERROR : CRDB Proof state write error : ${error.message}`)
+    }
     await storageClientPG.writeBTCHeadStateObjectAsync(stateObj)
 
     for (let x = 0; x < rows.length; x++) {
