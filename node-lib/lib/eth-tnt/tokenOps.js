@@ -35,7 +35,7 @@ class TokenOps {
    * @param {*} callback - Called after the transaction is broadcast
    */
   sendTokens (sendToAddr, amt, callback) {
-    return this.tokenContract.transfer(sendToAddr, amt, {gas: 1000000}, callback)
+    return this.tokenContract.transfer(sendToAddr, amt, {gas: 2000000}, callback)
   }
 
   /**
