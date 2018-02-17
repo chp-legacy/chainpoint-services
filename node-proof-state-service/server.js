@@ -97,10 +97,10 @@ async function ConsumeCalendarMessageAsync (msg) {
 
   try {
     // CRDB
-    // let rows = await storageClient.getHashIdsByAggIdAsync(stateObj.agg_id)
+    let rows = await storageClient.getHashIdsByAggIdAsync(stateObj.agg_id)
 
     // PG
-    let rows = await storageClientPG.getHashIdsByAggIdAsync(stateObj.agg_id)
+    // let rows = await storageClientPG.getHashIdsByAggIdAsync(stateObj.agg_id)
 
     try {
       await storageClient.writeCalStateObjectAsync(stateObj)
@@ -204,10 +204,10 @@ async function ConsumeBtcMonMessageAsync (msg) {
 
   try {
     // CRDB
-    // let rows = await storageClient.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
+    let rows = await storageClient.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
 
     // PG
-    let rows = await storageClientPG.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
+    // let rows = await storageClientPG.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
 
     try {
       await storageClient.writeBTCHeadStateObjectAsync(stateObj)
