@@ -96,18 +96,18 @@ async function consumeProofReadyMessageAsync (msg) {
   switch (messageObj.type) {
     case 'cal':
       try {
-        /* CRDB
+        // CRDB
         let aggStateRow = await storageClient.getAggStateObjectByHashIdAsync(messageObj.hash_id)
         if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
         let calStateRow = await storageClient.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
         if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
-        */
 
-        // PG
+        /* PG
         let aggStateRow = await storageClientPG.getAggStateObjectByHashIdAsync(messageObj.hash_id)
         if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
         let calStateRow = await storageClientPG.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
         if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
+        */
 
         let proof = {}
         proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
@@ -139,7 +139,7 @@ async function consumeProofReadyMessageAsync (msg) {
       break
     case 'btc':
       try {
-        /* CRDB
+        // CRDB
         // get the agg_state object for the hash_id
         let aggStateRow = await storageClient.getAggStateObjectByHashIdAsync(messageObj.hash_id)
         if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
@@ -155,9 +155,8 @@ async function consumeProofReadyMessageAsync (msg) {
         // get the btcthead_state object for the btctx_id
         let btcHeadStateRow = await storageClient.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
         if (!btcHeadStateRow) throw new Error(new Date().toISOString() + ' no matching btchead_state data found')
-        */
 
-        // PG
+        /* PG
         // get the agg_state object for the hash_id
         let aggStateRow = await storageClientPG.getAggStateObjectByHashIdAsync(messageObj.hash_id)
         if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
@@ -173,6 +172,7 @@ async function consumeProofReadyMessageAsync (msg) {
         // get the btcthead_state object for the btctx_id
         let btcHeadStateRow = await storageClientPG.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
         if (!btcHeadStateRow) throw new Error(new Date().toISOString() + ' no matching btchead_state data found')
+        */
 
         let proof = {}
         proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
