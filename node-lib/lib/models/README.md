@@ -42,12 +42,14 @@ The following are the descriptions of the configuration parameters:
 
 | Name           | Description  | Default |
 | :------------- |:-------------|:--------|
-| POSTGRES\_CONNECT\_PROTOCOL      | the PostgreSQL connection protocol | 'postgres:' |
-| POSTGRES\_CONNECT\_USER       | the PostgreSQL connection username | 'chainpoint' |
-| POSTGRES\_CONNECT\_PW       | the PostgreSQL connection password | 'chainpoint' |
-| POSTGRES\_CONNECT\_HOST      | the PostgreSQL connection hostname | 'postgres' |
-| POSTGRES\_CONNECT\_PORT       | the PostgreSQL connection port | 5432 |
-| POSTGRES\_CONNECT\_DB       | the PostgreSQL connection database name | 'chainpoint' |
+| COCKROACH_HOST | CockroachDB host or IP | 'roach1' |
+| COCKROACH_PORT | CockroachDB port | 26257 |
+| COCKROACH_DB_NAME | CockroachDB name | 'chainpoint' |
+| COCKROACH_DB_USER | CockroachDB user | 'chainpoint' |
+| COCKROACH_DB_PASS | CockroachDB password | '' |
+| COCKROACH_TLS_CA_CRT | CockroachDB TLS CA Cert | '' |
+| COCKROACH_TLS_CLIENT_KEY | CockroachDB TLS Client Key | '' |
+| COCKROACH_TLS_CLIENT_CRT | CockroachDB TLS Client Cert | '' |
 
 ## Proof State Models Schema
 
@@ -93,14 +95,3 @@ The following are the descriptions of the configuration parameters:
 | btctx\_id | String         | the bitcoin transaction id value | primary key |
 | btchead\_height         | Integer         | the bitcoin block height for the block cointaining the transaction | y |
 | btchead\_state      | Text         | the chainpoint operations connecting the bitcoin transaction body value to a btc anchor |   |
-
-### hash\_tracker\_log
-| Column          | Type         | Description  | Indexed |
-| :-------------  |:-------------|:-------------|:--------|
-| hash\_id | UUID           | the submitted hash's unique identifier | primary key |
-| hash     | String         | the submitted hash value | y |
-| aggregator_at     | Date         | the timestamp when the hash was processed by the aggregator service |  |
-| calendar_at     | Date         | the timestamp when the calendar proof was ready for this hash |  |
-| btc_at     | Date         | the timestamp when the btc proof was ready for this hash |  |
-| eth_at     | Date         | the timestamp when the eth proof was ready for this hash |  |
-| steps_complete     | Integer         | the number of completed events for this hash | y |
