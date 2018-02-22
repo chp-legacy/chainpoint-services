@@ -22,7 +22,6 @@ const utils = require('./lib/utils.js')
 const bluebird = require('bluebird')
 
 const storageClient = require('./lib/models/cachedProofStateModels.js')
-const storageClientPG = require('./lib/models/ProofStateModels.js')
 
 const r = require('redis')
 
@@ -55,12 +54,7 @@ async function ConsumeAggregationMessageAsync (msg) {
 
   try {
     // Store this state information
-    try {
-      await storageClient.writeAggStateObjectsBulkAsync(stateObjects)
-    } catch (error) {
-      console.error(`ERROR : CRDB Proof state write error : ${error.message}`)
-    }
-    await storageClientPG.writeAggStateObjectsBulkAsync(stateObjects)
+    await storageClient.writeAggStateObjectsBulkAsync(stateObjects)
 
     let aggObj = {}
     aggObj.agg_id = messageObj.agg_id
@@ -99,16 +93,7 @@ async function ConsumeCalendarMessageAsync (msg) {
     // CRDB
     let rows = await storageClient.getHashIdsByAggIdAsync(stateObj.agg_id)
 
-    // PG
-    // let rows = await storageClientPG.getHashIdsByAggIdAsync(stateObj.agg_id)
-
-    try {
-      await storageClient.writeCalStateObjectAsync(stateObj)
-    } catch (error) {
-      console.error(`ERROR : CRDB Proof state write error : ${error.message}`)
-    }
-
-    await storageClientPG.writeCalStateObjectAsync(stateObj)
+    await storageClient.writeCalStateObjectAsync(stateObj)
 
     for (let x = 0; x < rows.length; x++) {
       let hashIdRow = rows[x]
@@ -147,12 +132,8 @@ async function ConsumeAnchorBTCAggMessageAsync (msg) {
   stateObj.anchor_btc_agg_state = messageObj.anchor_btc_agg_state
 
   try {
-    try {
-      await storageClient.writeAnchorBTCAggStateObjectAsync(stateObj)
-    } catch (error) {
-      console.error(`ERROR : CRDB Proof state write error : ${error.message}`)
-    }
-    await storageClientPG.writeAnchorBTCAggStateObjectAsync(stateObj)
+    await storageClient.writeAnchorBTCAggStateObjectAsync(stateObj)
+
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
@@ -175,12 +156,8 @@ async function ConsumeBtcTxMessageAsync (msg) {
   stateObj.btctx_state = messageObj.btctx_state
 
   try {
-    try {
-      await storageClient.writeBTCTxStateObjectAsync(stateObj)
-    } catch (error) {
-      console.error(`ERROR : CRDB Proof state write error : ${error.message}`)
-    }
-    await storageClientPG.writeBTCTxStateObjectAsync(stateObj)
+    await storageClient.writeBTCTxStateObjectAsync(stateObj)
+
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
@@ -206,15 +183,7 @@ async function ConsumeBtcMonMessageAsync (msg) {
     // CRDB
     let rows = await storageClient.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
 
-    // PG
-    // let rows = await storageClientPG.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
-
-    try {
-      await storageClient.writeBTCHeadStateObjectAsync(stateObj)
-    } catch (error) {
-      console.error(`ERROR : CRDB Proof state write error : ${error.message}`)
-    }
-    await storageClientPG.writeBTCHeadStateObjectAsync(stateObj)
+    await storageClient.writeBTCHeadStateObjectAsync(stateObj)
 
     for (let x = 0; x < rows.length; x++) {
       let hashIdRow = rows[x]
@@ -263,22 +232,6 @@ async function PruneStateDataAsync () {
     if (rowCount) console.log(`Pruned btctx_states - ${rowCount} row(s) deleted`)
     // remove all rows from btchead_states that are older than the expiration age
     rowCount = await storageClient.pruneBtcHeadStatesAsync()
-    if (rowCount) console.log(`Pruned btcheadstates - ${rowCount} row(s) deleted`)
-    // PG
-    // remove all rows from agg_states that are older than the expiration age
-    rowCount = await storageClientPG.pruneAggStatesAsync()
-    if (rowCount) console.log(`Pruned agg_states - ${rowCount} row(s) deleted`)
-    // remove all rows from cal_states that are older than the expiration age
-    rowCount = await storageClientPG.pruneCalStatesAsync()
-    if (rowCount) console.log(`Pruned cal_states - ${rowCount} row(s) deleted`)
-    // remove all rows from anchor_btc_agg_states that are older than the expiration age
-    rowCount = await storageClientPG.pruneAnchorBTCAggStatesAsync()
-    if (rowCount) console.log(`Pruned anchor_btc_agg_states - ${rowCount} row(s) deleted`)
-    // remove all rows from btctx_states that are older than the expiration age
-    rowCount = await storageClientPG.pruneBtcTxStatesAsync()
-    if (rowCount) console.log(`Pruned btctx_states - ${rowCount} row(s) deleted`)
-    // remove all rows from btchead_states that are older than the expiration age
-    rowCount = await storageClientPG.pruneBtcHeadStatesAsync()
     if (rowCount) console.log(`Pruned btcheadstates - ${rowCount} row(s) deleted`)
   } catch (error) {
     console.error(`Unable to complete pruning process: ${error.message}`)
@@ -336,7 +289,6 @@ async function openStorageConnectionAsync () {
   while (!dbConnected) {
     try {
       await storageClient.openConnectionAsync()
-      await storageClientPG.openConnectionAsync()
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {

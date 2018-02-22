@@ -25,7 +25,6 @@ const utils = require('./lib/utils.js')
 const bluebird = require('bluebird')
 
 const storageClient = require('./lib/models/cachedProofStateModels.js')
-const storageClientPG = require('./lib/models/ProofStateModels.js')
 
 const r = require('redis')
 
@@ -102,13 +101,6 @@ async function consumeProofReadyMessageAsync (msg) {
         let calStateRow = await storageClient.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
         if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
 
-        /* PG
-        let aggStateRow = await storageClientPG.getAggStateObjectByHashIdAsync(messageObj.hash_id)
-        if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
-        let calStateRow = await storageClientPG.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
-        if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
-        */
-
         let proof = {}
         proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
         proof = addCalendarBranch(proof, JSON.parse(aggStateRow.agg_state), JSON.parse(calStateRow.cal_state))
@@ -155,24 +147,6 @@ async function consumeProofReadyMessageAsync (msg) {
         // get the btcthead_state object for the btctx_id
         let btcHeadStateRow = await storageClient.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
         if (!btcHeadStateRow) throw new Error(new Date().toISOString() + ' no matching btchead_state data found')
-
-        /* PG
-        // get the agg_state object for the hash_id
-        let aggStateRow = await storageClientPG.getAggStateObjectByHashIdAsync(messageObj.hash_id)
-        if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
-        // get the cal_state object for the agg_id
-        let calStateRow = await storageClientPG.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
-        if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
-        // get the anchorBTCAgg_state object for the cal_id
-        let anchorBTCAggStateRow = await storageClientPG.getAnchorBTCAggStateObjectByCalIdAsync(calStateRow.cal_id)
-        if (!anchorBTCAggStateRow) throw new Error(new Date().toISOString() + ' no matching anchor_btc_agg_state data found')
-        // get the btctx_state object for the anchor_btc_agg_id
-        let btcTxStateRow = await storageClientPG.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggStateRow.anchor_btc_agg_id)
-        if (!btcTxStateRow) throw new Error(new Date().toISOString() + ' no matching btctx_state data found')
-        // get the btcthead_state object for the btctx_id
-        let btcHeadStateRow = await storageClientPG.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
-        if (!btcHeadStateRow) throw new Error(new Date().toISOString() + ' no matching btchead_state data found')
-        */
 
         let proof = {}
         proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
@@ -293,7 +267,6 @@ async function openStorageConnectionAsync () {
   while (!dbConnected) {
     try {
       await storageClient.openConnectionAsync()
-      await storageClientPG.openConnectionAsync()
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {
