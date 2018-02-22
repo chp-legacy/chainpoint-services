@@ -281,7 +281,7 @@ async function openStorageConnectionAsync () {
 async function start () {
   if (env.NODE_ENV === 'test') return
   try {
-    // init Postgres
+    // init DB
     await openStorageConnectionAsync()
     // init Redis
     openRedisConnection(env.REDIS_CONNECT_URI)
