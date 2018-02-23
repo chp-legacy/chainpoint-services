@@ -30,7 +30,7 @@ const r = require('redis')
 // This value is set once the connection has been established
 var amqpChannel = null
 
-// The leadership status for this instance of the reward service
+// The leadership status for this instance of the proof state service
 let IS_LEADER = false
 // Boolean indicating if pruning is currently in process
 let PRUNING_IN_PROC = false
