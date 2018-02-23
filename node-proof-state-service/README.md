@@ -27,7 +27,7 @@ The following are the types, defaults, and acceptable ranges of the configuratio
 
 
 ## Data In
-The proof state service serves as the a proof state storage mechanism for all hashes as they are being processed. As proofs are constructed for each hash, state data is received and stored in Postgres from other services. As anchors objects are completed and added to the proof, a proof ready message is also queued for the proof generator service indicating that a Chainpoint proof is ready to be created for the current state data. These proof ready messages are both published and consumed by this service. Milestone events occurring during the proof building process are logged to a hash tracker table.
+The proof state service serves as the a proof state storage mechanism for all hashes as they are being processed. As proofs are constructed for each hash, state data is received and stored in CRDB from other services. As anchors objects are completed and added to the proof, a proof ready message is also queued for the proof generator service indicating that a Chainpoint proof is ready to be created for the current state data. These proof ready messages are both published and consumed by this service. Milestone events occurring during the proof building process are logged to a hash tracker table.
 
 
 #### Aggregator Message

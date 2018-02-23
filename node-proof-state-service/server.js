@@ -364,7 +364,7 @@ async function openRMQConnectionAsync (connectionString) {
 }
 
 function startIntervals () {
-  setInterval(PruneStateDataAsync, env.PRUNE_FREQUENCY_MINUTES * 60 * 1000)
+  // setInterval(PruneStateDataAsync, env.PRUNE_FREQUENCY_MINUTES * 60 * 1000)
 }
 
 // process all steps need to start the application
