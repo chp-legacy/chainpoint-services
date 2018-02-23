@@ -20,6 +20,7 @@ const env = require('./lib/parse-env.js')('state')
 const amqp = require('amqplib')
 const utils = require('./lib/utils.js')
 const bluebird = require('bluebird')
+const leaderElection = require('exp-leader-election')
 
 const storageClient = require('./lib/models/cachedProofStateModels.js')
 
@@ -28,6 +29,11 @@ const r = require('redis')
 // The channel used for all amqp communication
 // This value is set once the connection has been established
 var amqpChannel = null
+
+// The leadership status for this instance of the reward service
+let IS_LEADER = false
+// Boolean indicating if pruning is currently in process
+let PRUNING_IN_PROC = false
 
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
@@ -216,6 +222,7 @@ async function ConsumeBtcMonMessageAsync (msg) {
 *
 */
 async function PruneStateDataAsync () {
+  PRUNING_IN_PROC = true
   try {
     // CRDB
     // remove all rows from agg_states that are older than the expiration age
@@ -235,6 +242,8 @@ async function PruneStateDataAsync () {
     if (rowCount) console.log(`Pruned btcheadstates - ${rowCount} row(s) deleted`)
   } catch (error) {
     console.error(`Unable to complete pruning process: ${error.message}`)
+  } finally {
+    PRUNING_IN_PROC = false
   }
 }
 
@@ -279,6 +288,32 @@ function processMessage (msg) {
         amqpChannel.ack(msg)
     }
   }
+}
+
+async function performLeaderElection () {
+  IS_LEADER = false
+  PRUNING_IN_PROC = false
+  let leaderElectionConfig = {
+    key: env.PROOF_STATE_LEADER_KEY,
+    consul: {
+      host: env.CONSUL_HOST,
+      port: env.CONSUL_PORT,
+      ttl: 15,
+      lockDelay: 1
+    }
+  }
+
+  leaderElection(leaderElectionConfig)
+    .on('gainedLeadership', function () {
+      console.log('This service instance has been chosen to be leader')
+      IS_LEADER = true
+      PRUNING_IN_PROC = false
+    })
+    .on('error', function () {
+      console.error('This lock session has been invalidated, new lock session will be created')
+      IS_LEADER = false
+      PRUNING_IN_PROC = false
+    })
 }
 
 /**
@@ -364,13 +399,23 @@ async function openRMQConnectionAsync (connectionString) {
 }
 
 function startIntervals () {
-  // setInterval(PruneStateDataAsync, env.PRUNE_FREQUENCY_MINUTES * 60 * 1000)
+  setInterval(async () => {
+    if (IS_LEADER) {
+      if (PRUNING_IN_PROC) {
+        console.log(`Pruning interval skipped : previous pruning task still in process.`)
+      } else {
+        await PruneStateDataAsync()
+      }
+    }
+  }, env.PRUNE_FREQUENCY_MINUTES * 60 * 1000)
 }
 
 // process all steps need to start the application
 async function start () {
   if (env.NODE_ENV === 'test') return
   try {
+    // init consul and perform leader election
+    performLeaderElection()
     // init DB
     await openStorageConnectionAsync()
     // init Redis

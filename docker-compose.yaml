@@ -226,6 +226,7 @@ services:
     depends_on:
       - rabbitmq
       - roach1
+      - consul
     networks:
       - chainpoint
     environment:
