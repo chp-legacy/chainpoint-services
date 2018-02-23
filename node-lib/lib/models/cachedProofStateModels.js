@@ -63,7 +63,7 @@ const BTC_HEAD_STATE_KEY_PREFIX = 'BtcHeadState'
 let redis = null
 
 // How many hours any piece of proof state data is retained until pruned
-const PROOF_STATE_EXPIRE_HOURS = 12
+const PROOF_STATE_EXPIRE_HOURS = 6
 const PROOF_STATE_CACHE_EXPIRE_MINUTES = PROOF_STATE_EXPIRE_HOURS * 60
 
 // table for state data connecting individual hashes to aggregation roots
