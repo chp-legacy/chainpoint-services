@@ -164,7 +164,7 @@ async function pruneAuditDataAsync () {
   try {
     // continually delete old audit log entries in batches until all are gone
     do {
-      pruneCount = await NodeAuditLog.destroy({ where: { audit_at: { [Op.lt]: cutoffTimestamp } }, limit: 500 })
+      pruneCount = await NodeAuditLog.destroy({ where: { audit_at: { [Op.lt]: cutoffTimestamp } }, limit: 100 })
       totalPruned += pruneCount
     } while (pruneCount > 0)
   } catch (error) {

@@ -63,7 +63,7 @@ const BTC_HEAD_STATE_KEY_PREFIX = 'BtcHeadState'
 let redis = null
 
 // How many hours any piece of proof state data is retained until pruned
-const PROOF_STATE_EXPIRE_HOURS = 12
+const PROOF_STATE_EXPIRE_HOURS = 6
 const PROOF_STATE_CACHE_EXPIRE_MINUTES = PROOF_STATE_EXPIRE_HOURS * 60
 
 // table for state data connecting individual hashes to aggregation roots
@@ -379,34 +379,36 @@ async function writeBTCHeadStateObjectAsync (stateObject) {
   return true
 }
 
+async function pruneProofStateTableAsync (model, expHours, limit) {
+  let cutoffDate = new Date(Date.now() - expHours * 60 * 60 * 1000)
+  let totalCount = 0
+  let pruneCount = 0
+  // continually delete old proof state rows in batches until all are gone
+  do {
+    pruneCount = await model.destroy({ where: { created_at: { [Op.lt]: cutoffDate } }, limit: limit })
+    totalCount += pruneCount
+  } while (pruneCount > 0)
+  return totalCount
+}
+
 async function pruneAggStatesAsync () {
-  let cutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
-  let resultCount = await AggStates.destroy({ where: { created_at: { [Op.lt]: cutoffDate } } })
-  return resultCount
+  return pruneProofStateTableAsync(AggStates, PROOF_STATE_EXPIRE_HOURS, 100)
 }
 
 async function pruneCalStatesAsync () {
-  let cutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
-  let resultCount = await CalStates.destroy({ where: { created_at: { [Op.lt]: cutoffDate } } })
-  return resultCount
+  return pruneProofStateTableAsync(CalStates, PROOF_STATE_EXPIRE_HOURS, 100)
 }
 
 async function pruneAnchorBTCAggStatesAsync () {
-  let cutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
-  let resultCount = await AnchorBTCAggStates.destroy({ where: { created_at: { [Op.lt]: cutoffDate } } })
-  return resultCount
+  return pruneProofStateTableAsync(AnchorBTCAggStates, PROOF_STATE_EXPIRE_HOURS, 100)
 }
 
 async function pruneBtcTxStatesAsync () {
-  let cutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
-  let resultCount = await BtcTxStates.destroy({ where: { created_at: { [Op.lt]: cutoffDate } } })
-  return resultCount
+  return pruneProofStateTableAsync(BtcTxStates, PROOF_STATE_EXPIRE_HOURS, 100)
 }
 
 async function pruneBtcHeadStatesAsync () {
-  let cutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
-  let resultCount = await BtcHeadStates.destroy({ where: { created_at: { [Op.lt]: cutoffDate } } })
-  return resultCount
+  return pruneProofStateTableAsync(BtcHeadStates, PROOF_STATE_EXPIRE_HOURS, 100)
 }
 
 module.exports = {
