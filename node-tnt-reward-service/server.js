@@ -222,17 +222,17 @@ async function calculateCurrentRewardShares () {
 
   // Trigger the new reward amount to be set automatically
   // after a specified time.
-  let nextIncreaseTime = new Date('2018-01-24T22:00:00.000Z')
+  let nextIncreaseTime = new Date('2018-02-28T22:00:00.000Z')
   let now = new Date()
 
   let nodeTNTRewardShare
   let coreTNTRewardShare
 
   if (now >= nextIncreaseTime) {
-    nodeTNTRewardShare = 1250
+    nodeTNTRewardShare = 1500
     coreTNTRewardShare = 0
   } else {
-    nodeTNTRewardShare = 1000
+    nodeTNTRewardShare = 1250
     coreTNTRewardShare = 0
   }
 
