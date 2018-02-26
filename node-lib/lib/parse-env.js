@@ -95,8 +95,8 @@ let envDefinitions = {
   // Redis related variables
   REDIS_CONNECT_URI: envalid.url({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI' }),
 
-  MIN_NODE_VERSION_EXISTING: envalid.str({ default: '1.3.4', desc: 'The minimum acceptable Node version for existing registrations and to pass audits' }),
-  MIN_NODE_VERSION_NEW: envalid.str({ default: '1.3.5', desc: 'The minimum acceptable Node version for new registrations' }),
+  MIN_NODE_VERSION_EXISTING: envalid.str({ default: '1.3.5', desc: 'The minimum acceptable Node version for existing registrations and to pass audits' }),
+  MIN_NODE_VERSION_NEW: envalid.str({ default: '1.3.6', desc: 'The minimum acceptable Node version for new registrations' }),
 
   // Service Specific Variables
 
