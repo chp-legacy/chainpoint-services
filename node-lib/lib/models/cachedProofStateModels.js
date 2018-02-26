@@ -342,7 +342,7 @@ async function writeAggStateObjectsBulkAsync (stateObjects) {
     let hashId = sequelize.escape(stateObject.hash_id)
     let hash = sequelize.escape(stateObject.hash)
     let aggId = sequelize.escape(stateObject.agg_id)
-    let aggState = sequelize.escape(stateObject.agg_state)
+    let aggState = sequelize.escape(JSON.stringify(stateObject.agg_state))
     return `(${hashId}, ${hash}, ${aggId}, ${aggState}, now(), now())`
   })
 
