@@ -335,15 +335,20 @@ async function getBTCHeadStateObjectByBTCTxIdAsync (btcTxId) {
 }
 
 async function writeAggStateObjectsBulkAsync (stateObjects) {
-  let newAggStates = stateObjects.map((stateObject) => {
-    return {
-      hash_id: stateObject.hash_id,
-      hash: stateObject.hash,
-      agg_id: stateObject.agg_id,
-      agg_state: JSON.stringify(stateObject.agg_state)
-    }
+  let insertCmd = 'INSERT INTO chainpoint_proof_agg_states (hash_id, hash, agg_id, agg_state, created_at, updated_at) VALUES '
+
+  let insertValues = stateObjects.map((stateObject) => {
+    // use sequelize.escape() to sanitize input values just to be safe
+    let hashId = sequelize.escape(stateObject.hash_id)
+    let hash = sequelize.escape(stateObject.hash)
+    let aggId = sequelize.escape(stateObject.agg_id)
+    let aggState = sequelize.escape(stateObject.agg_state)
+    return `(${hashId}, ${hash}, ${aggId}, ${aggState}, now(), now())`
   })
-  await AggStates.bulkCreate(newAggStates)
+
+  insertCmd = insertCmd + insertValues.join(', ') + ' ON CONFLICT (hash_id) DO NOTHING'
+
+  await sequelize.query(insertCmd, { type: sequelize.QueryTypes.INSERT })
   return true
 }
 
