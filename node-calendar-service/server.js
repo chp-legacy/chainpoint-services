@@ -513,15 +513,9 @@ async function aggregateAndAnchorBTCAsync (lastBtcAnchorBlockId) {
 
   let treeData = {}
   try {
-    // Retrieve ALL Calendar blocks since last anchor block created by any stack.
-    // This will change when we determine an approach to allow only a single zone to anchor.
-    // stackId: env.CHAINPOINT_CORE_BASE_URI may be removed after single anchor implementation
-
-    // Use last BTC anchor block ID from global var 'lastBtcAnchorBlockId'
-    // set at top and bottom of hour just prior to requesting this lock.
+    // Retrieve ALL Calendar blocks since last anchor block created.
     if (!lastBtcAnchorBlockId) lastBtcAnchorBlockId = -1
-    let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastBtcAnchorBlockId }, stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
-    // debug.btcAnchor('aggregateAndAnchorBTCAsync : btc blocks to anchor : %o', blocks)
+    let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastBtcAnchorBlockId } }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
     debug.btcAnchor('aggregateAndAnchorBTCAsync : btc blocks.length to anchor : %d', blocks.length)
 
     if (blocks.length === 0) {
@@ -572,18 +566,18 @@ async function aggregateAndAnchorBTCAsync (lastBtcAnchorBlockId) {
   return treeData
 }
 
-// Get the id of that most recent btc-a block for the current stackId
-async function lastBtcAnchorBlockIdForStackIdAsync () {
-  debug.btcAnchor('lastBtcAnchorBlockForStackId : begin')
-  let lastBtcAnchorBlockForStack
+// Get the id of that most recent btc-a block
+async function lastBtcAnchorBlockIdAsync () {
+  debug.btcAnchor('lastBtcAnchorBlockIdAsync : begin')
+  let lastBtcAnchorBlock
   try {
-    lastBtcAnchorBlockForStack = await CalendarBlock.findOne({ where: { type: 'btc-a', stackId: env.CHAINPOINT_CORE_BASE_URI }, attributes: ['id', 'hash', 'time', 'stackId'], order: [['id', 'DESC']] })
+    lastBtcAnchorBlock = await CalendarBlock.findOne({ where: { type: 'btc-a' }, attributes: ['id'], order: [['id', 'DESC']] })
   } catch (error) {
     throw new Error(`unable to retrieve most recent BTC anchor block : ${error.message}`)
   }
 
-  let id = lastBtcAnchorBlockForStack ? parseInt(lastBtcAnchorBlockForStack.id, 10) : null
-  debug.btcAnchor(`lastBtcAnchorBlockIdForStackIdAsync : last block ID : ${id}`)
+  let id = lastBtcAnchorBlock ? parseInt(lastBtcAnchorBlock.id, 10) : null
+  debug.btcAnchor(`lastBtcAnchorBlockIdAsync : last block ID : ${id}`)
   return id
 }
 
@@ -1070,21 +1064,19 @@ async function scheduleActionsAsync () {
   let cronScheduleBtcAnchor = `${_.random(59)} 0 * * * *`
   debug.btcAnchor(`scheduleJob : BTC anchor : cronScheduleBtcAnchor : ${cronScheduleBtcAnchor}`)
   schedule.scheduleJob(cronScheduleBtcAnchor, async () => {
-    if (env.ANCHOR_BTC === 'enabled') {
+    if (IS_LEADER && env.ANCHOR_BTC === 'enabled') {
       debug.btcAnchor(`scheduleJob : BTC anchor : ANCHOR_BTC enabled`)
       // Look up last anchor block in DB outside of a lock to reduce
       // time spent inside the lock which is blocking for all other
       // lock users.
       try {
-        // Set global var with last anchor block ID for use inside lock.
-        // Doing it this way since we can't pass params to lock.
-        let lastBtcAnchorBlockId = await lastBtcAnchorBlockIdForStackIdAsync()
+        let lastBtcAnchorBlockId = await lastBtcAnchorBlockIdAsync()
         processBtcAnchorInterval(lastBtcAnchorBlockId)
       } catch (error) {
         console.error(`scheduleJob : BTC anchor : ${error.message}`)
       }
     } else {
-      debug.btcAnchor(`scheduleJob : BTC anchor : ANCHOR_BTC disabled`)
+      if (IS_LEADER) debug.btcAnchor(`scheduleJob : BTC anchor : ANCHOR_BTC disabled`)
     }
   })
 }
