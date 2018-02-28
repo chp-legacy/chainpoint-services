@@ -12,6 +12,7 @@ const crypto = require('crypto')
 const moment = require('moment')
 const uuidTime = require('uuid-time')
 const BLAKE2s = require('blake2s-js')
+const Charlatan = require('charlatan')
 
 const app = require('../server')
 const server = app.server
@@ -1154,7 +1155,8 @@ describe('Nodes Controller', () => {
     })
 
     it('should return error if a tnt_addr already exists', (done) => {
-      let publicUri = 'http://65.198.32.187'
+      let publicUri1 = 'http://' + Charlatan.Internet.IPv4()
+      let publicUri2 = 'http://' + Charlatan.Internet.IPv4()
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
 
       let data = []
@@ -1192,14 +1194,14 @@ describe('Nodes Controller', () => {
       request(server)
         .post('/nodes')
         .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
-        .send({ tnt_addr: tntAddr1, public_uri: publicUri })
+        .send({ tnt_addr: tntAddr1, public_uri: publicUri1 })
         .expect(200)
         .end((err, res) => {
           expect(err).to.equal(null)
           request(server)
             .post('/nodes')
             .set('X-Node-Version', process.env.MIN_NODE_VERSION_NEW)
-            .send({ tnt_addr: tntAddr1, public_uri: publicUri })
+            .send({ tnt_addr: tntAddr1, public_uri: publicUri2 })
             .expect(409)
             .end((err, res) => {
               expect(err).to.equal(null)
@@ -1215,7 +1217,7 @@ describe('Nodes Controller', () => {
     })
 
     it('should not allow public_uri to be registered twice', (done) => {
-      let publicUri = 'http://65.198.32.187'
+      let publicUri = 'http://' + Charlatan.Internet.IPv4()
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
       let tntAddr2 = '0x' + crypto.randomBytes(20).toString('hex')
 
@@ -1277,7 +1279,7 @@ describe('Nodes Controller', () => {
     })
 
     it('should return OK for valid request', (done) => {
-      let publicUri = 'http://65.198.32.187'
+      let publicUri = 'http://' + Charlatan.Internet.IPv4()
       let tntAddr1 = '0x' + crypto.randomBytes(20).toString('hex')
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
