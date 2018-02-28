@@ -266,17 +266,6 @@ async function postNodeV1Async (req, res, next) {
     }
   }
 
-  // check to see if the Node has the min balance required for Node operation
-  try {
-    let nodeBalance = await getTNTGrainsBalanceForAddressAsync(lowerCasedTntAddrParam)
-    if (nodeBalance < minGrainsBalanceNeeded) {
-      let minTNTBalanceNeeded = tntUnits.grainsToTNT(minGrainsBalanceNeeded)
-      return next(new restify.ForbiddenError(`TNT address ${lowerCasedTntAddrParam} does not have the minimum balance of ${minTNTBalanceNeeded} TNT for Node operation`))
-    }
-  } catch (error) {
-    return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
-  }
-
   let randHMACKey = crypto.randomBytes(32).toString('hex')
 
   let newNode

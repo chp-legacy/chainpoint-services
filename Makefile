@@ -55,13 +55,13 @@ push:
 ## test-api                  : Run API test suite with Mocha
 .PHONY : test-api
 test-api: cockroachdb-setup
-	./bin/docker-make --no-push node-api-service-test 
+	docker run --rm -w /usr/src/app -v ~/.docker:/root/.docker -v /var/run/docker.sock:/var/run/docker.sock -v "$(PWD)":/usr/src/app jizhilong/docker-make:latest docker-make --no-push node-api-service-test
 	docker-compose up --build api-test
 
 ## test-aggregator           : Run aggregator test suite with Mocha
 .PHONY : test-aggregator
 test-aggregator:
-	./bin/docker-make --no-push node-aggregator-service-test
+	docker run --rm -w /usr/src/app -v ~/.docker:/root/.docker -v /var/run/docker.sock:/var/run/docker.sock -v "$(PWD)":/usr/src/app jizhilong/docker-make:latest docker-make --no-push node-aggregator-service-test
 	docker-compose up --build aggregator-test
 
 ## test                      : Run all application tests

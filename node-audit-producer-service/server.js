@@ -82,7 +82,7 @@ async function auditNodesAsync () {
       tntCredit: nodesReadyForAudit[x].tntCredit
     }
     try {
-      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_AUDIT_QUEUE, Buffer.from(JSON.stringify(auditTaskObj)), { persistent: true })
+      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_AUDIT_QUEUE, Buffer.from(JSON.stringify(auditTaskObj)), { persistent: true, type: 'audit' })
     } catch (error) {
       console.error(env.RMQ_WORK_OUT_AGG_QUEUE, 'publish message nacked')
     }
@@ -158,20 +158,40 @@ async function performCreditTopoffAsync (creditAmount) {
 }
 
 async function pruneAuditDataAsync () {
-  let cutoffTimestamp = Date.now() - 360 * 60 * 1000 // 6 hours ago
-  let totalPruned = 0
-  let pruneCount = 0
-  try {
-    // continually delete old audit log entries in batches until all are gone
-    do {
-      pruneCount = await NodeAuditLog.destroy({ where: { audit_at: { [Op.lt]: cutoffTimestamp } }, limit: 100 })
-      totalPruned += pruneCount
-    } while (pruneCount > 0)
-  } catch (error) {
-    console.error(`Unable to prune audit data: ${error.message}`)
+  const cutoffTimestamp = Date.now() - 360 * 60 * 1000 // 6 hours ago
+  const pruneBatchSize = 250
+
+  // select all the audit_at values that are ready to be pruned
+  let auditAtTimes = await NodeAuditLog.findAll({ where: { audit_at: { [Op.lte]: cutoffTimestamp } }, attributes: ['audit_at'], order: [['audit_at', 'ASC']] })
+  // get the plain object results form the sequelize return value
+  for (let x = 0; x < auditAtTimes.length; x++) {
+    auditAtTimes[x] = auditAtTimes[x].get({ plain: true })
   }
-  if (totalPruned > 0) {
-    console.log(`Pruned ${totalPruned} records from the Audit log older than 6 hours`)
+
+  // split the entire set of audit log rows into batches
+  // and determine the audit_at start and end ranges for the batches
+  let pruneBatchTasks = []
+  let pruneBatchesNeeded = Math.ceil(auditAtTimes.length / pruneBatchSize)
+
+  for (let x = 0; x < pruneBatchesNeeded; x++) {
+    let startBoundIndex = x * pruneBatchSize
+    let endBoundIndex = startBoundIndex + pruneBatchSize - 1
+    if (endBoundIndex >= auditAtTimes.length) endBoundIndex = auditAtTimes.length - 1
+
+    let newRange = {
+      startBound: auditAtTimes[startBoundIndex].audit_at,
+      endBound: auditAtTimes[endBoundIndex].audit_at
+    }
+    pruneBatchTasks.push(newRange)
+  }
+
+  for (let x = 0; x < pruneBatchTasks.length; x++) {
+    try {
+      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_AUDIT_QUEUE, Buffer.from(JSON.stringify(pruneBatchTasks[x])), { persistent: true, type: 'prune' })
+      console.log(`Batch ${x + 1} of ${pruneBatchTasks.length} publish message acked`)
+    } catch (error) {
+      console.error(env.RMQ_WORK_OUT_AUDIT_QUEUE, 'publish message nacked')
+    }
   }
 }
 

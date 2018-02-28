@@ -60,6 +60,8 @@ const BTC_HEAD_STATE_KEY_PREFIX = 'BtcHeadState'
 
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
+// In the event of Redis failure, function calls will return successfully as long as DB calls succeed
+// Optimally, values will be cached and read from Redis where appropriate
 let redis = null
 
 // How many hours any piece of proof state data is retained until pruned
@@ -223,8 +225,12 @@ async function getAggStateObjectByHashIdAsync (hashId) {
 async function getCalStateObjectByAggIdAsync (aggId) {
   let redisKey = `${CAL_STATE_KEY_PREFIX}:${aggId}`
   if (redis) {
-    let cacheResult = await redis.getAsync(redisKey)
-    if (cacheResult) return JSON.parse(cacheResult)
+    try {
+      let cacheResult = await redis.getAsync(redisKey)
+      if (cacheResult) return JSON.parse(cacheResult)
+    } catch (error) {
+      console.error(`Redis read error : getCalStateObjectByAggIdAsync : ${error.message}`)
+    }
   }
   let result = await CalStates.findOne({
     where: {
@@ -235,7 +241,11 @@ async function getCalStateObjectByAggIdAsync (aggId) {
   // or more likely, there was no cache hit and the database was queried.
   // Store the query result in redis to cache for next request
   if (redis) {
-    await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    try {
+      await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    } catch (error) {
+      console.error(`Redis write error : getCalStateObjectByAggIdAsync : ${error.message}`)
+    }
   }
   return result
 }
@@ -243,8 +253,12 @@ async function getCalStateObjectByAggIdAsync (aggId) {
 async function getAnchorBTCAggStateObjectByCalIdAsync (calId) {
   let redisKey = `${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${calId}`
   if (redis) {
-    let cacheResult = await redis.getAsync(redisKey)
-    if (cacheResult) return JSON.parse(cacheResult)
+    try {
+      let cacheResult = await redis.getAsync(redisKey)
+      if (cacheResult) return JSON.parse(cacheResult)
+    } catch (error) {
+      console.error(`Redis read error : getAnchorBTCAggStateObjectByCalIdAsync : ${error.message}`)
+    }
   }
   let result = await AnchorBTCAggStates.findOne({
     where: {
@@ -255,7 +269,11 @@ async function getAnchorBTCAggStateObjectByCalIdAsync (calId) {
   // or more likely, there was no cache hit and the database was queried.
   // Store the query result in redis to cache for next request
   if (redis) {
-    await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    try {
+      await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    } catch (error) {
+      console.error(`Redis write error : getAnchorBTCAggStateObjectByCalIdAsync : ${error.message}`)
+    }
   }
   return result
 }
@@ -263,8 +281,12 @@ async function getAnchorBTCAggStateObjectByCalIdAsync (calId) {
 async function getBTCTxStateObjectByAnchorBTCAggIdAsync (anchorBTCAggId) {
   let redisKey = `${BTC_TX_STATE_KEY_PREFIX}:${anchorBTCAggId}`
   if (redis) {
-    let cacheResult = await redis.getAsync(redisKey)
-    if (cacheResult) return JSON.parse(cacheResult)
+    try {
+      let cacheResult = await redis.getAsync(redisKey)
+      if (cacheResult) return JSON.parse(cacheResult)
+    } catch (error) {
+      console.error(`Redis read error : getBTCTxStateObjectByAnchorBTCAggIdAsync : ${error.message}`)
+    }
   }
   let result = await BtcTxStates.findOne({
     where: {
@@ -275,7 +297,11 @@ async function getBTCTxStateObjectByAnchorBTCAggIdAsync (anchorBTCAggId) {
   // or more likely, there was no cache hit and the database was queried.
   // Store the query result in redis to cache for next request
   if (redis) {
-    await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    try {
+      await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    } catch (error) {
+      console.error(`Redis write error : getBTCTxStateObjectByAnchorBTCAggIdAsync : ${error.message}`)
+    }
   }
   return result
 }
@@ -283,8 +309,12 @@ async function getBTCTxStateObjectByAnchorBTCAggIdAsync (anchorBTCAggId) {
 async function getBTCHeadStateObjectByBTCTxIdAsync (btcTxId) {
   let redisKey = `${BTC_HEAD_STATE_KEY_PREFIX}:${btcTxId}`
   if (redis) {
-    let cacheResult = await redis.getAsync(redisKey)
-    if (cacheResult) return JSON.parse(cacheResult)
+    try {
+      let cacheResult = await redis.getAsync(redisKey)
+      if (cacheResult) return JSON.parse(cacheResult)
+    } catch (error) {
+      console.error(`Redis read error : getBTCHeadStateObjectByBTCTxIdAsync : ${error.message}`)
+    }
   }
   let result = await BtcHeadStates.findOne({
     where: {
@@ -295,21 +325,30 @@ async function getBTCHeadStateObjectByBTCTxIdAsync (btcTxId) {
   // or more likely, there was no cache hit and the database was queried.
   // Store the query result in redis to cache for next request
   if (redis) {
-    await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    try {
+      await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    } catch (error) {
+      console.error(`Redis write error : getBTCHeadStateObjectByBTCTxIdAsync : ${error.message}`)
+    }
   }
   return result
 }
 
 async function writeAggStateObjectsBulkAsync (stateObjects) {
-  let newAggStates = stateObjects.map((stateObject) => {
-    return {
-      hash_id: stateObject.hash_id,
-      hash: stateObject.hash,
-      agg_id: stateObject.agg_id,
-      agg_state: JSON.stringify(stateObject.agg_state)
-    }
+  let insertCmd = 'INSERT INTO chainpoint_proof_agg_states (hash_id, hash, agg_id, agg_state, created_at, updated_at) VALUES '
+
+  let insertValues = stateObjects.map((stateObject) => {
+    // use sequelize.escape() to sanitize input values just to be safe
+    let hashId = sequelize.escape(stateObject.hash_id)
+    let hash = sequelize.escape(stateObject.hash)
+    let aggId = sequelize.escape(stateObject.agg_id)
+    let aggState = sequelize.escape(JSON.stringify(stateObject.agg_state))
+    return `(${hashId}, ${hash}, ${aggId}, ${aggState}, now(), now())`
   })
-  await AggStates.bulkCreate(newAggStates)
+
+  insertCmd = insertCmd + insertValues.join(', ') + ' ON CONFLICT (hash_id) DO NOTHING'
+
+  await sequelize.query(insertCmd, { type: sequelize.QueryTypes.INSERT })
   return true
 }
 
@@ -324,8 +363,12 @@ async function writeCalStateObjectAsync (stateObject) {
   await CalStates.upsert(calStateObject)
   // Store the state object in redis to cache for next request
   if (redis) {
-    let redisKey = `${CAL_STATE_KEY_PREFIX}:${stateObject.agg_id}`
-    await redis.setAsync(redisKey, JSON.stringify(calStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    try {
+      let redisKey = `${CAL_STATE_KEY_PREFIX}:${stateObject.agg_id}`
+      await redis.setAsync(redisKey, JSON.stringify(calStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    } catch (error) {
+      console.error(`Redis write error : writeCalStateObjectAsync : ${error.message}`)
+    }
   }
   return true
 }
@@ -341,8 +384,12 @@ async function writeAnchorBTCAggStateObjectAsync (stateObject) {
   await AnchorBTCAggStates.upsert(anchorBTCAggStateObject)
   // Store the state object in redis to cache for next request
   if (redis) {
-    let redisKey = `${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObject.calId}`
-    await redis.setAsync(redisKey, JSON.stringify(anchorBTCAggStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    try {
+      let redisKey = `${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObject.calId}`
+      await redis.setAsync(redisKey, JSON.stringify(anchorBTCAggStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    } catch (error) {
+      console.error(`Redis write error : writeAnchorBTCAggStateObjectAsync : ${error.message}`)
+    }
   }
   return true
 }
@@ -356,8 +403,12 @@ async function writeBTCTxStateObjectAsync (stateObject) {
   await BtcTxStates.upsert(btcTxStateObject)
   // Store the state object in redis to cache for next request
   if (redis) {
-    let redisKey = `${BTC_TX_STATE_KEY_PREFIX}:${stateObject.anchor_btc_agg_id}`
-    await redis.setAsync(redisKey, JSON.stringify(btcTxStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    try {
+      let redisKey = `${BTC_TX_STATE_KEY_PREFIX}:${stateObject.anchor_btc_agg_id}`
+      await redis.setAsync(redisKey, JSON.stringify(btcTxStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    } catch (error) {
+      console.error(`Redis write error : writeBTCTxStateObjectAsync : ${error.message}`)
+    }
   }
   return true
 }
@@ -373,8 +424,12 @@ async function writeBTCHeadStateObjectAsync (stateObject) {
   await BtcHeadStates.upsert(btcHeadStateObject)
   // Store the state object in redis to cache for next request
   if (redis) {
-    let redisKey = `${BTC_HEAD_STATE_KEY_PREFIX}:${stateObject.btctx_id}`
-    await redis.setAsync(redisKey, JSON.stringify(btcHeadStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    try {
+      let redisKey = `${BTC_HEAD_STATE_KEY_PREFIX}:${stateObject.btctx_id}`
+      await redis.setAsync(redisKey, JSON.stringify(btcHeadStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    } catch (error) {
+      console.error(`Redis write error : writeBTCHeadStateObjectAsync : ${error.message}`)
+    }
   }
   return true
 }
