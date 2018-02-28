@@ -42,6 +42,7 @@ nacl.util = require('tweetnacl-util')
 // pull in variables defined in shared database models
 let nodeAuditSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
+let Op = nodeAuditSequelize.Op
 
 // The acceptable time difference between Node and Core for a timestamp to be considered valid, in milliseconds
 const ACCEPTABLE_DELTA_MS = 5000 // 5 seconds
@@ -52,7 +53,27 @@ const MAX_NODE_RESPONSE_CHALLENGE_AGE_MIN = 75
 // The minimum credit balance to receive awards and be publicly advertised
 const MIN_PASSING_CREDIT_BALANCE = 10800
 
-async function processIncomingAuditJobAsync (msg) {
+async function processMessageAsync (msg) {
+  if (msg !== null) {
+    // determine the source of the message and handle appropriately
+    switch (msg.properties.type) {
+      case 'audit':
+        // perform an audit task
+        await consumeAuditMessage(msg)
+        break
+      case 'prune':
+        // perform a prune task
+        await consumePruneMessage(msg)
+        break
+      default:
+        console.error('NodeAudit : processMessage : unknown message type', msg.properties.type)
+        // cannot handle unknown type messages, ack message and do nothing
+        amqpChannel.ack(msg)
+    }
+  }
+}
+
+async function consumeAuditMessage (msg) {
   if (msg !== null) {
     let auditTaskObj = JSON.parse(msg.content.toString())
 
@@ -184,57 +205,75 @@ async function processIncomingAuditJobAsync (msg) {
     }
     amqpChannel.ack(msg)
   }
+}
 
-  async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass) {
+async function consumePruneMessage (msg) {
+  if (msg !== null) {
+    let pruneTaskObj = JSON.parse(msg.content.toString())
+    let startTimestamp, endTimestamp
     try {
-      await retry(async bail => {
-        await NodeAuditLog.create({
-          tntAddr: tntAddr,
-          publicUri: publicUri,
-          auditAt: auditTime,
-          publicIPPass: publicIPPass,
-          nodeMSDelta: nodeMSDelta,
-          timePass: timePass,
-          calStatePass: calStatePass,
-          minCreditsPass: minCreditsPass,
-          nodeVersion: nodeVersion,
-          nodeVersionPass: nodeVersionPass
-        })
-      }, {
-        retries: 5,    // The maximum amount of times to retry the operation. Default is 10
-        factor: 1,       // The exponential factor to use. Default is 2
-        minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
-        maxTimeout: 400,
-        randomize: true
-      })
+      startTimestamp = parseInt(pruneTaskObj.startBound)
+      endTimestamp = parseInt(pruneTaskObj.endBound)
+      let delCount = await NodeAuditLog.destroy({ where: { audit_at: { [Op.gte]: startTimestamp, [Op.lte]: endTimestamp } } })
+      console.log(`${delCount} audit log rows deleted between audit_at values of ${startTimestamp} and ${endTimestamp}`)
+      amqpChannel.ack(msg)
     } catch (error) {
-      console.error(`Audit logging error: ${tntAddr}: ${error.message} `)
-      return false
+      console.error(`NodeAudit: consumePruneMessage : could not delete rows between audit_at values of ${pruneTaskObj.startBound} and ${endTimestamp} : ${error.message}`)
+      // wait a minute and try again, maybe CRDB was temporarily unavailable
+      setTimeout(() => { amqpChannel.nack(msg) }, 60000)
     }
-    return true
+  }
+}
+
+async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass) {
+  try {
+    await retry(async bail => {
+      await NodeAuditLog.create({
+        tntAddr: tntAddr,
+        publicUri: publicUri,
+        auditAt: auditTime,
+        publicIPPass: publicIPPass,
+        nodeMSDelta: nodeMSDelta,
+        timePass: timePass,
+        calStatePass: calStatePass,
+        minCreditsPass: minCreditsPass,
+        nodeVersion: nodeVersion,
+        nodeVersionPass: nodeVersionPass
+      })
+    }, {
+      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
+      factor: 1,       // The exponential factor to use. Default is 2
+      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 400,
+      randomize: true
+    })
+  } catch (error) {
+    console.error(`Audit logging error: ${tntAddr}: ${error.message} `)
+    return false
+  }
+  return true
+}
+
+async function getNodeConfigObjectAsync (auditTaskObj) {
+  // perform the /config checks for the Node
+  let nodeResponse
+  let options = {
+    headers: [
+      {
+        name: 'Content-Type',
+        value: 'application/json'
+      }
+    ],
+    method: 'GET',
+    uri: `${auditTaskObj.publicUri}/config`,
+    json: true,
+    gzip: true,
+    timeout: 2500,
+    resolveWithFullResponse: true
   }
 
-  async function getNodeConfigObjectAsync (auditTaskObj) {
-    // perform the /config checks for the Node
-    let nodeResponse
-    let options = {
-      headers: [
-        {
-          name: 'Content-Type',
-          value: 'application/json'
-        }
-      ],
-      method: 'GET',
-      uri: `${auditTaskObj.publicUri}/config`,
-      json: true,
-      gzip: true,
-      timeout: 2500,
-      resolveWithFullResponse: true
-    }
-
-    nodeResponse = await rp(options)
-    return nodeResponse.body
-  }
+  nodeResponse = await rp(options)
+  return nodeResponse.body
 }
 
 /**
@@ -299,7 +338,7 @@ async function openRMQConnectionAsync (connectionString) {
       amqpChannel = chan
       // Receive and process audit task messages
       chan.consume(env.RMQ_WORK_IN_AUDIT_QUEUE, async (msg) => {
-        await processIncomingAuditJobAsync(msg)
+        await processMessageAsync(msg)
       })
       // if the channel closes for any reason, attempt to reconnect
       conn.on('close', async () => {
