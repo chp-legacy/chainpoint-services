@@ -40,6 +40,7 @@
   },
   "devDependencies": {
     "chai": "^3.5.0",
+    "charlatan": "^1.1.0",
     "mocha": "^3.4.2",
     "supertest": "^3.0.0"
   }
