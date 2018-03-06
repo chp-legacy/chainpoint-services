@@ -1,7 +1,7 @@
 {
-  "name": "chainpoint-node-proof-state-service",
+  "name": "chainpoint-node-task-handler-service",
   "version": "0.0.1",
-  "description": "Chainpoint proof state service.",
+  "description": "Chainpoint Task Handler service.",
   "author": "Glenn Rempe <glenn@tierion.com>",
   "license": "AGPL-3.0",
   "main": "server.js",
@@ -9,13 +9,10 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "amqplib": "^0.5.1",
-    "bluebird": "^3.5.1",
-    "envalid": "^3.1.1",
-    "exp-leader-election": "^0.2.2",
+    "envalid": "^4.1.4",
     "node-resque": "^5.2.0",
     "redis": "^2.8.0",
-    "sequelize": "^4.33.3",
+    "sequelize": "^4.35.2",
     "sequelize-cockroachdb": "https://github.com/cockroachdb/sequelize-cockroachdb.git#f6b15cfaf23c17882e4b813a4dfc9758a77aa5a9"
   }
 }

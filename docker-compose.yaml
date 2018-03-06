@@ -472,3 +472,20 @@ services:
       CHAINPOINT_CORE_BASE_URI: ${CHAINPOINT_CORE_BASE_URI}
       CORE_REWARD_ETH_ADDR: ${CORE_REWARD_ETH_ADDR}
       CORE_REWARD_ELIGIBLE: ${CORE_REWARD_ELIGIBLE}
+
+  # Task Handler
+  # Responsible for rewarding TNT to random Nodes passing
+  # requisite audit checks at regular intervals
+  #
+  task-handler:
+    restart: always
+    image: quay.io/chainpoint/node-task-handler-service:${DOCKER_TAG}
+    build:
+      context: ./node-task-handler-service
+    depends_on:
+      - redis
+      - roach1
+    networks:
+      - chainpoint
+    environment:
+      NODE_ENV: development
