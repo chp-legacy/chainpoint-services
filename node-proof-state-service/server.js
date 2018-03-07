@@ -450,6 +450,14 @@ async function initResqueQueueAsync () {
   queue.on('error', function (error) { console.log(error) })
   await queue.connect()
   taskQueue = queue
+
+  process.on('SIGINT', async () => {
+    console.log('SIGINT : stopping queue...')
+    await taskQueue.end()
+    console.log('SIGINT : queue stopped : exiting')
+    process.exit()
+  })
+
   console.log('Resque queue connection established')
 }
 
