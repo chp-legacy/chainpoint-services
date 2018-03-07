@@ -474,8 +474,7 @@ services:
       CORE_REWARD_ELIGIBLE: ${CORE_REWARD_ELIGIBLE}
 
   # Task Handler
-  # Responsible for rewarding TNT to random Nodes passing
-  # requisite audit checks at regular intervals
+  # node-resque job processing queue
   #
   task-handler:
     restart: always
