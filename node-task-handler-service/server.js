@@ -127,6 +127,14 @@ async function initResqueWorkerAsync () {
   await worker.connect()
   await worker.workerCleanup() // cleanup any previous improperly shutdown workers on this host
   worker.start()
+
+  process.on('SIGINT', async () => {
+    console.log('SIGINT : stopping all workers...')
+    await worker.stop()
+    console.log('SIGINT : all workers stopped : exiting')
+    process.exit()
+  })
+
   console.log('Resque worker connection established')
 }
 
