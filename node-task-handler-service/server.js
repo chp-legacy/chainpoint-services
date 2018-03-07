@@ -47,55 +47,50 @@ const jobs = {
 async function pruneAggStatesRangeAsync (startTime, endTime) {
   try {
     let delCount = await storageClient.pruneAggStatesRangeAsync(startTime, endTime)
-    console.log(`Deleted ${delCount} rows from agg_states between ${startTime} and ${endTime}`)
-    return delCount
+    return `Deleted ${delCount} rows from agg_states between ${startTime} and ${endTime}`
   } catch (error) {
-    console.error(`Could not delete rows from agg_states between ${startTime} and ${endTime} : ${error.message}`)
-    throw error.message
+    let errorMessage = `Could not delete rows from agg_states between ${startTime} and ${endTime} : ${error.message}`
+    throw errorMessage
   }
 }
 
 async function pruneCalStatesRangeAsync (startTime, endTime) {
   try {
     let delCount = await storageClient.pruneCalStatesRangeAsync(startTime, endTime)
-    console.log(`Deleted ${delCount} rows from cal_states between ${startTime} and ${endTime}`)
-    return delCount
+    return `Deleted ${delCount} rows from cal_states between ${startTime} and ${endTime}`
   } catch (error) {
-    console.error(`Could not delete rows from cal_states between ${startTime} and ${endTime} : ${error.message}`)
-    throw error.message
+    let errorMessage = `Could not delete rows from cal_states between ${startTime} and ${endTime} : ${error.message}`
+    throw errorMessage
   }
 }
 
 async function pruneAnchorBTCAggStatesRangeAsync (startTime, endTime) {
   try {
     let delCount = await storageClient.pruneAnchorBTCAggStatesRangeAsync(startTime, endTime)
-    console.log(`Deleted ${delCount} rows from anchor_btc_agg_states between ${startTime} and ${endTime}`)
-    return delCount
+    return `Deleted ${delCount} rows from anchor_btc_agg_states between ${startTime} and ${endTime}`
   } catch (error) {
-    console.error(`Could not delete rows from anchor_btc_agg_states between ${startTime} and ${endTime} : ${error.message}`)
-    throw error.message
+    let errorMessage = `Could not delete rows from anchor_btc_agg_states between ${startTime} and ${endTime} : ${error.message}`
+    throw errorMessage
   }
 }
 
 async function pruneBTCTxStatesRangeAsync (startTime, endTime) {
   try {
     let delCount = await storageClient.pruneBTCTxStatesRangeAsync(startTime, endTime)
-    console.log(`Deleted ${delCount} rows from btctx_states between ${startTime} and ${endTime}`)
-    return delCount
+    return `Deleted ${delCount} rows from btctx_states between ${startTime} and ${endTime}`
   } catch (error) {
-    console.error(`Could not delete rows from btctx_states between ${startTime} and ${endTime} : ${error.message}`)
-    throw error.message
+    let errorMessage = `Could not delete rows from btctx_states between ${startTime} and ${endTime} : ${error.message}`
+    throw errorMessage
   }
 }
 
 async function pruneBTCHeadStatesRangeAsync (startTime, endTime) {
   try {
     let delCount = await storageClient.pruneBTCHeadStatesRangeAsync(startTime, endTime)
-    console.log(`Deleted ${delCount} rows from btchead_states between ${startTime} and ${endTime}`)
-    return delCount
+    return `Deleted ${delCount} rows from btchead_states between ${startTime} and ${endTime}`
   } catch (error) {
-    console.error(`Could not delete rows from btchead_states between ${startTime} and ${endTime} : ${error.message}`)
-    throw error.message
+    let errorMessage = `Could not delete rows from btchead_states between ${startTime} and ${endTime} : ${error.message}`
+    throw errorMessage
   }
 }
 
@@ -138,6 +133,19 @@ async function initResqueWorkerAsync () {
   }
 
   const multiWorker = new nodeResque.MultiWorker(multiWorkerConfig, jobs)
+
+  multiWorker.on('start', (workerId) => { console.log(`worker[${workerId}] : started`) })
+  multiWorker.on('end', (workerId) => { console.log(`worker[${workerId}] : ended`) })
+  multiWorker.on('cleaning_worker', (workerId, worker, pid) => { console.log(`worker[${workerId}] : cleaning old worker : ${worker}`) })
+  // multiWorker.on('poll', (workerId, queue) => { console.log(`worker[${workerId}] : polling : ${queue}`) })
+  // multiWorker.on('job', (workerId, queue, job) => { console.log(`worker[${workerId}] : working job : ${queue} : ${JSON.stringify(job)}`) })
+  multiWorker.on('reEnqueue', (workerId, queue, job, plugin) => { console.log(`worker[${workerId}] : re-enqueuing job : ${queue} : ${JSON.stringify(job)}`) })
+  multiWorker.on('success', (workerId, queue, job, result) => { console.log(`worker[${workerId}] : success : ${queue} : ${result}`) })
+  multiWorker.on('failure', (workerId, queue, job, failure) => { console.error(`worker[${workerId}] : failure : ${queue} : ${failure}`) })
+  multiWorker.on('error', (workerId, queue, job, error) => { console.error(`worker[${workerId}] : error : ${queue} : ${error}`) })
+  // multiWorker.on('pause', (workerId) => { console.log(`worker[${workerId}] : paused`) })
+  multiWorker.on('internalError', (error) => { console.error(`multiWorker : intneral error : ${error}`) })
+  // multiWorker.on('multiWorkerAction', (verb, delay) => { console.log(`*** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
 
   multiWorker.start()
 
