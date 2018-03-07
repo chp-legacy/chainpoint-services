@@ -483,8 +483,27 @@ services:
       context: ./node-task-handler-service
     depends_on:
       - redis
-      - roach1
     networks:
       - chainpoint
     environment:
       NODE_ENV: development
+
+  # Resque Web UI
+  # Web UI for task-handler node-resque job processing queue
+  # Access locally : http://127.0.0.1:9292/overview
+  #
+  resque-web:
+    restart: always
+    image: corbinu/node-resque-web
+    depends_on:
+      - redis
+      - task-handler
+    networks:
+      - chainpoint
+    ports:
+      - "9292:9292"
+    environment:
+      NODE_ENV: development
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
