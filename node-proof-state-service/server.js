@@ -22,6 +22,7 @@ const utils = require('./lib/utils.js')
 const bluebird = require('bluebird')
 const leaderElection = require('exp-leader-election')
 const nodeResque = require('node-resque')
+const exitHook = require('exit-hook')
 
 const storageClient = require('./lib/models/cachedProofStateModels.js')
 
@@ -451,11 +452,8 @@ async function initResqueQueueAsync () {
   await queue.connect()
   taskQueue = queue
 
-  process.on('SIGINT', async () => {
-    console.log('SIGINT : stopping queue...')
-    await taskQueue.end()
-    console.log('SIGINT : queue stopped : exiting')
-    process.exit()
+  exitHook(async () => {
+    await queue.end()
   })
 
   console.log('Resque queue connection established')

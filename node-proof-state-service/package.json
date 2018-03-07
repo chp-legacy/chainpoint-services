@@ -12,6 +12,7 @@
     "amqplib": "^0.5.1",
     "bluebird": "^3.5.1",
     "envalid": "^3.1.1",
+    "exit-hook": "^1.1.1",
     "exp-leader-election": "^0.2.2",
     "node-resque": "^5.2.0",
     "redis": "^2.8.0",

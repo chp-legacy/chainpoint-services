@@ -20,6 +20,7 @@ const env = require('./lib/parse-env.js')('task-handler')
 const r = require('redis')
 const nodeResque = require('node-resque')
 const utils = require('./lib/utils.js')
+const exitHook = require('exit-hook')
 
 const storageClient = require('./lib/models/cachedProofStateModels.js')
 
@@ -149,11 +150,8 @@ async function initResqueWorkerAsync () {
 
   multiWorker.start()
 
-  process.on('SIGINT', async () => {
-    console.log('SIGINT : stopping all workers...')
+  exitHook(async () => {
     await multiWorker.end()
-    console.log('SIGINT : all workers stopped : exiting')
-    process.exit()
   })
 
   console.log('Resque worker connection established')
