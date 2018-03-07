@@ -126,21 +126,24 @@ async function initResqueWorkerAsync () {
     redisReady = (redis !== null)
   }
 
-  var connectionDetails = {
-    host: 'redis',
-    port: 6379,
-    namespace: 'resque'
+  var multiWorkerConfig = {
+    connection: {
+      host: 'redis',
+      port: 6379,
+      namespace: 'resque'
+    },
+    queues: ['task-handler-queue'],
+    minTaskProcessors: 10,
+    maxTaskProcessors: 100
   }
 
-  const worker = new nodeResque.Worker({ connection: connectionDetails, queues: ['task-handler-queue'] }, jobs)
+  const multiWorker = new nodeResque.MultiWorker(multiWorkerConfig, jobs)
 
-  await worker.connect()
-  await worker.workerCleanup() // cleanup any previous improperly shutdown workers on this host
-  worker.start()
+  multiWorker.start()
 
   process.on('SIGINT', async () => {
     console.log('SIGINT : stopping all workers...')
-    await worker.end()
+    await multiWorker.end()
     console.log('SIGINT : all workers stopped : exiting')
     process.exit()
   })
