@@ -140,7 +140,7 @@ async function initResqueWorkerAsync () {
 
   process.on('SIGINT', async () => {
     console.log('SIGINT : stopping all workers...')
-    await worker.stop()
+    await worker.end()
     console.log('SIGINT : all workers stopped : exiting')
     process.exit()
   })
