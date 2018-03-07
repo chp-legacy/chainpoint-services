@@ -48,8 +48,10 @@ async function pruneAggStatesRangeAsync (startTime, endTime) {
   try {
     let delCount = await storageClient.pruneAggStatesRangeAsync(startTime, endTime)
     console.log(`Deleted ${delCount} rows from agg_states between ${startTime} and ${endTime}`)
+    return delCount
   } catch (error) {
     console.error(`Could not delete rows from agg_states between ${startTime} and ${endTime} : ${error.message}`)
+    throw error.message
   }
 }
 
@@ -57,8 +59,10 @@ async function pruneCalStatesRangeAsync (startTime, endTime) {
   try {
     let delCount = await storageClient.pruneCalStatesRangeAsync(startTime, endTime)
     console.log(`Deleted ${delCount} rows from cal_states between ${startTime} and ${endTime}`)
+    return delCount
   } catch (error) {
     console.error(`Could not delete rows from cal_states between ${startTime} and ${endTime} : ${error.message}`)
+    throw error.message
   }
 }
 
@@ -66,8 +70,10 @@ async function pruneAnchorBTCAggStatesRangeAsync (startTime, endTime) {
   try {
     let delCount = await storageClient.pruneAnchorBTCAggStatesRangeAsync(startTime, endTime)
     console.log(`Deleted ${delCount} rows from anchor_btc_agg_states between ${startTime} and ${endTime}`)
+    return delCount
   } catch (error) {
     console.error(`Could not delete rows from anchor_btc_agg_states between ${startTime} and ${endTime} : ${error.message}`)
+    throw error.message
   }
 }
 
@@ -75,8 +81,10 @@ async function pruneBTCTxStatesRangeAsync (startTime, endTime) {
   try {
     let delCount = await storageClient.pruneBTCTxStatesRangeAsync(startTime, endTime)
     console.log(`Deleted ${delCount} rows from btctx_states between ${startTime} and ${endTime}`)
+    return delCount
   } catch (error) {
     console.error(`Could not delete rows from btctx_states between ${startTime} and ${endTime} : ${error.message}`)
+    throw error.message
   }
 }
 
@@ -84,8 +92,10 @@ async function pruneBTCHeadStatesRangeAsync (startTime, endTime) {
   try {
     let delCount = await storageClient.pruneBTCHeadStatesRangeAsync(startTime, endTime)
     console.log(`Deleted ${delCount} rows from btchead_states between ${startTime} and ${endTime}`)
+    return delCount
   } catch (error) {
     console.error(`Could not delete rows from btchead_states between ${startTime} and ${endTime} : ${error.message}`)
+    throw error.message
   }
 }
 
