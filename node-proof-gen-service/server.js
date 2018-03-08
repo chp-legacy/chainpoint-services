@@ -24,7 +24,7 @@ const chpBinary = require('chainpoint-binary')
 const utils = require('./lib/utils.js')
 const bluebird = require('bluebird')
 
-const storageClient = require('./lib/models/cachedProofStateModels.js')
+const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 
 const r = require('redis')
 
@@ -96,9 +96,9 @@ async function consumeProofReadyMessageAsync (msg) {
     case 'cal':
       try {
         // CRDB
-        let aggStateRow = await storageClient.getAggStateObjectByHashIdAsync(messageObj.hash_id)
+        let aggStateRow = await cachedProofState.getAggStateObjectByHashIdAsync(messageObj.hash_id)
         if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
-        let calStateRow = await storageClient.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
+        let calStateRow = await cachedProofState.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
         if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
 
         let proof = {}
@@ -133,19 +133,19 @@ async function consumeProofReadyMessageAsync (msg) {
       try {
         // CRDB
         // get the agg_state object for the hash_id
-        let aggStateRow = await storageClient.getAggStateObjectByHashIdAsync(messageObj.hash_id)
+        let aggStateRow = await cachedProofState.getAggStateObjectByHashIdAsync(messageObj.hash_id)
         if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
         // get the cal_state object for the agg_id
-        let calStateRow = await storageClient.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
+        let calStateRow = await cachedProofState.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
         if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
         // get the anchorBTCAgg_state object for the cal_id
-        let anchorBTCAggStateRow = await storageClient.getAnchorBTCAggStateObjectByCalIdAsync(calStateRow.cal_id)
+        let anchorBTCAggStateRow = await cachedProofState.getAnchorBTCAggStateObjectByCalIdAsync(calStateRow.cal_id)
         if (!anchorBTCAggStateRow) throw new Error(new Date().toISOString() + ' no matching anchor_btc_agg_state data found')
         // get the btctx_state object for the anchor_btc_agg_id
-        let btcTxStateRow = await storageClient.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggStateRow.anchor_btc_agg_id)
+        let btcTxStateRow = await cachedProofState.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggStateRow.anchor_btc_agg_id)
         if (!btcTxStateRow) throw new Error(new Date().toISOString() + ' no matching btctx_state data found')
         // get the btcthead_state object for the btctx_id
-        let btcHeadStateRow = await storageClient.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
+        let btcHeadStateRow = await cachedProofState.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
         if (!btcHeadStateRow) throw new Error(new Date().toISOString() + ' no matching btchead_state data found')
 
         let proof = {}
@@ -205,14 +205,14 @@ function openRedisConnection (redisURI) {
   redis = r.createClient(redisURI)
   redis.on('ready', () => {
     bluebird.promisifyAll(redis)
-    storageClient.setRedis(redis)
+    cachedProofState.setRedis(redis)
     console.log('Redis connection established')
   })
   redis.on('error', async (err) => {
     console.error(`A redis error has ocurred: ${err}`)
     redis.quit()
     redis = null
-    storageClient.setRedis(null)
+    cachedProofState.setRedis(null)
     console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
     await utils.sleep(5000)
     openRedisConnection(redisURI)
@@ -266,7 +266,7 @@ async function openStorageConnectionAsync () {
   let dbConnected = false
   while (!dbConnected) {
     try {
-      await storageClient.openConnectionAsync()
+      await cachedProofState.openConnectionAsync()
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {

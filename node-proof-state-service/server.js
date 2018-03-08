@@ -25,7 +25,7 @@ const nodeResque = require('node-resque')
 const exitHook = require('exit-hook')
 const { URL } = require('url')
 
-const storageClient = require('./lib/models/cachedProofStateModels.js')
+const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 
 const r = require('redis')
 
@@ -64,7 +64,7 @@ async function ConsumeAggregationMessageAsync (msg) {
 
   try {
     // Store this state information
-    await storageClient.writeAggStateObjectsBulkAsync(stateObjects)
+    await cachedProofState.writeAggStateObjectsBulkAsync(stateObjects)
 
     let aggObj = {}
     aggObj.agg_id = messageObj.agg_id
@@ -101,9 +101,9 @@ async function ConsumeCalendarMessageAsync (msg) {
 
   try {
     // CRDB
-    let rows = await storageClient.getHashIdsByAggIdAsync(stateObj.agg_id)
+    let rows = await cachedProofState.getHashIdsByAggIdAsync(stateObj.agg_id)
 
-    await storageClient.writeCalStateObjectAsync(stateObj)
+    await cachedProofState.writeCalStateObjectAsync(stateObj)
 
     for (let x = 0; x < rows.length; x++) {
       let hashIdRow = rows[x]
@@ -142,7 +142,7 @@ async function ConsumeAnchorBTCAggMessageAsync (msg) {
   stateObj.anchor_btc_agg_state = messageObj.anchor_btc_agg_state
 
   try {
-    await storageClient.writeAnchorBTCAggStateObjectAsync(stateObj)
+    await cachedProofState.writeAnchorBTCAggStateObjectAsync(stateObj)
 
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
@@ -166,7 +166,7 @@ async function ConsumeBtcTxMessageAsync (msg) {
   stateObj.btctx_state = messageObj.btctx_state
 
   try {
-    await storageClient.writeBTCTxStateObjectAsync(stateObj)
+    await cachedProofState.writeBTCTxStateObjectAsync(stateObj)
 
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
@@ -191,9 +191,9 @@ async function ConsumeBtcMonMessageAsync (msg) {
 
   try {
     // CRDB
-    let rows = await storageClient.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
+    let rows = await cachedProofState.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
 
-    await storageClient.writeBTCHeadStateObjectAsync(stateObj)
+    await cachedProofState.writeBTCHeadStateObjectAsync(stateObj)
 
     for (let x = 0; x < rows.length; x++) {
       let hashIdRow = rows[x]
@@ -250,7 +250,7 @@ async function PruneStateDataAsync () {
 
 async function queueProofStatePruningTasks (modelName) {
   // determine the created_at bounds for the ranges
-  let createDates = await storageClient.getExpiredCreatedAtDatesForModel(modelName)
+  let createDates = await cachedProofState.getExpiredCreatedAtDatesForModel(modelName)
   let pruneBatchTasks = []
   let pruneBatchSize = 250
   let pruneBatchesNeeded = Math.ceil(createDates.length / pruneBatchSize)
@@ -357,7 +357,7 @@ async function openStorageConnectionAsync () {
   let dbConnected = false
   while (!dbConnected) {
     try {
-      await storageClient.openConnectionAsync()
+      await cachedProofState.openConnectionAsync()
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {
@@ -377,14 +377,14 @@ function openRedisConnection (redisURI) {
   redis = r.createClient(redisURI)
   redis.on('ready', () => {
     bluebird.promisifyAll(redis)
-    storageClient.setRedis(redis)
+    cachedProofState.setRedis(redis)
     console.log('Redis connection established')
   })
   redis.on('error', async (err) => {
     console.error(`A redis error has ocurred: ${err}`)
     redis.quit()
     redis = null
-    storageClient.setRedis(null)
+    cachedProofState.setRedis(null)
     console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
     await utils.sleep(5000)
     openRedisConnection(redisURI)

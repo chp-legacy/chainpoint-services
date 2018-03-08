@@ -23,7 +23,7 @@ const utils = require('./lib/utils.js')
 const exitHook = require('exit-hook')
 const { URL } = require('url')
 
-const storageClient = require('./lib/models/cachedProofStateModels.js')
+const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 
 // This value is set once the connection has been established
 let redis = null
@@ -48,7 +48,7 @@ const jobs = {
 
 async function pruneAggStatesRangeAsync (startTime, endTime) {
   try {
-    let delCount = await storageClient.pruneAggStatesRangeAsync(startTime, endTime)
+    let delCount = await cachedProofState.pruneAggStatesRangeAsync(startTime, endTime)
     return `Deleted ${delCount} rows from agg_states between ${startTime} and ${endTime}`
   } catch (error) {
     let errorMessage = `Could not delete rows from agg_states between ${startTime} and ${endTime} : ${error.message}`
@@ -58,7 +58,7 @@ async function pruneAggStatesRangeAsync (startTime, endTime) {
 
 async function pruneCalStatesRangeAsync (startTime, endTime) {
   try {
-    let delCount = await storageClient.pruneCalStatesRangeAsync(startTime, endTime)
+    let delCount = await cachedProofState.pruneCalStatesRangeAsync(startTime, endTime)
     return `Deleted ${delCount} rows from cal_states between ${startTime} and ${endTime}`
   } catch (error) {
     let errorMessage = `Could not delete rows from cal_states between ${startTime} and ${endTime} : ${error.message}`
@@ -68,7 +68,7 @@ async function pruneCalStatesRangeAsync (startTime, endTime) {
 
 async function pruneAnchorBTCAggStatesRangeAsync (startTime, endTime) {
   try {
-    let delCount = await storageClient.pruneAnchorBTCAggStatesRangeAsync(startTime, endTime)
+    let delCount = await cachedProofState.pruneAnchorBTCAggStatesRangeAsync(startTime, endTime)
     return `Deleted ${delCount} rows from anchor_btc_agg_states between ${startTime} and ${endTime}`
   } catch (error) {
     let errorMessage = `Could not delete rows from anchor_btc_agg_states between ${startTime} and ${endTime} : ${error.message}`
@@ -78,7 +78,7 @@ async function pruneAnchorBTCAggStatesRangeAsync (startTime, endTime) {
 
 async function pruneBTCTxStatesRangeAsync (startTime, endTime) {
   try {
-    let delCount = await storageClient.pruneBTCTxStatesRangeAsync(startTime, endTime)
+    let delCount = await cachedProofState.pruneBTCTxStatesRangeAsync(startTime, endTime)
     return `Deleted ${delCount} rows from btctx_states between ${startTime} and ${endTime}`
   } catch (error) {
     let errorMessage = `Could not delete rows from btctx_states between ${startTime} and ${endTime} : ${error.message}`
@@ -88,7 +88,7 @@ async function pruneBTCTxStatesRangeAsync (startTime, endTime) {
 
 async function pruneBTCHeadStatesRangeAsync (startTime, endTime) {
   try {
-    let delCount = await storageClient.pruneBTCHeadStatesRangeAsync(startTime, endTime)
+    let delCount = await cachedProofState.pruneBTCHeadStatesRangeAsync(startTime, endTime)
     return `Deleted ${delCount} rows from btchead_states between ${startTime} and ${endTime}`
   } catch (error) {
     let errorMessage = `Could not delete rows from btchead_states between ${startTime} and ${endTime} : ${error.message}`
