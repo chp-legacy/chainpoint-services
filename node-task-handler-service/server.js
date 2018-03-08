@@ -22,6 +22,15 @@ const nodeResque = require('node-resque')
 const utils = require('./lib/utils.js')
 const exitHook = require('exit-hook')
 const { URL } = require('url')
+const debugPkg = require('debug')
+
+var debug = {
+  general: debugPkg('task-handler:general'),
+  worker: debugPkg('task-handler:worker'),
+  multiworker: debugPkg('task-handler:multiworker')
+}
+// direct debug to output over STDOUT
+debugPkg.log = console.info.bind(console)
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 
@@ -104,7 +113,7 @@ async function pruneBTCHeadStatesRangeAsync (startTime, endTime) {
 function openRedisConnection (redisURI) {
   redis = r.createClient(redisURI)
   redis.on('ready', async () => {
-    console.log('Redis connection established')
+    debug.general('Redis connection established')
   })
   redis.on('error', async (err) => {
     console.error(`A redis error has ocurred: ${err}`)
@@ -137,18 +146,18 @@ async function initResqueWorkerAsync () {
 
   const multiWorker = new nodeResque.MultiWorker(multiWorkerConfig, jobs)
 
-  multiWorker.on('start', (workerId) => { console.log(`worker[${workerId}] : started`) })
-  multiWorker.on('end', (workerId) => { console.log(`worker[${workerId}] : ended`) })
-  multiWorker.on('cleaning_worker', (workerId, worker, pid) => { console.log(`worker[${workerId}] : cleaning old worker : ${worker}`) })
-  // multiWorker.on('poll', (workerId, queue) => { console.log(`worker[${workerId}] : polling : ${queue}`) })
-  // multiWorker.on('job', (workerId, queue, job) => { console.log(`worker[${workerId}] : working job : ${queue} : ${JSON.stringify(job)}`) })
-  multiWorker.on('reEnqueue', (workerId, queue, job, plugin) => { console.log(`worker[${workerId}] : re-enqueuing job : ${queue} : ${JSON.stringify(job)}`) })
-  multiWorker.on('success', (workerId, queue, job, result) => { console.log(`worker[${workerId}] : success : ${queue} : ${result}`) })
+  multiWorker.on('start', (workerId) => { debug.worker(`worker[${workerId}] : started`) })
+  multiWorker.on('end', (workerId) => { debug.worker(`worker[${workerId}] : ended`) })
+  multiWorker.on('cleaning_worker', (workerId, worker, pid) => { debug.worker(`worker[${workerId}] : cleaning old worker : ${worker}`) })
+  // multiWorker.on('poll', (workerId, queue) => { debug.worker(`worker[${workerId}] : polling : ${queue}`) })
+  // multiWorker.on('job', (workerId, queue, job) => { debug.worker(`worker[${workerId}] : working job : ${queue} : ${JSON.stringify(job)}`) })
+  multiWorker.on('reEnqueue', (workerId, queue, job, plugin) => { debug.worker(`worker[${workerId}] : re-enqueuing job : ${queue} : ${JSON.stringify(job)}`) })
+  multiWorker.on('success', (workerId, queue, job, result) => { debug.worker(`worker[${workerId}] : success : ${queue} : ${result}`) })
   multiWorker.on('failure', (workerId, queue, job, failure) => { console.error(`worker[${workerId}] : failure : ${queue} : ${failure}`) })
   multiWorker.on('error', (workerId, queue, job, error) => { console.error(`worker[${workerId}] : error : ${queue} : ${error}`) })
-  // multiWorker.on('pause', (workerId) => { console.log(`worker[${workerId}] : paused`) })
+  // multiWorker.on('pause', (workerId) => { debug.worker(`worker[${workerId}] : paused`) })
   multiWorker.on('internalError', (error) => { console.error(`multiWorker : intneral error : ${error}`) })
-  // multiWorker.on('multiWorkerAction', (verb, delay) => { console.log(`*** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
+  // multiWorker.on('multiWorkerAction', (verb, delay) => { debug.multiworker(`*** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
 
   multiWorker.start()
 
@@ -156,7 +165,7 @@ async function initResqueWorkerAsync () {
     await multiWorker.end()
   })
 
-  console.log('Resque worker connection established')
+  debug.general('Resque worker connection established')
 }
 
 // process all steps need to start the application
@@ -166,7 +175,7 @@ async function start () {
     openRedisConnection(env.REDIS_CONNECT_URI)
     // init Resque worker
     await initResqueWorkerAsync()
-    console.log('startup completed successfully')
+    debug.general('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)
     process.exit(1)
