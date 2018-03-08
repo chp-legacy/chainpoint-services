@@ -482,17 +482,20 @@ services:
     build:
       context: ./node-task-handler-service
     depends_on:
+      - roach1
       - redis
+      - rabbitmq
+      - consul
     networks:
       - chainpoint
     environment:
       NODE_ENV: development
 
-  # Resque Web UI
+  # Task Handler Admin (Resque Web) UI
   # Web UI for task-handler node-resque job processing queue
   # Access locally : http://127.0.0.1:9292/overview
   #
-  resque-web:
+  task-handler-admin:
     restart: always
     image: corbinu/node-resque-web
     depends_on:
