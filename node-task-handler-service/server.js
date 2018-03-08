@@ -124,8 +124,8 @@ async function initResqueWorkerAsync () {
 
   var multiWorkerConfig = {
     connection: {
-      host: 'redis',
-      port: 6379,
+      host: env.REDIS_HOST,
+      port: env.REDIS_PORT,
       namespace: 'resque'
     },
     queues: ['task-handler-queue'],

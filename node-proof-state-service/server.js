@@ -442,8 +442,8 @@ async function initResqueQueueAsync () {
   }
 
   var connectionDetails = {
-    host: 'redis',
-    port: 6379,
+    host: env.REDIS_HOST,
+    port: env.REDIS_PORT,
     namespace: 'resque'
   }
 
