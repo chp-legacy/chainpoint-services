@@ -23,6 +23,7 @@ const bluebird = require('bluebird')
 const leaderElection = require('exp-leader-election')
 const nodeResque = require('node-resque')
 const exitHook = require('exit-hook')
+const { URL } = require('url')
 
 const storageClient = require('./lib/models/cachedProofStateModels.js')
 
@@ -440,10 +441,10 @@ async function initResqueQueueAsync () {
     await utils.sleep(100)
     redisReady = (redis !== null)
   }
-
+  const redisURI = new URL(env.REDIS_CONNECT_URI)
   var connectionDetails = {
-    host: env.REDIS_HOST,
-    port: env.REDIS_PORT,
+    host: redisURI.hostname,
+    port: redisURI.port,
     namespace: 'resque'
   }
 

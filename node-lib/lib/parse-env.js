@@ -93,8 +93,6 @@ let envDefinitions = {
   RMQ_WORK_OUT_AUDIT_QUEUE: envalid.str({ default: 'work.audit', desc: 'The queue name for outgoing message to the audit consumer service' }),
 
   // Redis related variables
-  REDIS_HOST: envalid.str({ devDefault: 'redis', desc: 'The Redis server hostname' }),
-  REDIS_PORT: envalid.num({ devDefault: 6379, desc: 'The Redis server port' }),
   REDIS_CONNECT_URI: envalid.url({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI' }),
 
   MIN_NODE_VERSION_EXISTING: envalid.str({ default: '1.3.5', desc: 'The minimum acceptable Node version for existing registrations and to pass audits' }),
