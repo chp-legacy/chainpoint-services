@@ -64,8 +64,9 @@ const BTC_HEAD_STATE_KEY_PREFIX = 'BtcHeadState'
 // Optimally, values will be cached and read from Redis where appropriate
 let redis = null
 
-// How many hours any piece of proof state data is retained until pruned
+// How many hours any piece of proof state data is retained before pruning
 const PROOF_STATE_EXPIRE_HOURS = 6
+// How many hours any piece of proof state data is cached
 const PROOF_STATE_CACHE_EXPIRE_MINUTES = PROOF_STATE_EXPIRE_HOURS * 60
 
 // table for state data connecting individual hashes to aggregation roots
@@ -434,36 +435,61 @@ async function writeBTCHeadStateObjectAsync (stateObject) {
   return true
 }
 
-async function pruneProofStateTableAsync (model, expHours, limit) {
-  let cutoffDate = new Date(Date.now() - expHours * 60 * 60 * 1000)
-  let totalCount = 0
-  let pruneCount = 0
-  // continually delete old proof state rows in batches until all are gone
-  do {
-    pruneCount = await model.destroy({ where: { created_at: { [Op.lt]: cutoffDate } }, limit: limit })
-    totalCount += pruneCount
-  } while (pruneCount > 0)
-  return totalCount
+async function pruneProofStateTableRangeAsync (model, startTime, endTime) {
+  // Add 1 millsecond to endTime and include things less than that value
+  // This is necessary because CRSB stores date with greater than millisecond precision.
+  // This was allowing some rows to slip through the cracks in rare cases
+  endTime = new Date(new Date(endTime).getTime() + 1)
+  let pruneCount = await model.destroy({ where: { created_at: { [Op.gte]: startTime, [Op.lt]: endTime } } })
+  return pruneCount
 }
 
-async function pruneAggStatesAsync () {
-  return pruneProofStateTableAsync(AggStates, PROOF_STATE_EXPIRE_HOURS, 100)
+async function pruneAggStatesRangeAsync (startTime, endTime) {
+  return pruneProofStateTableRangeAsync(AggStates, startTime, endTime)
 }
 
-async function pruneCalStatesAsync () {
-  return pruneProofStateTableAsync(CalStates, PROOF_STATE_EXPIRE_HOURS, 100)
+async function pruneCalStatesRangeAsync (startTime, endTime) {
+  return pruneProofStateTableRangeAsync(CalStates, startTime, endTime)
 }
 
-async function pruneAnchorBTCAggStatesAsync () {
-  return pruneProofStateTableAsync(AnchorBTCAggStates, PROOF_STATE_EXPIRE_HOURS, 100)
+async function pruneAnchorBTCAggStatesRangeAsync (startTime, endTime) {
+  return pruneProofStateTableRangeAsync(AnchorBTCAggStates, startTime, endTime)
 }
 
-async function pruneBtcTxStatesAsync () {
-  return pruneProofStateTableAsync(BtcTxStates, PROOF_STATE_EXPIRE_HOURS, 100)
+async function pruneBTCTxStatesRangeAsync (startTime, endTime) {
+  return pruneProofStateTableRangeAsync(BtcTxStates, startTime, endTime)
 }
 
-async function pruneBtcHeadStatesAsync () {
-  return pruneProofStateTableAsync(BtcHeadStates, PROOF_STATE_EXPIRE_HOURS, 100)
+async function pruneBTCHeadStatesRangeAsync (startTime, endTime) {
+  return pruneProofStateTableRangeAsync(BtcHeadStates, startTime, endTime)
+}
+
+async function getExpiredCreatedAtDatesForModel (modelName) {
+  let model = null
+  switch (modelName) {
+    case 'agg_states':
+      model = AggStates
+      break
+    case 'cal_states':
+      model = CalStates
+      break
+    case 'anchor_btc_agg_states':
+      model = AnchorBTCAggStates
+      break
+    case 'btctx_states':
+      model = BtcTxStates
+      break
+    case 'btchead_states':
+      model = BtcHeadStates
+      break
+  }
+  if (model === null) throw new Error(`Unknown modelName : ${modelName}`)
+  let pruneCutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
+  let createDates = await model.findAll({ where: { created_at: { [Op.lte]: pruneCutoffDate } }, attributes: ['created_at'], order: [['created_at', 'ASC']] })
+  for (let x = 0; x < createDates.length; x++) {
+    createDates[x] = createDates[x].get({ plain: true })
+  }
+  return createDates
 }
 
 module.exports = {
@@ -480,11 +506,12 @@ module.exports = {
   writeAnchorBTCAggStateObjectAsync: writeAnchorBTCAggStateObjectAsync,
   writeBTCTxStateObjectAsync: writeBTCTxStateObjectAsync,
   writeBTCHeadStateObjectAsync: writeBTCHeadStateObjectAsync,
-  pruneAggStatesAsync: pruneAggStatesAsync,
-  pruneCalStatesAsync: pruneCalStatesAsync,
-  pruneAnchorBTCAggStatesAsync: pruneAnchorBTCAggStatesAsync,
-  pruneBtcTxStatesAsync: pruneBtcTxStatesAsync,
-  pruneBtcHeadStatesAsync: pruneBtcHeadStatesAsync,
+  pruneAggStatesRangeAsync: pruneAggStatesRangeAsync,
+  pruneCalStatesRangeAsync: pruneCalStatesRangeAsync,
+  pruneAnchorBTCAggStatesRangeAsync: pruneAnchorBTCAggStatesRangeAsync,
+  pruneBTCTxStatesRangeAsync: pruneBTCTxStatesRangeAsync,
+  pruneBTCHeadStatesRangeAsync: pruneBTCHeadStatesRangeAsync,
+  getExpiredCreatedAtDatesForModel: getExpiredCreatedAtDatesForModel,
   sequelize: sequelize,
   setRedis: (r) => { redis = r }
 }

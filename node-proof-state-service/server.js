@@ -21,6 +21,8 @@ const amqp = require('amqplib')
 const utils = require('./lib/utils.js')
 const bluebird = require('bluebird')
 const leaderElection = require('exp-leader-election')
+const nodeResque = require('node-resque')
+const exitHook = require('exit-hook')
 
 const storageClient = require('./lib/models/cachedProofStateModels.js')
 
@@ -32,12 +34,13 @@ var amqpChannel = null
 
 // The leadership status for this instance of the proof state service
 let IS_LEADER = false
-// Boolean indicating if pruning is currently in process
-let PRUNING_IN_PROC = false
 
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
 let redis = null
+
+// This value is set once the connection has been established
+let taskQueue = null
 
 /**
 * Writes the state data to persistent storage and logs aggregation event
@@ -222,29 +225,62 @@ async function ConsumeBtcMonMessageAsync (msg) {
 *
 */
 async function PruneStateDataAsync () {
-  PRUNING_IN_PROC = true
   try {
     // CRDB
     // remove all rows from agg_states that are older than the expiration age
-    let rowCount = await storageClient.pruneAggStatesAsync()
-    if (rowCount) console.log(`Pruned agg_states - ${rowCount} row(s) deleted`)
+    let results = await queueProofStatePruningTasks('agg_states')
+    if (results.rowCount) console.log(`Pruning agg_states - ${results.rowCount} row(s) to be deleted in ${results.batchCount} batches`)
     // remove all rows from cal_states that are older than the expiration age
-    rowCount = await storageClient.pruneCalStatesAsync()
-    if (rowCount) console.log(`Pruned cal_states - ${rowCount} row(s) deleted`)
+    results = await queueProofStatePruningTasks('cal_states')
+    if (results.rowCount) console.log(`Pruned cal_states - ${results.rowCount} row(s) to be deleted in ${results.batchCount} batches`)
     // remove all rows from anchor_btc_agg_states that are older than the expiration age
-    rowCount = await storageClient.pruneAnchorBTCAggStatesAsync()
-    if (rowCount) console.log(`Pruned anchor_btc_agg_states - ${rowCount} row(s) deleted`)
+    results = await queueProofStatePruningTasks('anchor_btc_agg_states')
+    if (results.rowCount) console.log(`Pruned anchor_btc_agg_states - ${results.rowCount} row(s) to be deleted in ${results.batchCount} batches`)
     // remove all rows from btctx_states that are older than the expiration age
-    rowCount = await storageClient.pruneBtcTxStatesAsync()
-    if (rowCount) console.log(`Pruned btctx_states - ${rowCount} row(s) deleted`)
+    results = await queueProofStatePruningTasks('btctx_states')
+    if (results.rowCount) console.log(`Pruned btctx_states - ${results.rowCount} row(s) to be deleted in ${results.batchCount} batches`)
     // remove all rows from btchead_states that are older than the expiration age
-    rowCount = await storageClient.pruneBtcHeadStatesAsync()
-    if (rowCount) console.log(`Pruned btcheadstates - ${rowCount} row(s) deleted`)
+    results = await queueProofStatePruningTasks('btchead_states')
+    if (results.rowCount) console.log(`Pruned btchead_states - ${results.rowCount} row(s) to be deleted in ${results.batchCount} batches`)
   } catch (error) {
     console.error(`Unable to complete pruning process: ${error.message}`)
-  } finally {
-    PRUNING_IN_PROC = false
   }
+}
+
+async function queueProofStatePruningTasks (modelName) {
+  // determine the created_at bounds for the ranges
+  let createDates = await storageClient.getExpiredCreatedAtDatesForModel(modelName)
+  let pruneBatchTasks = []
+  let pruneBatchSize = 250
+  let pruneBatchesNeeded = Math.ceil(createDates.length / pruneBatchSize)
+
+  for (let x = 0; x < pruneBatchesNeeded; x++) {
+    let startBoundIndex = x * pruneBatchSize
+    let endBoundIndex = startBoundIndex + pruneBatchSize - 1
+    if (endBoundIndex >= createDates.length) endBoundIndex = createDates.length - 1
+
+    let newRange = {
+      startBound: createDates[startBoundIndex].created_at,
+      endBound: createDates[endBoundIndex].created_at
+    }
+    pruneBatchTasks.push(newRange)
+  }
+
+  // create and issue individual delete tasks for each batch
+  for (let x = 0; x < pruneBatchTasks.length; x++) {
+    try {
+      await taskQueue.enqueue('task-handler-queue', `prune_${modelName}`, [pruneBatchTasks[x].startBound, pruneBatchTasks[x].endBound])
+    } catch (error) {
+      console.error(`Could not enqueue prune task : ${error.message}`)
+    }
+  }
+
+  let results = {
+    rowCount: createDates.length,
+    batchCount: pruneBatchTasks.length
+  }
+
+  return results
 }
 
 /**
@@ -292,7 +328,6 @@ function processMessage (msg) {
 
 async function performLeaderElection () {
   IS_LEADER = false
-  PRUNING_IN_PROC = false
   let leaderElectionConfig = {
     key: env.PROOF_STATE_LEADER_KEY,
     consul: {
@@ -307,12 +342,10 @@ async function performLeaderElection () {
     .on('gainedLeadership', function () {
       console.log('This service instance has been chosen to be leader')
       IS_LEADER = true
-      PRUNING_IN_PROC = false
     })
     .on('error', function () {
       console.error('This lock session has been invalidated, new lock session will be created')
       IS_LEADER = false
-      PRUNING_IN_PROC = false
     })
 }
 
@@ -397,15 +430,39 @@ async function openRMQConnectionAsync (connectionString) {
     }
   }
 }
+/**
+ * Initializes the connection to teh Resque queue when Redis is ready
+ */
+async function initResqueQueueAsync () {
+  // wait until redis is initialized
+  let redisReady = (redis !== null)
+  while (!redisReady) {
+    await utils.sleep(100)
+    redisReady = (redis !== null)
+  }
+
+  var connectionDetails = {
+    host: 'redis',
+    port: 6379,
+    namespace: 'resque'
+  }
+
+  const queue = new nodeResque.Queue({ connection: connectionDetails })
+  queue.on('error', function (error) { console.log(error) })
+  await queue.connect()
+  taskQueue = queue
+
+  exitHook(async () => {
+    await queue.end()
+  })
+
+  console.log('Resque queue connection established')
+}
 
 function startIntervals () {
   setInterval(async () => {
     if (IS_LEADER) {
-      if (PRUNING_IN_PROC) {
-        console.log(`Pruning interval skipped : previous pruning task still in process.`)
-      } else {
-        await PruneStateDataAsync()
-      }
+      await PruneStateDataAsync()
     }
   }, env.PRUNE_FREQUENCY_MINUTES * 60 * 1000)
 }
@@ -422,6 +479,8 @@ async function start () {
     openRedisConnection(env.REDIS_CONNECT_URI)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
+    // init Resque queue
+    await initResqueQueueAsync()
     // Init intervals
     startIntervals()
     console.log('startup completed successfully')
