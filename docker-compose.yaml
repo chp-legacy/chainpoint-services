@@ -472,3 +472,42 @@ services:
       CHAINPOINT_CORE_BASE_URI: ${CHAINPOINT_CORE_BASE_URI}
       CORE_REWARD_ETH_ADDR: ${CORE_REWARD_ETH_ADDR}
       CORE_REWARD_ELIGIBLE: ${CORE_REWARD_ELIGIBLE}
+
+  # Task Handler
+  # node-resque job processing queue
+  #
+  task-handler:
+    restart: always
+    image: quay.io/chainpoint/node-task-handler-service:${DOCKER_TAG}
+    build:
+      context: ./node-task-handler-service
+    depends_on:
+      - roach1
+      - redis
+      - rabbitmq
+      - consul
+    networks:
+      - chainpoint
+    environment:
+      NODE_ENV: development
+
+  # Task Handler Admin (Resque Web) UI
+  # Web UI for task-handler node-resque job processing queue
+  # Access locally : http://127.0.0.1:9292/overview
+  #
+  task-handler-admin:
+    restart: always
+    image: corbinu/node-resque-web
+    depends_on:
+      - redis
+      - task-handler
+    networks:
+      - chainpoint
+    ports:
+      - "9292:9292"
+    environment:
+      NODE_ENV: development
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      REDIS_NAMESPACE: resque
