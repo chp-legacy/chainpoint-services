@@ -24,6 +24,12 @@ const exitHook = require('exit-hook')
 const { URL } = require('url')
 const debugPkg = require('debug')
 
+// The age of a running job, in miliseconds, for it to be considered stuck/timed out
+// This is neccesary to allow resque to determine what is a valid running job, and what
+// has been 'stuck' due to service crash/restart. Jobs found in the state are added to the fail queue.
+// Workers found with jobs in this state are deleted.
+const TASK_TIMEOUT_MS = 60000 // 1 minute timeout
+
 var debug = {
   general: debugPkg('task-handler:general'),
   worker: debugPkg('task-handler:worker'),
@@ -125,6 +131,33 @@ function openRedisConnection (redisURI) {
   })
 }
 
+async function cleanUpWorkersAndRequequeJobsAsync (connectionDetails) {
+  const queue = new nodeResque.Queue({ connection: connectionDetails })
+  await queue.connect()
+  // Delete stuck workers and move their stuck job to the failed queue
+  await queue.cleanOldWorkers(TASK_TIMEOUT_MS)
+  // Get the count of jobs in the failed queue
+  let failedCount = await queue.failedCount()
+  // Retrieve failed jobs in batches of 100
+  // First, determine the batch ranges to retrieve
+  let batchSize = 100
+  let failedBatches = []
+  for (let x = 0; x < failedCount; x += batchSize) {
+    failedBatches.push({ start: x, end: x + batchSize - 1 })
+  }
+  // Retrieve the failed jobs for each batch and collect in 'failedJobs' array
+  let failedJobs = []
+  for (let x = 0; x < failedBatches.length; x++) {
+    let failedJobSet = await queue.failed(failedBatches[x].start, failedBatches[x].end)
+    failedJobs = failedJobs.concat(failedJobSet)
+  }
+  // For each job, remove the job from the failed queue and requeue to its original queue
+  for (let x = 0; x < failedJobs.length; x++) {
+    debug.worker(`Requeuing job: ${failedJobs[x].payload.queue} : ${failedJobs[x].payload.class} : ${failedJobs[x].error}`)
+    await queue.retryAndRemoveFailed(failedJobs[x])
+  }
+}
+
 async function initResqueWorkerAsync () {
   let redisReady = (redis !== null)
   while (!redisReady) {
@@ -133,16 +166,19 @@ async function initResqueWorkerAsync () {
   }
 
   const redisURI = new URL(env.REDIS_CONNECT_URI)
+  const connectionDetails = {
+    host: redisURI.hostname,
+    port: redisURI.port,
+    namespace: 'resque'
+  }
   var multiWorkerConfig = {
-    connection: {
-      host: redisURI.hostname,
-      port: redisURI.port,
-      namespace: 'resque'
-    },
+    connection: connectionDetails,
     queues: ['task-handler-queue'],
     minTaskProcessors: 10,
     maxTaskProcessors: 100
   }
+
+  await cleanUpWorkersAndRequequeJobsAsync(connectionDetails)
 
   const multiWorker = new nodeResque.MultiWorker(multiWorkerConfig, jobs)
 
