@@ -492,6 +492,11 @@ async function getExpiredCreatedAtDatesForModel (modelName) {
   return createDates
 }
 
+async function pruneSingleAggStateByHashIdAsync (hashId) {
+  let pruneCount = await AggStates.destroy({ where: { hashId: hashId } })
+  return pruneCount
+}
+
 module.exports = {
   openConnectionAsync: openConnectionAsync,
   getHashIdsByAggIdAsync: getHashIdsByAggIdAsync,
@@ -512,6 +517,7 @@ module.exports = {
   pruneBTCTxStatesRangeAsync: pruneBTCTxStatesRangeAsync,
   pruneBTCHeadStatesRangeAsync: pruneBTCHeadStatesRangeAsync,
   getExpiredCreatedAtDatesForModel: getExpiredCreatedAtDatesForModel,
+  pruneSingleAggStateByHashIdAsync: pruneSingleAggStateByHashIdAsync,
   sequelize: sequelize,
   setRedis: (r) => { redis = r }
 }
