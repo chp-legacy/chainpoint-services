@@ -431,6 +431,7 @@ async function openRMQConnectionAsync (connectionString) {
     }
   }
 }
+
 /**
  * Initializes the connection to teh Resque queue when Redis is ready
  */
