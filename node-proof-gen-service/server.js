@@ -291,7 +291,7 @@ async function openStorageConnectionAsync () {
 }
 
 /**
- * Initializes the connection to teh Resque queue when Redis is ready
+ * Initializes the connection to the Resque queue when Redis is ready
  */
 async function initResqueQueueAsync () {
   // wait until redis is initialized
