@@ -44,6 +44,7 @@ const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 let redis = null
 
 const jobs = {
+  // tasks from proof-state service, bulk deletion of old proof state data
   'prune_agg_states': {
     perform: pruneAggStatesRangeAsync
   },
@@ -58,6 +59,10 @@ const jobs = {
   },
   'prune_btchead_states': {
     perform: pruneBTCHeadStatesRangeAsync
+  },
+  // tasks from proof-gen service, individual deletion of old proof state data
+  'prune_single_agg_state': {
+    perform: pruneSingleAggStateByHashIdAsync
   }
 }
 
@@ -107,6 +112,16 @@ async function pruneBTCHeadStatesRangeAsync (startTime, endTime) {
     return `Deleted ${delCount} rows from btchead_states between ${startTime} and ${endTime}`
   } catch (error) {
     let errorMessage = `Could not delete rows from btchead_states between ${startTime} and ${endTime} : ${error.message}`
+    throw errorMessage
+  }
+}
+
+async function pruneSingleAggStateByHashIdAsync (hashId) {
+  try {
+    let delCount = await cachedProofState.pruneSingleAggStateByHashIdAsync(hashId)
+    return `Deleted ${delCount} agg_states row with hash_id = ${hashId}`
+  } catch (error) {
+    let errorMessage = `Could not delete agg_states row with hash_id = ${hashId} : ${error.message}`
     throw errorMessage
   }
 }
