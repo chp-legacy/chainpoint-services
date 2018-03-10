@@ -493,7 +493,7 @@ async function getExpiredCreatedAtDatesForModel (modelName) {
 }
 
 async function pruneSingleAggStateByHashIdAsync (hashId) {
-  let pruneCount = await AggStates.destroy({ where: { hashId: hashId } })
+  let pruneCount = await AggStates.destroy({ where: { hash_id: hashId } })
   return pruneCount
 }
 
