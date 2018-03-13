@@ -349,7 +349,7 @@ services:
   #
   roach1:
     restart: always
-    image: cockroachdb/cockroach:v1.1.5
+    image: cockroachdb/cockroach:v1.1.6
     container_name: roach1-core
     ports:
       - "26257:26257"

@@ -861,6 +861,24 @@ async function processRewardMessage (msg) {
     let coreRewardEthAddr = rewardMsgObj.core ? rewardMsgObj.core.address : null
     let coreTNTGrainsRewardShare = rewardMsgObj.core ? rewardMsgObj.core.amount : 0
 
+    // check to be sure a sufficient TNT balance exists to pay out rewards,
+    // log an error if the TNT balance is too low.
+    let rewardTNTAddr // the TNT address from which rewards are sent for this Core
+    try {
+      let ethWallet = JSON.parse(env.ETH_WALLET)
+      rewardTNTAddr = ethWallet.address
+      if (!rewardTNTAddr.startsWith('0x')) rewardTNTAddr = `0x${rewardTNTAddr}`
+      let requiredMinimumBalance = nodeTNTGrainsRewardShare + coreTNTGrainsRewardShare
+      let currentBalance = await getTNTGrainsBalanceForAddressAsync(rewardTNTAddr)
+      if (currentBalance >= requiredMinimumBalance) {
+        debug.reward(`consumeRewardMessageAsync : processRewardMessage : Minimum balance for ${rewardTNTAddr} OK, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
+      } else {
+        console.error(`consumeRewardMessageAsync : processRewardMessage : Insufficient balance for ${rewardTNTAddr}, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
+      }
+    } catch (error) {
+      console.error(`consumeRewardMessageAsync : processRewardMessage : Could not verify minimum balance for ${rewardTNTAddr} : ${error.message}`)
+    }
+
     debug.reward('consumeRewardMessageAsync : processRewardMessage : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
     nodeRewardTxId = await sendTNTRewardAsync(nodeRewardETHAddr, nodeTNTGrainsRewardShare)
 
@@ -892,6 +910,38 @@ async function processRewardMessage (msg) {
     }
   } catch (error) {
     console.error(`consumeRewardMessageAsync : processRewardMessage : ${error.message}`)
+  }
+}
+
+async function getTNTGrainsBalanceForAddressAsync (tntAddress) {
+  let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
+
+  let options = {
+    headers: [
+      {
+        name: 'Content-Type',
+        value: 'application/json'
+      }
+    ],
+    method: 'GET',
+    uri: `${ethTntTxUri}/balance/${tntAddress}`,
+    json: true,
+    gzip: true,
+    timeout: 10000,
+    resolveWithFullResponse: true
+  }
+
+  try {
+    let balanceResponse = await rp(options)
+    let balanceTNTGrains = balanceResponse.body.balance
+    let intBalance = parseInt(balanceTNTGrains)
+    if (intBalance >= 0) {
+      return intBalance
+    } else {
+      throw new Error(`Bad TNT balance value: ${balanceTNTGrains}`)
+    }
+  } catch (error) {
+    throw new Error(`TNT balance read error: ${error.message}`)
   }
 }
 

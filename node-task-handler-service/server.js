@@ -43,75 +43,70 @@ const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 // This value is set once the connection has been established
 let redis = null
 
+const pluginOptions = {
+  plugins: ['DelayQueueLock', 'QueueLock'],
+  pluginOptions: {
+    DelayQueueLock: {},
+    QueueLock: {}
+  }
+}
 const jobs = {
   // tasks from proof-state service, bulk deletion of old proof state data
-  'prune_agg_states': {
-    perform: pruneAggStatesRangeAsync
-  },
-  'prune_cal_states': {
-    perform: pruneCalStatesRangeAsync
-  },
-  'prune_anchor_btc_agg_states': {
-    perform: pruneAnchorBTCAggStatesRangeAsync
-  },
-  'prune_btctx_states': {
-    perform: pruneBTCTxStatesRangeAsync
-  },
-  'prune_btchead_states': {
-    perform: pruneBTCHeadStatesRangeAsync
-  },
+  'prune_agg_states_ids': Object.assign({ perform: pruneAggStatesByIdsAsync }, pluginOptions),
+  'prune_cal_states_ids': Object.assign({ perform: pruneCalStatesByIdsAsync }, pluginOptions),
+  'prune_anchor_btc_agg_states_ids': Object.assign({ perform: pruneAnchorBTCAggStatesByIdsAsync }, pluginOptions),
+  'prune_btctx_states_ids': Object.assign({ perform: pruneBTCTxStatesByIdsAsync }, pluginOptions),
+  'prune_btchead_states_ids': Object.assign({ perform: pruneBTCHeadStatesByIdsAsync }, pluginOptions),
   // tasks from proof-gen service, individual deletion of old proof state data
-  'prune_single_agg_state': {
-    perform: pruneSingleAggStateByHashIdAsync
-  }
+  'prune_single_agg_state': { perform: pruneSingleAggStateByHashIdAsync }
 }
 
-async function pruneAggStatesRangeAsync (startTime, endTime) {
+async function pruneAggStatesByIdsAsync (ids) {
   try {
-    let delCount = await cachedProofState.pruneAggStatesRangeAsync(startTime, endTime)
-    return `Deleted ${delCount} rows from agg_states between ${startTime} and ${endTime}`
+    let delCount = await cachedProofState.pruneAggStatesByIdsAsync(ids)
+    return `Deleted ${delCount} rows from agg_states with ids ${ids[0]}...`
   } catch (error) {
-    let errorMessage = `Could not delete rows from agg_states between ${startTime} and ${endTime} : ${error.message}`
+    let errorMessage = `Could not delete rows from agg_states  with ids ${ids[0]}... : ${error.message}`
     throw errorMessage
   }
 }
 
-async function pruneCalStatesRangeAsync (startTime, endTime) {
+async function pruneCalStatesByIdsAsync (ids) {
   try {
-    let delCount = await cachedProofState.pruneCalStatesRangeAsync(startTime, endTime)
-    return `Deleted ${delCount} rows from cal_states between ${startTime} and ${endTime}`
+    let delCount = await cachedProofState.pruneCalStatesByIdsAsync(ids)
+    return `Deleted ${delCount} rows from cal_states with ids ${ids[0]}...`
   } catch (error) {
-    let errorMessage = `Could not delete rows from cal_states between ${startTime} and ${endTime} : ${error.message}`
+    let errorMessage = `Could not delete rows from cal_states with ids ${ids[0]}... : ${error.message}`
     throw errorMessage
   }
 }
 
-async function pruneAnchorBTCAggStatesRangeAsync (startTime, endTime) {
+async function pruneAnchorBTCAggStatesByIdsAsync (ids) {
   try {
-    let delCount = await cachedProofState.pruneAnchorBTCAggStatesRangeAsync(startTime, endTime)
-    return `Deleted ${delCount} rows from anchor_btc_agg_states between ${startTime} and ${endTime}`
+    let delCount = await cachedProofState.pruneAnchorBTCAggStatesByIdsAsync(ids)
+    return `Deleted ${delCount} rows from anchor_btc_agg_states with ids ${ids[0]}...`
   } catch (error) {
-    let errorMessage = `Could not delete rows from anchor_btc_agg_states between ${startTime} and ${endTime} : ${error.message}`
+    let errorMessage = `Could not delete rows from anchor_btc_agg_states with ids ${ids[0]}... : ${error.message}`
     throw errorMessage
   }
 }
 
-async function pruneBTCTxStatesRangeAsync (startTime, endTime) {
+async function pruneBTCTxStatesByIdsAsync (ids) {
   try {
-    let delCount = await cachedProofState.pruneBTCTxStatesRangeAsync(startTime, endTime)
-    return `Deleted ${delCount} rows from btctx_states between ${startTime} and ${endTime}`
+    let delCount = await cachedProofState.pruneBTCTxStatesByIdsAsync(ids)
+    return `Deleted ${delCount} rows from btctx_states with ids ${ids[0]}...`
   } catch (error) {
-    let errorMessage = `Could not delete rows from btctx_states between ${startTime} and ${endTime} : ${error.message}`
+    let errorMessage = `Could not delete rows from btctx_states with ids ${ids[0]}... : ${error.message}`
     throw errorMessage
   }
 }
 
-async function pruneBTCHeadStatesRangeAsync (startTime, endTime) {
+async function pruneBTCHeadStatesByIdsAsync (ids) {
   try {
-    let delCount = await cachedProofState.pruneBTCHeadStatesRangeAsync(startTime, endTime)
-    return `Deleted ${delCount} rows from btchead_states between ${startTime} and ${endTime}`
+    let delCount = await cachedProofState.pruneBTCHeadStatesByIdsAsync(ids)
+    return `Deleted ${delCount} rows from btchead_states with ids ${ids[0]}...`
   } catch (error) {
-    let errorMessage = `Could not delete rows from btchead_states between ${startTime} and ${endTime} : ${error.message}`
+    let errorMessage = `Could not delete rows from btchead_states with ids ${ids[0]}... : ${error.message}`
     throw errorMessage
   }
 }
