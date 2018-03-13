@@ -43,27 +43,22 @@ const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 // This value is set once the connection has been established
 let redis = null
 
+const pluginOptions = {
+  plugins: ['DelayQueueLock', 'QueueLock'],
+  pluginOptions: {
+    DelayQueueLock: {},
+    QueueLock: {}
+  }
+}
 const jobs = {
   // tasks from proof-state service, bulk deletion of old proof state data
-  'prune_agg_states_ids': {
-    perform: pruneAggStatesByIdsAsync
-  },
-  'prune_cal_states_ids': {
-    perform: pruneCalStatesByIdsAsync
-  },
-  'prune_anchor_btc_agg_states_ids': {
-    perform: pruneAnchorBTCAggStatesByIdsAsync
-  },
-  'prune_btctx_states_ids': {
-    perform: pruneBTCTxStatesByIdsAsync
-  },
-  'prune_btchead_states_ids': {
-    perform: pruneBTCHeadStatesByIdsAsync
-  },
+  'prune_agg_states_ids': Object.assign({ perform: pruneAggStatesByIdsAsync }, pluginOptions),
+  'prune_cal_states_ids': Object.assign({ perform: pruneCalStatesByIdsAsync }, pluginOptions),
+  'prune_anchor_btc_agg_states_ids': Object.assign({ perform: pruneAnchorBTCAggStatesByIdsAsync }, pluginOptions),
+  'prune_btctx_states_ids': Object.assign({ perform: pruneBTCTxStatesByIdsAsync }, pluginOptions),
+  'prune_btchead_states_ids': Object.assign({ perform: pruneBTCHeadStatesByIdsAsync }, pluginOptions),
   // tasks from proof-gen service, individual deletion of old proof state data
-  'prune_single_agg_state': {
-    perform: pruneSingleAggStateByHashIdAsync
-  }
+  'prune_single_agg_state': { perform: pruneSingleAggStateByHashIdAsync }
 }
 
 async function pruneAggStatesByIdsAsync (ids) {
