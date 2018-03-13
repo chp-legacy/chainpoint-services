@@ -249,35 +249,29 @@ async function PruneStateDataAsync () {
 }
 
 async function queueProofStatePruningTasks (modelName) {
-  // determine the created_at bounds for the ranges
-  let createDates = await cachedProofState.getExpiredCreatedAtDatesForModel(modelName)
+  // determine the primary key ids for each batch
+  let primaryKeyValues = await cachedProofState.getExpiredPKValuesForModel(modelName)
   let pruneBatchTasks = []
-  let pruneBatchSize = 250
-  let pruneBatchesNeeded = Math.ceil(createDates.length / pruneBatchSize)
+  let pruneBatchSize = 500
 
-  for (let x = 0; x < pruneBatchesNeeded; x++) {
-    let startBoundIndex = x * pruneBatchSize
-    let endBoundIndex = startBoundIndex + pruneBatchSize - 1
-    if (endBoundIndex >= createDates.length) endBoundIndex = createDates.length - 1
+  while (primaryKeyValues.length > 0) {
+    let batch = primaryKeyValues.splice(0, pruneBatchSize)
 
-    let newRange = {
-      startBound: createDates[startBoundIndex].created_at,
-      endBound: createDates[endBoundIndex].created_at
-    }
-    pruneBatchTasks.push(newRange)
+    pruneBatchTasks.push(batch)
+    console.log(`Created batch for ${modelName} table ${batch[0]}...`)
   }
 
   // create and issue individual delete tasks for each batch
   for (let x = 0; x < pruneBatchTasks.length; x++) {
     try {
-      await taskQueue.enqueue('task-handler-queue', `prune_${modelName}`, [pruneBatchTasks[x].startBound, pruneBatchTasks[x].endBound])
+      await taskQueue.enqueue('task-handler-queue', `prune_${modelName}_ids`, [pruneBatchTasks[x]])
     } catch (error) {
       console.error(`Could not enqueue prune task : ${error.message}`)
     }
   }
 
   let results = {
-    rowCount: createDates.length,
+    rowCount: primaryKeyValues.length,
     batchCount: pruneBatchTasks.length
   }
 
