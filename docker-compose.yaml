@@ -516,3 +516,25 @@ services:
       REDIS_PORT: 6379
       REDIS_DB: 0
       REDIS_NAMESPACE: resque
+
+  # Prune Accumulator
+  # Accumulates and deletes proof state rows in batches once no longer needed
+  # 
+  prune-accumulator:
+    restart: always
+    image: quay.io/chainpoint/node-prune-accumulator-service:${DOCKER_TAG}
+    build:
+      context: ./node-prune-accumulator-service
+    depends_on:
+      - roach1
+      - redis
+      - rabbitmq
+    networks:
+      - chainpoint
+    environment:
+      NODE_ENV: development
+      DEBUG: "prune-accumulator:*"
+      DEBUG_HIDE_DATE: "false"
+      # DEBUG_COLORS: "true"
+      DEBUG_DEPTH: 10
+      DEBUG_SHOW_HIDDEN: "enabled"
