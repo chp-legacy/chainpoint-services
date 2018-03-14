@@ -32,6 +32,8 @@ var debug = {
   general: debugPkg('prune-accumulator:general'),
   tasking: debugPkg('prune-accumulator:tasking')
 }
+// direct debug to output over STDOUT
+debugPkg.log = console.info.bind(console)
 
 const PRUNE_HASHES_KEY = 'PruneAggStateHashes'
 
