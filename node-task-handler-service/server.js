@@ -56,9 +56,7 @@ const jobs = {
   'prune_cal_states_ids': Object.assign({ perform: pruneCalStatesByIdsAsync }, pluginOptions),
   'prune_anchor_btc_agg_states_ids': Object.assign({ perform: pruneAnchorBTCAggStatesByIdsAsync }, pluginOptions),
   'prune_btctx_states_ids': Object.assign({ perform: pruneBTCTxStatesByIdsAsync }, pluginOptions),
-  'prune_btchead_states_ids': Object.assign({ perform: pruneBTCHeadStatesByIdsAsync }, pluginOptions),
-  // tasks from proof-gen service, individual deletion of old proof state data
-  'prune_single_agg_state': { perform: pruneSingleAggStateByHashIdAsync }
+  'prune_btchead_states_ids': Object.assign({ perform: pruneBTCHeadStatesByIdsAsync }, pluginOptions)
 }
 
 async function pruneAggStatesByIdsAsync (ids) {
@@ -107,16 +105,6 @@ async function pruneBTCHeadStatesByIdsAsync (ids) {
     return `Deleted ${delCount} rows from btchead_states with ids ${ids[0]}...`
   } catch (error) {
     let errorMessage = `Could not delete rows from btchead_states with ids ${ids[0]}... : ${error.message}`
-    throw errorMessage
-  }
-}
-
-async function pruneSingleAggStateByHashIdAsync (hashId) {
-  try {
-    let delCount = await cachedProofState.pruneSingleAggStateByHashIdAsync(hashId)
-    return `Deleted ${delCount} agg_states row with hash_id = ${hashId}`
-  } catch (error) {
-    let errorMessage = `Could not delete agg_states row with hash_id = ${hashId} : ${error.message}`
     throw errorMessage
   }
 }
