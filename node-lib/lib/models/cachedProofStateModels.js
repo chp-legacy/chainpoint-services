@@ -37,11 +37,11 @@ let sequelizeOptions = {
   logging: false,
   operatorsAliases: false,
   pool: {
-    max: 100,
+    max: 20,
     min: 0,
-    idle: 4000,
+    idle: 10000,
     acquire: 10000,
-    evict: 4000
+    evict: 10000
   }
 }
 
@@ -502,11 +502,6 @@ async function getExpiredPKValuesForModel (modelName) {
   return primaryKeyVals
 }
 
-async function pruneSingleAggStateByHashIdAsync (hashId) {
-  let pruneCount = await AggStates.destroy({ where: { hash_id: hashId } })
-  return pruneCount
-}
-
 module.exports = {
   openConnectionAsync: openConnectionAsync,
   getHashIdsByAggIdAsync: getHashIdsByAggIdAsync,
@@ -527,7 +522,6 @@ module.exports = {
   pruneBTCTxStatesByIdsAsync: pruneBTCTxStatesByIdsAsync,
   pruneBTCHeadStatesByIdsAsync: pruneBTCHeadStatesByIdsAsync,
   getExpiredPKValuesForModel: getExpiredPKValuesForModel,
-  pruneSingleAggStateByHashIdAsync: pruneSingleAggStateByHashIdAsync,
   sequelize: sequelize,
   setRedis: (r) => { redis = r }
 }

@@ -23,9 +23,6 @@ const uuidTime = require('uuid-time')
 const chpBinary = require('chainpoint-binary')
 const utils = require('./lib/utils.js')
 const bluebird = require('bluebird')
-const nodeResque = require('node-resque')
-const exitHook = require('exit-hook')
-const { URL } = require('url')
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 
@@ -38,9 +35,6 @@ let amqpChannel = null
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
 let redis = null
-
-// This value is set once the connection has been established
-let taskQueue = null
 
 function addChainpointHeader (proof, hash, hashId) {
   proof['@context'] = 'https://w3id.org/chainpoint/v3'
@@ -173,11 +167,11 @@ async function consumeProofReadyMessageAsync (msg) {
         // store in redis
         await storeProofAsync(proof)
 
-        // delete the agg_states proof state row for this hash_id
+        // queue prune message containing hash_id for this agg_state row
         try {
-          await taskQueue.enqueue('task-handler-queue', 'prune_single_agg_state', aggStateRow.hash_id)
+          await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_PRUNE_ACC_QUEUE, Buffer.from(aggStateRow.hash_id), { persistent: true })
         } catch (error) {
-          console.error(`Could not enqueue prune_single_agg_state task for ${aggStateRow.hash_id} : ${error.message}`)
+          console.error(`${env.RMQ_WORK_OUT_PRUNE_ACC_QUEUE} publish message nacked`)
         }
 
         // Proof ready message has been consumed, ack consumption of original message
@@ -248,7 +242,7 @@ async function openRMQConnectionAsync (connectionString) {
       let chan = await conn.createConfirmChannel()
       // the connection and channel have been established
       chan.assertQueue(env.RMQ_WORK_IN_GEN_QUEUE, { durable: true })
-      chan.assertExchange(env.RMQ_OUTGOING_EXCHANGE, 'headers', { durable: true })
+      chan.assertQueue(env.RMQ_WORK_OUT_PRUNE_ACC_QUEUE, { durable: true })
       chan.prefetch(env.RMQ_PREFETCH_COUNT_GEN)
       amqpChannel = chan
       // Continuously load the HASHES from RMQ with hash objects to process
@@ -290,35 +284,6 @@ async function openStorageConnectionAsync () {
   }
 }
 
-/**
- * Initializes the connection to the Resque queue when Redis is ready
- */
-async function initResqueQueueAsync () {
-  // wait until redis is initialized
-  let redisReady = (redis !== null)
-  while (!redisReady) {
-    await utils.sleep(100)
-    redisReady = (redis !== null)
-  }
-  const redisURI = new URL(env.REDIS_CONNECT_URI)
-  var connectionDetails = {
-    host: redisURI.hostname,
-    port: redisURI.port,
-    namespace: 'resque'
-  }
-
-  const queue = new nodeResque.Queue({ connection: connectionDetails })
-  queue.on('error', function (error) { console.log(error) })
-  await queue.connect()
-  taskQueue = queue
-
-  exitHook(async () => {
-    await queue.end()
-  })
-
-  console.log('Resque queue connection established')
-}
-
 // process all steps need to start the application
 async function start () {
   if (env.NODE_ENV === 'test') return
@@ -329,8 +294,6 @@ async function start () {
     openRedisConnection(env.REDIS_CONNECT_URI)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    // init Resque queue
-    await initResqueQueueAsync()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)
