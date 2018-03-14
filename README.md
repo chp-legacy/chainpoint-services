@@ -66,7 +66,7 @@ Running `make up` should build and start all services for you.
 [GNU Affero General Public License v3.0](http://www.gnu.org/licenses/agpl-3.0.txt)
 
 ```
-Copyright (C) 2017 Tierion
+Copyright (C) 2018 Tierion
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published by
