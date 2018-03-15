@@ -74,7 +74,7 @@ async function drainHashPoolAsync () {
 
     let currentHashCount = await redis.scardAsync(PRUNE_HASHES_KEY)
     let pruneBatchesNeeded = Math.ceil(currentHashCount / pruneBatchSize)
-    debug.general(`${currentHashCount} hash_ids currently in pool`)
+    if (currentHashCount > 0) debug.general(`${currentHashCount} hash_ids currently in pool`)
     for (let x = 0; x < pruneBatchesNeeded; x++) {
       let hashIds = await redis.spopAsync(PRUNE_HASHES_KEY, pruneBatchSize)
       // delete the agg_states proof state rows for these hash_ids
@@ -205,7 +205,7 @@ function startIntervals () {
   debug.general('starting intervals')
 
   // PERIODIC TIMERS
-  setInterval(() => drainHashPoolAsync(), 5000)
+  setInterval(() => drainHashPoolAsync(), 1000)
 }
 
 // process all steps need to start the application
