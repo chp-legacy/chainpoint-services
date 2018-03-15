@@ -160,17 +160,15 @@ async function pruneAuditDataAsync () {
   const cutoffTimestamp = Date.now() - AUDIT_LOG_EXPIRE_HOURS * 60 * 60 * 1000
 
   // select all the audit id values that are ready to be pruned
-  let auditIdsTimes = await NodeAuditLog.findAll({ where: { audit_at: { [Op.lte]: cutoffTimestamp } }, attributes: ['id'] })
-  // get the plain object results form the sequelize return value
-  for (let x = 0; x < auditIdsTimes.length; x++) {
-    auditIdsTimes[x] = auditIdsTimes[x].get({ plain: true })
-  }
+  let auditIds = await NodeAuditLog.findAll({ where: { audit_at: { [Op.lte]: cutoffTimestamp } }, attributes: ['id'] })
+  // get an array of ids from the results
+  auditIds = auditIds.map((item) => { return item.id })
 
   let pruneBatchTasks = []
   let pruneBatchSize = 500
 
-  while (auditIdsTimes.length > 0) {
-    let batch = auditIdsTimes.splice(0, pruneBatchSize)
+  while (auditIds.length > 0) {
+    let batch = auditIds.splice(0, pruneBatchSize)
     pruneBatchTasks.push(batch)
   }
 
