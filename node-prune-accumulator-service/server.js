@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Tierion
+/* Copyright (C) 2018 Tierion
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -32,6 +32,8 @@ var debug = {
   general: debugPkg('prune-accumulator:general'),
   tasking: debugPkg('prune-accumulator:tasking')
 }
+// direct debug to output over STDOUT
+debugPkg.log = console.info.bind(console)
 
 const PRUNE_HASHES_KEY = 'PruneAggStateHashes'
 
@@ -72,7 +74,7 @@ async function drainHashPoolAsync () {
 
     let currentHashCount = await redis.scardAsync(PRUNE_HASHES_KEY)
     let pruneBatchesNeeded = Math.ceil(currentHashCount / pruneBatchSize)
-    debug.general(`${currentHashCount} hash_ids currently in pool`)
+    if (currentHashCount > 0) debug.general(`${currentHashCount} hash_ids currently in pool`)
     for (let x = 0; x < pruneBatchesNeeded; x++) {
       let hashIds = await redis.spopAsync(PRUNE_HASHES_KEY, pruneBatchSize)
       // delete the agg_states proof state rows for these hash_ids
@@ -203,7 +205,7 @@ function startIntervals () {
   debug.general('starting intervals')
 
   // PERIODIC TIMERS
-  setInterval(() => drainHashPoolAsync(), 5000)
+  setInterval(() => drainHashPoolAsync(), 1000)
 }
 
 // process all steps need to start the application

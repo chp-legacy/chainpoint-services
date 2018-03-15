@@ -9,12 +9,19 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "async-retry": "^1.2.1",
+    "bluebird": "^3.5.1",
     "debug": "^3.1.0",
     "envalid": "^4.1.4",
     "exit-hook": "^1.1.1",
     "node-resque": "^5.2.0",
     "redis": "^2.8.0",
+    "request": "^2.85.0",
+    "request-promise-native": "^1.0.5",
+    "semver": "^5.5.0",
     "sequelize": "^4.35.2",
-    "sequelize-cockroachdb": "https://github.com/cockroachdb/sequelize-cockroachdb.git#f6b15cfaf23c17882e4b813a4dfc9758a77aa5a9"
+    "sequelize-cockroachdb": "https://github.com/cockroachdb/sequelize-cockroachdb.git#f6b15cfaf23c17882e4b813a4dfc9758a77aa5a9",
+    "tweetnacl": "^1.0.0",
+    "tweetnacl-util": "^0.15.0"
   }
 }
