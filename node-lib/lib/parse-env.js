@@ -90,7 +90,6 @@ let envDefinitions = {
   RMQ_WORK_OUT_BTCMON_QUEUE: envalid.str({ default: 'work.btcmon', desc: 'The queue name for outgoing message to the btc mon service' }),
   RMQ_WORK_OUT_GEN_QUEUE: envalid.str({ default: 'work.gen', desc: 'The queue name for outgoing message to the proof gen service' }),
   RMQ_WORK_OUT_API_QUEUE: envalid.str({ default: 'work.api', desc: 'The queue name for outgoing message to the api service' }),
-  RMQ_WORK_OUT_AUDIT_QUEUE: envalid.str({ default: 'work.audit', desc: 'The queue name for outgoing message to the audit consumer service' }),
   RMQ_WORK_OUT_PRUNE_ACC_QUEUE: envalid.str({ default: 'work.prune', desc: 'The queue name for outgoing message to the prune accumulator service' }),
 
   // Redis related variables
@@ -163,10 +162,8 @@ let envDefinitions = {
   REWARDS_LEADER_KEY: envalid.str({ default: 'service/reward/leader/lock', desc: 'Key used for acquiring reward process leadership locks' }),
 
   // Audit services specific variables
-  RMQ_PREFETCH_COUNT_AUDIT: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
   NEW_AUDIT_CHALLENGES_PER_HOUR: validateFactorOfSixty({ default: 2, desc: 'The number of times per hour to generate new audit challenges, defaults to 2, must be a factor of 60, no greater than 20' }),
   NODE_AUDIT_ROUNDS_PER_HOUR: validateFactorOfSixtyUpToSixty({ default: 2, desc: 'The number of times per hour to perform Node audit rounds, defaults to 60, must be a factor of 60' }),
-  RMQ_WORK_IN_AUDIT_QUEUE: envalid.str({ default: 'work.audit', desc: 'The queue name for message consumption originating from the audit producer service' }),
   AUDIT_PRODUCER_LEADER_KEY: envalid.str({ default: 'service/audit-producer/leader/lock', desc: 'Key used for acquiring audit producer process leadership locks' }),
 
   // Prune accumulator specific variables
