@@ -26,22 +26,26 @@ const crypto = require('crypto')
 const rnd = require('random-number-csprng')
 const MerkleTools = require('merkle-tools')
 const heartbeats = require('heartbeats')
-const amqp = require('amqplib')
 const leaderElection = require('exp-leader-election')
 const cnsl = require('consul')
 const bluebird = require('bluebird')
 const r = require('redis')
+const nodeResque = require('node-resque')
+const exitHook = require('exit-hook')
+const { URL } = require('url')
 
 let consul = null
 
-// The channel used for all amqp communication
-// This value is set once the connection has been established
-let amqpChannel = null
-
 let redis = null
+
+// This value is set once the connection has been established
+let taskQueue = null
 
 // The leadership status for this instance of the audit producer service
 let IS_LEADER = false
+
+// The lifespan of audit log entries
+const AUDIT_LOG_EXPIRE_HOURS = 6
 
 // the amount of credits to top off all Nodes with daily
 const creditTopoffAmount = 86400
@@ -76,15 +80,10 @@ async function auditNodesAsync () {
 
   // iterate through each Registered Node, queue up an audit task for audit consumer
   for (let x = 0; x < nodesReadyForAudit.length; x++) {
-    let auditTaskObj = {
-      tntAddr: nodesReadyForAudit[x].tntAddr,
-      publicUri: nodesReadyForAudit[x].publicUri,
-      tntCredit: nodesReadyForAudit[x].tntCredit
-    }
     try {
-      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_AUDIT_QUEUE, Buffer.from(JSON.stringify(auditTaskObj)), { persistent: true, type: 'audit' })
+      await taskQueue.enqueue('task-handler-queue', `audit_node`, [nodesReadyForAudit[x].tntAddr, nodesReadyForAudit[x].publicUri, nodesReadyForAudit[x].tntCredit])
     } catch (error) {
-      console.error(env.RMQ_WORK_OUT_AGG_QUEUE, 'publish message nacked')
+      console.error(`Could not enqueue audit_node task : ${error.message}`)
     }
   }
   console.log(`Audit tasks queued for audit-consumer`)
@@ -158,39 +157,29 @@ async function performCreditTopoffAsync (creditAmount) {
 }
 
 async function pruneAuditDataAsync () {
-  const cutoffTimestamp = Date.now() - 360 * 60 * 1000 // 6 hours ago
-  const pruneBatchSize = 250
+  const cutoffTimestamp = Date.now() - AUDIT_LOG_EXPIRE_HOURS * 60 * 60 * 1000
 
-  // select all the audit_at values that are ready to be pruned
-  let auditAtTimes = await NodeAuditLog.findAll({ where: { audit_at: { [Op.lte]: cutoffTimestamp } }, attributes: ['audit_at'], order: [['audit_at', 'ASC']] })
+  // select all the audit id values that are ready to be pruned
+  let auditIdsTimes = await NodeAuditLog.findAll({ where: { audit_at: { [Op.lte]: cutoffTimestamp } }, attributes: ['id'] })
   // get the plain object results form the sequelize return value
-  for (let x = 0; x < auditAtTimes.length; x++) {
-    auditAtTimes[x] = auditAtTimes[x].get({ plain: true })
+  for (let x = 0; x < auditIdsTimes.length; x++) {
+    auditIdsTimes[x] = auditIdsTimes[x].get({ plain: true })
   }
 
-  // split the entire set of audit log rows into batches
-  // and determine the audit_at start and end ranges for the batches
   let pruneBatchTasks = []
-  let pruneBatchesNeeded = Math.ceil(auditAtTimes.length / pruneBatchSize)
+  let pruneBatchSize = 500
 
-  for (let x = 0; x < pruneBatchesNeeded; x++) {
-    let startBoundIndex = x * pruneBatchSize
-    let endBoundIndex = startBoundIndex + pruneBatchSize - 1
-    if (endBoundIndex >= auditAtTimes.length) endBoundIndex = auditAtTimes.length - 1
-
-    let newRange = {
-      startBound: auditAtTimes[startBoundIndex].audit_at,
-      endBound: auditAtTimes[endBoundIndex].audit_at
-    }
-    pruneBatchTasks.push(newRange)
+  while (auditIdsTimes.length > 0) {
+    let batch = auditIdsTimes.splice(0, pruneBatchSize)
+    pruneBatchTasks.push(batch)
   }
 
+  // create and issue individual delete tasks for each batch
   for (let x = 0; x < pruneBatchTasks.length; x++) {
     try {
-      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_AUDIT_QUEUE, Buffer.from(JSON.stringify(pruneBatchTasks[x])), { persistent: true, type: 'prune' })
-      console.log(`Batch ${x + 1} of ${pruneBatchTasks.length} publish message acked`)
+      await taskQueue.enqueue('task-handler-queue', `prune_audit_log_ids`, [pruneBatchTasks[x]])
     } catch (error) {
-      console.error(env.RMQ_WORK_OUT_AUDIT_QUEUE, 'publish message nacked')
+      console.error(`Could not enqueue prune task : ${error.message}`)
     }
   }
 }
@@ -239,41 +228,6 @@ function openRedisConnection (redisURI) {
   })
 }
 
-/**
- * Opens an AMPQ connection and channel
- * Retry logic is included to handle losses of connection
- *
- * @param {string} connectionString - The connection string for the RabbitMQ instance, an AMQP URI
- */
-async function openRMQConnectionAsync (connectionString) {
-  let rmqConnected = false
-  while (!rmqConnected) {
-    try {
-      // connect to rabbitmq server
-      let conn = await amqp.connect(connectionString)
-      // create communication channel
-      let chan = await conn.createConfirmChannel()
-      // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_OUT_AUDIT_QUEUE, { durable: true })
-      // set 'amqpChannel' so that publishers have access to the channel
-      amqpChannel = chan
-      // if the channel closes for any reason, attempt to reconnect
-      conn.on('close', async () => {
-        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
-        amqpChannel = null
-        await utils.sleep(5000)
-        await openRMQConnectionAsync(connectionString)
-      })
-      console.log('RabbitMQ connection established')
-      rmqConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
-}
-
 async function performLeaderElection () {
   IS_LEADER = false
   let leaderElectionConfig = {
@@ -310,6 +264,35 @@ async function checkForGenesisBlockAsync () {
     }
   }
   console.log(`Genesis block found, calendar confirmed to exist`)
+}
+
+/**
+ * Initializes the connection to the Resque queue when Redis is ready
+ */
+async function initResqueQueueAsync () {
+  // wait until redis is initialized
+  let redisReady = (redis !== null)
+  while (!redisReady) {
+    await utils.sleep(100)
+    redisReady = (redis !== null)
+  }
+  const redisURI = new URL(env.REDIS_CONNECT_URI)
+  var connectionDetails = {
+    host: redisURI.hostname,
+    port: redisURI.port,
+    namespace: 'resque'
+  }
+
+  const queue = new nodeResque.Queue({ connection: connectionDetails })
+  queue.on('error', function (error) { console.log(error) })
+  await queue.connect()
+  taskQueue = queue
+
+  exitHook(async () => {
+    await queue.end()
+  })
+
+  console.log('Resque queue connection established')
 }
 
 function setGenerateNewChallengeInterval () {
@@ -415,10 +398,10 @@ async function start () {
     openRedisConnection(env.REDIS_CONNECT_URI)
     // init consul and perform leader election
     performLeaderElection()
-    // init RabbitMQ
-    await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // ensure at least 1 calendar block exist
     await checkForGenesisBlockAsync()
+    // init Resque queue
+    await initResqueQueueAsync()
     // start main processing
     await startWatchesAndIntervalsAsync()
     console.log('startup completed successfully')
