@@ -69,18 +69,6 @@ builds:
     labels:
       - 'org.chainpoint.git.commitid={fcommitid}'
 
-  node-audit-consumer-service:
-    context: node-audit-consumer-service
-    dockerfile: Dockerfile
-    rewrite_from: node-lib
-    depends_on:
-      - node-lib
-    pushes:
-      - 'on_branch:master=quay.io/chainpoint/node-audit-consumer-service:latest'
-      - 'always=quay.io/chainpoint/node-audit-consumer-service:{fcommitid}'
-    labels:
-      - 'org.chainpoint.git.commitid={fcommitid}'
-
   node-audit-producer-service:
     context: node-audit-producer-service
     dockerfile: Dockerfile

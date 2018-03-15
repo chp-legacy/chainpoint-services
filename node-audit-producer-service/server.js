@@ -78,7 +78,7 @@ async function auditNodesAsync () {
     console.error(`Could not retrieve public Node list: ${error.message}`)
   }
 
-  // iterate through each Registered Node, queue up an audit task for audit consumer
+  // iterate through each Registered Node, queue up an audit task for task handler
   for (let x = 0; x < nodesReadyForAudit.length; x++) {
     try {
       await taskQueue.enqueue('task-handler-queue', `audit_node`, [nodesReadyForAudit[x].tntAddr, nodesReadyForAudit[x].publicUri, nodesReadyForAudit[x].tntCredit])
@@ -86,7 +86,7 @@ async function auditNodesAsync () {
       console.error(`Could not enqueue audit_node task : ${error.message}`)
     }
   }
-  console.log(`Audit tasks queued for audit-consumer`)
+  console.log(`Audit tasks queued for task-handler`)
 
   // wait 1 minute and then prune any old data from the table
   setTimeout(() => { pruneAuditDataAsync() }, 60000)
