@@ -15,7 +15,7 @@
 */
 
 // load all environment variables into env object
-const env = require('./lib/parse-env.js')('prune-accumulator')
+const env = require('./lib/parse-env.js')('task-accumulator')
 
 const amqp = require('amqplib')
 const r = require('redis')
@@ -26,22 +26,28 @@ const nodeResque = require('node-resque')
 const exitHook = require('exit-hook')
 const { URL } = require('url')
 
-const cachedProofState = require('./lib/models/cachedProofStateModels.js')
-
 var debug = {
-  general: debugPkg('prune-accumulator:general'),
-  tasking: debugPkg('prune-accumulator:tasking')
+  general: debugPkg('task-accumulator:general'),
+  pruneAgg: debugPkg('task-accumulator:prune_agg'),
+  writeAuditLog: debugPkg('task-accumulator:write_audit_log')
 }
 // direct debug to output over STDOUT
 debugPkg.log = console.info.bind(console)
 
-const PRUNE_HASHES_KEY = 'PruneAggStateHashes'
+const PRUNE_AGG_STATES_KEY = 'PruneAggStates'
+const AUDIT_LOG_WRITES_KEY = 'AuditLogWrites'
 
-// Variable indicating if accumulation pool is currently being drained
-let POOL_DRAINING = false
+// Variable indicating if prune agg states accumulation pool is currently being drained
+let PRUNE_AGG_STATES_POOL_DRAINING = false
 
 // The number of items to include in a single batch delete command
-let pruneBatchSize = 500
+let pruneAggStatesBatchSize = 500
+
+// Variable indicating if audit log write accumulation pool is currently being drained
+let AUDIT_LOG_WRITE_POOL_DRAINING = false
+
+// The number of items to include in a single batch audit log write command
+let auditLogWriteBatchSize = 500
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -53,58 +59,105 @@ let redis = null
 // This value is set once the connection has been established
 let taskQueue = null
 
-async function consumePruneMessageAsync (msg) {
+/**
+* Parses a message and performs the required work for that message
+*
+* @param {amqp message object} msg - The AMQP message received from the queue
+*/
+function processMessage (msg) {
+  if (msg !== null) {
+    // determine the source of the message and handle appropriately
+    switch (msg.properties.type) {
+      case 'prune_agg':
+        // Consumes a prune message from the proof gen
+        // accumulates prune tasks and issues batch to task handler
+        consumePruneAggMessageAsync(msg)
+        break
+      case 'write_audit_log':
+      // Consumes an audit log write message from the task handler
+        // accumulates audit log write tasks and issues batch to task handler
+        consumeWriteAuditLogMessageAsync(msg)
+        break
+      default:
+        // This is an unknown state type
+        console.error(`Unknown state type: ${msg.properties.type}`)
+        // cannot handle unknown type messages, ack message and do nothing
+        amqpChannel.ack(msg)
+    }
+  }
+}
+
+async function consumePruneAggMessageAsync (msg) {
   if (msg !== null) {
     let hashId = msg.content.toString()
 
     try {
       // add the hashId to the redis set
-      await redis.saddAsync(PRUNE_HASHES_KEY, hashId)
+      await redis.saddAsync(PRUNE_AGG_STATES_KEY, hashId)
       amqpChannel.ack(msg)
     } catch (error) {
       amqpChannel.nack(msg)
-      console.error(env.RMQ_WORK_IN_PRUNE_ACC_QUEUE, 'consume message nacked')
+      console.error(env.RMQ_WORK_IN_TASK_ACC_QUEUE, `[${msg.properties.type}] consume message nacked`)
     }
   }
 }
 
-async function drainHashPoolAsync () {
-  if (!POOL_DRAINING) {
-    POOL_DRAINING = true
+async function consumeWriteAuditLogMessageAsync (msg) {
+  if (msg !== null) {
+    let auditDataJSON = msg.content.toString()
 
-    let currentHashCount = await redis.scardAsync(PRUNE_HASHES_KEY)
-    let pruneBatchesNeeded = Math.ceil(currentHashCount / pruneBatchSize)
-    if (currentHashCount > 0) debug.general(`${currentHashCount} hash_ids currently in pool`)
+    try {
+      // add the hashId to the redis set
+      await redis.saddAsync(AUDIT_LOG_WRITES_KEY, auditDataJSON)
+      amqpChannel.ack(msg)
+    } catch (error) {
+      amqpChannel.nack(msg)
+      console.error(env.RMQ_WORK_IN_TASK_ACC_QUEUE, `[${msg.properties.type}] consume message nacked`)
+    }
+  }
+}
+
+async function drainPruneAggStatesPoolAsync () {
+  if (!PRUNE_AGG_STATES_POOL_DRAINING) {
+    PRUNE_AGG_STATES_POOL_DRAINING = true
+
+    let currentHashCount = await redis.scardAsync(PRUNE_AGG_STATES_KEY)
+    let pruneBatchesNeeded = Math.ceil(currentHashCount / pruneAggStatesBatchSize)
+    if (currentHashCount > 0) debug.pruneAgg(`${currentHashCount} hash_ids currently in pool`)
     for (let x = 0; x < pruneBatchesNeeded; x++) {
-      let hashIds = await redis.spopAsync(PRUNE_HASHES_KEY, pruneBatchSize)
+      let hashIds = await redis.spopAsync(PRUNE_AGG_STATES_KEY, pruneAggStatesBatchSize)
       // delete the agg_states proof state rows for these hash_ids
       try {
         await taskQueue.enqueue('task-handler-queue', `prune_agg_states_ids`, [hashIds])
-        debug.tasking(`${hashIds.length} hash_ids queued for deletion`)
+        debug.pruneAgg(`${hashIds.length} hash_ids queued for deletion`)
       } catch (error) {
         console.error(`Could not enqueue prune task : ${error.message}`)
       }
     }
 
-    POOL_DRAINING = false
+    PRUNE_AGG_STATES_POOL_DRAINING = false
   }
 }
 
-/**
- * Opens a storage connection
- **/
-async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await cachedProofState.openConnectionAsync()
-      debug.general('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
+async function drainAuditLogWritePoolAsync () {
+  if (!AUDIT_LOG_WRITE_POOL_DRAINING) {
+    AUDIT_LOG_WRITE_POOL_DRAINING = true
+
+    let currentPendingWriteCount = await redis.scardAsync(AUDIT_LOG_WRITES_KEY)
+    let writeBatchesNeeded = Math.ceil(currentPendingWriteCount / auditLogWriteBatchSize)
+    if (currentPendingWriteCount > 0) debug.writeAuditLog(`${currentPendingWriteCount} pending audit log writes currently in pool`)
+    for (let x = 0; x < writeBatchesNeeded; x++) {
+      let auditDataJSON = await redis.spopAsync(AUDIT_LOG_WRITES_KEY, auditLogWriteBatchSize)
+      // delete the agg_states proof state rows for these hash_ids
+      try {
+        await taskQueue.enqueue('task-handler-queue', `write_audit_log_items`, [auditDataJSON])
+        debug.writeAuditLog(`${auditDataJSON.length} audit log items queued for writing`)
+      } catch (error) {
+        console.error(`Could not enqueue write task : ${error.message}`)
+      }
     }
+
+    AUDIT_LOG_WRITE_POOL_DRAINING = false
   }
 }
 
@@ -117,15 +170,14 @@ function openRedisConnection (redisURI) {
   redis = r.createClient(redisURI)
   redis.on('ready', () => {
     bluebird.promisifyAll(redis)
-    cachedProofState.setRedis(redis)
     debug.general('Redis connection established')
   })
   redis.on('error', async (err) => {
     console.error(`A redis error has ocurred: ${err}`)
     redis.quit()
     redis = null
-    cachedProofState.setRedis(null)
-    POOL_DRAINING = false
+    PRUNE_AGG_STATES_POOL_DRAINING = false
+    AUDIT_LOG_WRITE_POOL_DRAINING = false
     console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
     await utils.sleep(5000)
     openRedisConnection(redisURI)
@@ -147,12 +199,12 @@ async function openRMQConnectionAsync (connectionString) {
       // create communication channel
       let chan = await conn.createConfirmChannel()
       // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_IN_PRUNE_ACC_QUEUE, { durable: true })
-      chan.prefetch(env.RMQ_PREFETCH_COUNT_PRUNE_ACC)
+      chan.assertQueue(env.RMQ_WORK_IN_TASK_ACC_QUEUE, { durable: true })
+      chan.prefetch(env.RMQ_PREFETCH_COUNT_TASK_ACC)
       amqpChannel = chan
       // Continuously load the agg_ids to be accumulated and pruned in batches
-      chan.consume(env.RMQ_WORK_IN_PRUNE_ACC_QUEUE, (msg) => {
-        consumePruneMessageAsync(msg)
+      chan.consume(env.RMQ_WORK_IN_TASK_ACC_QUEUE, (msg) => {
+        processMessage(msg)
       })
       // if the channel closes for any reason, attempt to reconnect
       conn.on('close', async () => {
@@ -205,14 +257,13 @@ function startIntervals () {
   debug.general('starting intervals')
 
   // PERIODIC TIMERS
-  setInterval(() => drainHashPoolAsync(), 1000)
+  setInterval(() => drainPruneAggStatesPoolAsync(), 1000)
+  setInterval(() => drainAuditLogWritePoolAsync(), 1000)
 }
 
 // process all steps need to start the application
 async function start () {
   try {
-    // init DB
-    await openStorageConnectionAsync()
     // init Redis
     openRedisConnection(env.REDIS_CONNECT_URI)
     // init RabbitMQ

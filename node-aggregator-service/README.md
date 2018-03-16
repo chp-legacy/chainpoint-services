@@ -1,5 +1,35 @@
 # chainpoint-node-aggregator-service
 
+## Minimum Instance Count
+
+This service sends batch insert jobs to the proof state service. CockroachDB currently has a query size limit of `256k`. It is important that batches never be generated that will result in an insert query that exceeds that size. The more instances of this service there are, the smaller the batches, and the trees within those batches, will be.
+
+The following code is an implementation of a formula one can use to help identify the appropriate instance count for your expected load.
+```javascript
+// Adjust the following 2 variables
+let hashesPerSecond = 100
+let aggInstances = 6
+///////////////////////////////////
+let individualInstanceLoad = Math.ceil(hashesPerSecond/aggInstances)
+let querySizeKb = Math.ceil((132 + (170 + (85 * Math.ceil(Math.log2(individualInstanceLoad)))) * individualInstanceLoad) / 1024)
+let assumedNodeCount = hashesPerSecond * 5
+console.log(`${querySizeKb}kb query from ${hashesPerSecond} hashes/sec with ${aggInstances} agg instances, (${assumedNodeCount} nodes)`)
+```
+
+The following are some sample data points:
+
+| Hashes/sec           | Agg Count  | Query Size (kb) |
+| :------------- |:-------------|:-----------|
+|        200        |       1       |     167       |
+|        500      |       1       |        457    |
+|        1000        |       1       |       997     |
+|        200        |       3       |     51       |
+|        500        |       3       |      139      |
+|        1000        |       3       |     306       |
+|        200        |       6       |      23     |
+|        500        |       6       |       63     |
+|        1000        |       6       |       139     |
+
 ## Configuration
 Configuration parameters will be stored in environment variables. Environment variables can be overridden throught the use of a .env file. 
 

@@ -90,7 +90,7 @@ let envDefinitions = {
   RMQ_WORK_OUT_BTCMON_QUEUE: envalid.str({ default: 'work.btcmon', desc: 'The queue name for outgoing message to the btc mon service' }),
   RMQ_WORK_OUT_GEN_QUEUE: envalid.str({ default: 'work.gen', desc: 'The queue name for outgoing message to the proof gen service' }),
   RMQ_WORK_OUT_API_QUEUE: envalid.str({ default: 'work.api', desc: 'The queue name for outgoing message to the api service' }),
-  RMQ_WORK_OUT_PRUNE_ACC_QUEUE: envalid.str({ default: 'work.prune', desc: 'The queue name for outgoing message to the prune accumulator service' }),
+  RMQ_WORK_OUT_TASK_ACC_QUEUE: envalid.str({ default: 'work.taskacc', desc: 'The queue name for outgoing message to the task accumulator service' }),
 
   // Redis related variables
   REDIS_CONNECT_URI: envalid.url({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI' }),
@@ -166,9 +166,9 @@ let envDefinitions = {
   NODE_AUDIT_ROUNDS_PER_HOUR: validateFactorOfSixtyUpToSixty({ default: 2, desc: 'The number of times per hour to perform Node audit rounds, defaults to 60, must be a factor of 60' }),
   AUDIT_PRODUCER_LEADER_KEY: envalid.str({ default: 'service/audit-producer/leader/lock', desc: 'Key used for acquiring audit producer process leadership locks' }),
 
-  // Prune accumulator specific variables
-  RMQ_PREFETCH_COUNT_PRUNE_ACC: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
-  RMQ_WORK_IN_PRUNE_ACC_QUEUE: envalid.str({ default: 'work.prune', desc: 'The queue name for message consumption originating from the proof gen service' })
+  // Task accumulator specific variables
+  RMQ_PREFETCH_COUNT_TASK_ACC: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
+  RMQ_WORK_IN_TASK_ACC_QUEUE: envalid.str({ default: 'work.taskacc', desc: 'The queue name for message consumption originating from the other services' })
 }
 
 module.exports = (service) => {
