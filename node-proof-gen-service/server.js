@@ -195,16 +195,16 @@ async function consumeProofReadyMessageAsync (msg) {
         // store in redis
         await storeProofAsync(proof)
 
+        // Proof ready message has been consumed, ack consumption of original message
+        amqpChannel.ack(msg)
+        console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
+
         // queue prune message containing hash_id for this agg_state row
         try {
           await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_PRUNE_ACC_QUEUE, Buffer.from(aggStateRow.hash_id), { persistent: true })
         } catch (error) {
           console.error(`${env.RMQ_WORK_OUT_PRUNE_ACC_QUEUE} publish message nacked`)
         }
-
-        // Proof ready message has been consumed, ack consumption of original message
-        amqpChannel.ack(msg)
-        console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
       } catch (error) {
         console.error(`Unable to process proof ready message: ${error.message}`)
         // An error as occurred consuming a message, nack consumption of original message
