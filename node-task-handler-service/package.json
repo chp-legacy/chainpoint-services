@@ -9,6 +9,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "amqplib": "^0.5.2",
     "async-retry": "^1.2.1",
     "bluebird": "^3.5.1",
     "debug": "^3.1.0",

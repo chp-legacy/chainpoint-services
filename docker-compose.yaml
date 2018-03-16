@@ -468,7 +468,6 @@ services:
       - roach1
       - redis
       - rabbitmq
-      - consul
     networks:
       - chainpoint
     environment:
@@ -509,7 +508,6 @@ services:
     build:
       context: ./node-task-accumulator-service
     depends_on:
-      - roach1
       - redis
       - rabbitmq
     networks:

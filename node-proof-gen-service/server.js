@@ -201,7 +201,7 @@ async function consumeProofReadyMessageAsync (msg) {
 
         // queue prune message containing hash_id for this agg_state row
         try {
-          await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(aggStateRow.hash_id), { persistent: true })
+          await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(aggStateRow.hash_id), { persistent: true, type: 'prune_agg' })
         } catch (error) {
           console.error(`${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} publish message nacked`)
         }

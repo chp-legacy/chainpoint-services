@@ -17,6 +17,7 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('task-handler')
 
+const amqp = require('amqplib')
 const r = require('redis')
 const nodeResque = require('node-resque')
 const utils = require('./lib/utils.js')
@@ -69,6 +70,10 @@ const MIN_PASSING_CREDIT_BALANCE = 10800
 // This value is set once the connection has been established
 let redis = null
 
+// The channel used for all amqp communication
+// This value is set once the connection has been established
+let amqpChannel = null
+
 const pluginOptions = {
   plugins: ['DelayQueueLock', 'QueueLock'],
   pluginOptions: {
@@ -85,7 +90,8 @@ const jobs = {
   'prune_btchead_states_ids': Object.assign({ perform: pruneBTCHeadStatesByIdsAsync }, pluginOptions),
   // tasks from the audit producer service
   'audit_node': Object.assign({ perform: performAuditAsync }, pluginOptions),
-  'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions)
+  'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
+  'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions)
 }
 
 // ******************************************************
@@ -267,6 +273,26 @@ async function pruneAuditLogsByIdsAsync (ids) {
   }
 }
 
+async function writeAuditLogItemsAsync (auditDataJSON) {
+  // auditDataJSON is an array of JSON strings, convert to array of objects
+  let auditDataItems = auditDataJSON.map((item) => { return JSON.parse(item) })
+  try {
+    await retry(async bail => {
+      await NodeAuditLog.bulkCreate(auditDataItems)
+    }, {
+      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
+      factor: 1,       // The exponential factor to use. Default is 2
+      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 400,
+      randomize: true
+    })
+    return `Inserted ${auditDataItems.length} rows into chainpoint_node_audit_log with tntAddrs ${auditDataItems[0].tntAddr}...`
+  } catch (error) {
+    let errorMessage = `writeAuditLogItemsAsync : bulk write error : ${error.message}`
+    throw errorMessage
+  }
+}
+
 // ****************************************************
 // support functions for all tasks
 // ****************************************************
@@ -294,29 +320,23 @@ async function getNodeConfigObjectAsync (publicUri) {
 }
 
 async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass) {
+  // queue prune message containing audit data
   try {
-    await retry(async bail => {
-      await NodeAuditLog.create({
-        tntAddr: tntAddr,
-        publicUri: publicUri,
-        auditAt: auditTime,
-        publicIPPass: publicIPPass,
-        nodeMSDelta: nodeMSDelta,
-        timePass: timePass,
-        calStatePass: calStatePass,
-        minCreditsPass: minCreditsPass,
-        nodeVersion: nodeVersion,
-        nodeVersionPass: nodeVersionPass
-      })
-    }, {
-      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
-      factor: 1,       // The exponential factor to use. Default is 2
-      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
-      maxTimeout: 400,
-      randomize: true
-    })
+    let auditData = {
+      tntAddr: tntAddr,
+      publicUri: publicUri,
+      auditAt: auditTime,
+      publicIPPass: publicIPPass,
+      nodeMSDelta: nodeMSDelta,
+      timePass: timePass,
+      calStatePass: calStatePass,
+      minCreditsPass: minCreditsPass,
+      nodeVersion: nodeVersion,
+      nodeVersionPass: nodeVersionPass
+    }
+    await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(JSON.stringify(auditData)), { persistent: true, type: 'write_audit_log' })
   } catch (error) {
-    let errorMessage = `addAuditToLogAsync : write error : ${tntAddr} : ${error.message}`
+    let errorMessage = `${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} publish message nacked`
     throw errorMessage
   }
 }
@@ -365,6 +385,40 @@ function openRedisConnection (redisURI) {
     await utils.sleep(5000)
     openRedisConnection(redisURI)
   })
+}
+
+/**
+ * Opens an AMPQ connection and channel
+ * Retry logic is included to handle losses of connection
+ *
+ * @param {string} connectionString - The connection string for the RabbitMQ instance, an AMQP URI
+ */
+async function openRMQConnectionAsync (connectionString) {
+  let rmqConnected = false
+  while (!rmqConnected) {
+    try {
+      // connect to rabbitmq server
+      let conn = await amqp.connect(connectionString)
+      // create communication channel
+      let chan = await conn.createConfirmChannel()
+      // the connection and channel have been established
+      chan.assertQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, { durable: true })
+      amqpChannel = chan
+      // if the channel closes for any reason, attempt to reconnect
+      conn.on('close', async () => {
+        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
+        amqpChannel = null
+        await utils.sleep(5000)
+        await openRMQConnectionAsync(connectionString)
+      })
+      console.log('RabbitMQ connection established')
+      rmqConnected = true
+    } catch (error) {
+      // catch errors when attempting to establish connection
+      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
+      await utils.sleep(5000)
+    }
+  }
 }
 
 async function cleanUpWorkersAndRequequeJobsAsync (connectionDetails) {
@@ -447,6 +501,8 @@ async function start () {
     await openStorageConnectionAsync()
     // init Redis
     openRedisConnection(env.REDIS_CONNECT_URI)
+    // init RabbitMQ
+    await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // init Resque worker
     await initResqueWorkerAsync()
     debug.general('startup completed successfully')
