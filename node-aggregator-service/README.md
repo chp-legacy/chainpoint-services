@@ -16,7 +16,8 @@ let assumedNodeCount = hashesPerSecond * 5
 console.log(`${querySizeKb}kb query from ${hashesPerSecond} hashes/sec with ${aggInstances} agg instances, (${assumedNodeCount} nodes)`)
 ```
 
-The following are some sample data points
+The following are some sample data points:
+
 | Hashes/sec           | Agg Count  | Query Size (kb) |
 | :------------- |:-------------|:-----------|
 |        200        |       1       |     167       |
