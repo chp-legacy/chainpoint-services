@@ -500,14 +500,14 @@ services:
       REDIS_DB: 0
       REDIS_NAMESPACE: resque
 
-  # Prune Accumulator
-  # Accumulates and deletes proof state rows in batches once no longer needed
+  # Task Accumulator
+  # Accumulates and performs tasks in batches
   # 
-  prune-accumulator:
+  task-accumulator:
     restart: always
-    image: quay.io/chainpoint/node-prune-accumulator-service:${DOCKER_TAG}
+    image: quay.io/chainpoint/node-task-accumulator-service:${DOCKER_TAG}
     build:
-      context: ./node-prune-accumulator-service
+      context: ./node-task-accumulator-service
     depends_on:
       - roach1
       - redis
@@ -516,7 +516,7 @@ services:
       - chainpoint
     environment:
       NODE_ENV: development
-      DEBUG: "prune-accumulator:*"
+      DEBUG: "task-accumulator:*"
       DEBUG_HIDE_DATE: "false"
       # DEBUG_COLORS: "true"
       DEBUG_DEPTH: 10

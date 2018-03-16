@@ -201,9 +201,9 @@ async function consumeProofReadyMessageAsync (msg) {
 
         // queue prune message containing hash_id for this agg_state row
         try {
-          await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_PRUNE_ACC_QUEUE, Buffer.from(aggStateRow.hash_id), { persistent: true })
+          await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(aggStateRow.hash_id), { persistent: true })
         } catch (error) {
-          console.error(`${env.RMQ_WORK_OUT_PRUNE_ACC_QUEUE} publish message nacked`)
+          console.error(`${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} publish message nacked`)
         }
       } catch (error) {
         console.error(`Unable to process proof ready message: ${error.message}`)
@@ -270,7 +270,7 @@ async function openRMQConnectionAsync (connectionString) {
       let chan = await conn.createConfirmChannel()
       // the connection and channel have been established
       chan.assertQueue(env.RMQ_WORK_IN_GEN_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_PRUNE_ACC_QUEUE, { durable: true })
+      chan.assertQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, { durable: true })
       chan.prefetch(env.RMQ_PREFETCH_COUNT_GEN)
       amqpChannel = chan
       // Continuously load the HASHES from RMQ with hash objects to process

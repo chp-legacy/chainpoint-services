@@ -15,7 +15,7 @@
 */
 
 // load all environment variables into env object
-const env = require('./lib/parse-env.js')('prune-accumulator')
+const env = require('./lib/parse-env.js')('task-accumulator')
 
 const amqp = require('amqplib')
 const r = require('redis')
@@ -29,8 +29,8 @@ const { URL } = require('url')
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 
 var debug = {
-  general: debugPkg('prune-accumulator:general'),
-  tasking: debugPkg('prune-accumulator:tasking')
+  general: debugPkg('task-accumulator:general'),
+  tasking: debugPkg('task-accumulator:tasking')
 }
 // direct debug to output over STDOUT
 debugPkg.log = console.info.bind(console)
@@ -63,7 +63,7 @@ async function consumePruneMessageAsync (msg) {
       amqpChannel.ack(msg)
     } catch (error) {
       amqpChannel.nack(msg)
-      console.error(env.RMQ_WORK_IN_PRUNE_ACC_QUEUE, 'consume message nacked')
+      console.error(env.RMQ_WORK_IN_TASK_ACC_QUEUE, 'consume message nacked')
     }
   }
 }
@@ -147,11 +147,11 @@ async function openRMQConnectionAsync (connectionString) {
       // create communication channel
       let chan = await conn.createConfirmChannel()
       // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_IN_PRUNE_ACC_QUEUE, { durable: true })
-      chan.prefetch(env.RMQ_PREFETCH_COUNT_PRUNE_ACC)
+      chan.assertQueue(env.RMQ_WORK_IN_TASK_ACC_QUEUE, { durable: true })
+      chan.prefetch(env.RMQ_PREFETCH_COUNT_TASK_ACC)
       amqpChannel = chan
       // Continuously load the agg_ids to be accumulated and pruned in batches
-      chan.consume(env.RMQ_WORK_IN_PRUNE_ACC_QUEUE, (msg) => {
+      chan.consume(env.RMQ_WORK_IN_TASK_ACC_QUEUE, (msg) => {
         consumePruneMessageAsync(msg)
       })
       // if the channel closes for any reason, attempt to reconnect

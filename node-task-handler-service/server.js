@@ -77,7 +77,7 @@ const pluginOptions = {
   }
 }
 const jobs = {
-  // tasks from proof-state service (and prune accumulator), bulk deletion of old proof state data
+  // tasks from proof-state service (and task accumulator), bulk deletion of old proof state data
   'prune_agg_states_ids': Object.assign({ perform: pruneAggStatesByIdsAsync }, pluginOptions),
   'prune_cal_states_ids': Object.assign({ perform: pruneCalStatesByIdsAsync }, pluginOptions),
   'prune_anchor_btc_agg_states_ids': Object.assign({ perform: pruneAnchorBTCAggStatesByIdsAsync }, pluginOptions),
@@ -89,7 +89,7 @@ const jobs = {
 }
 
 // ******************************************************
-// tasks from proof-state service (and prune accumulator)
+// tasks from proof-state service (and task accumulator)
 // ******************************************************
 async function pruneAggStatesByIdsAsync (ids) {
   try {
