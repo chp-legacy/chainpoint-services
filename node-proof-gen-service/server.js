@@ -97,9 +97,17 @@ async function consumeProofReadyMessageAsync (msg) {
       try {
         // CRDB
         let aggStateRow = await cachedProofState.getAggStateObjectByHashIdAsync(messageObj.hash_id)
-        if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
+        if (!aggStateRow) {
+          console.error(`No matching agg_state data for hash_id ${messageObj.hash_id}`)
+          amqpChannel.ack(msg)
+          return
+        }
         let calStateRow = await cachedProofState.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
-        if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
+        if (!calStateRow) {
+          console.error(`No matching cal_state data for agg_id ${aggStateRow.agg_id}`)
+          amqpChannel.ack(msg)
+          return
+        }
 
         let proof = {}
         proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
@@ -134,19 +142,39 @@ async function consumeProofReadyMessageAsync (msg) {
         // CRDB
         // get the agg_state object for the hash_id
         let aggStateRow = await cachedProofState.getAggStateObjectByHashIdAsync(messageObj.hash_id)
-        if (!aggStateRow) throw new Error(new Date().toISOString() + ' no matching agg_state data found')
+        if (!aggStateRow) {
+          console.error(`No matching agg_state data for hash_id ${messageObj.hash_id}`)
+          amqpChannel.ack(msg)
+          return
+        }
         // get the cal_state object for the agg_id
         let calStateRow = await cachedProofState.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
-        if (!calStateRow) throw new Error(new Date().toISOString() + ' no matching cal_state data found')
+        if (!calStateRow) {
+          console.error(`No matching cal_state data for agg_id ${aggStateRow.agg_id}`)
+          amqpChannel.ack(msg)
+          return
+        }
         // get the anchorBTCAgg_state object for the cal_id
         let anchorBTCAggStateRow = await cachedProofState.getAnchorBTCAggStateObjectByCalIdAsync(calStateRow.cal_id)
-        if (!anchorBTCAggStateRow) throw new Error(new Date().toISOString() + ' no matching anchor_btc_agg_state data found')
+        if (!anchorBTCAggStateRow) {
+          console.error(`No matching anchor_btc_agg_state data for cal_id ${calStateRow.cal_id}`)
+          amqpChannel.ack(msg)
+          return
+        }
         // get the btctx_state object for the anchor_btc_agg_id
         let btcTxStateRow = await cachedProofState.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggStateRow.anchor_btc_agg_id)
-        if (!btcTxStateRow) throw new Error(new Date().toISOString() + ' no matching btctx_state data found')
+        if (!btcTxStateRow) {
+          console.error(`No matching btctx_state data for anchor_btc_agg_id ${aggStateRow.anchor_btc_agg_id}`)
+          amqpChannel.ack(msg)
+          return
+        }
         // get the btcthead_state object for the btctx_id
         let btcHeadStateRow = await cachedProofState.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
-        if (!btcHeadStateRow) throw new Error(new Date().toISOString() + ' no matching btchead_state data found')
+        if (!btcHeadStateRow) {
+          console.error(`No matching btcthead_state data for btctx_id ${aggStateRow.btctx_id}`)
+          amqpChannel.ack(msg)
+          return
+        }
 
         let proof = {}
         proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
