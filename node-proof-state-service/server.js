@@ -258,7 +258,7 @@ async function queueProofStatePruningTasks (modelName) {
     let batch = primaryKeyValues.splice(0, pruneBatchSize)
 
     pruneBatchTasks.push(batch)
-    console.log(`Created batch for ${modelName} table ${batch[0]}...`)
+    console.log(`Created pruning batch for ${modelName} table ${batch[0]}...`)
   }
 
   // create and issue individual delete tasks for each batch
