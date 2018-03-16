@@ -1039,11 +1039,11 @@ async function performLeaderElection () {
 
   leaderElection(leaderElectionConfig)
     .on('gainedLeadership', function () {
-      debug.general('leaderElection : elected! : %s', env.CHAINPOINT_CORE_BASE_URI)
+      debug.general(`leaderElection : elected : ${env.CHAINPOINT_CORE_BASE_URI}`)
       IS_LEADER = true
     })
-    .on('error', function () {
-      console.error('leaderElection : on error : lock session invalidated')
+    .on('error', function (err) {
+      console.error(`leaderElection : error : lock session invalidated : ${err}`)
       IS_LEADER = false
     })
 }

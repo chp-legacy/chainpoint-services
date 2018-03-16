@@ -335,11 +335,11 @@ async function performLeaderElection () {
 
   leaderElection(leaderElectionConfig)
     .on('gainedLeadership', function () {
-      console.log('This service instance has been chosen to be leader')
+      console.log(`leaderElection : elected `)
       IS_LEADER = true
     })
-    .on('error', function () {
-      console.error('This lock session has been invalidated, new lock session will be created')
+    .on('error', function (err) {
+      console.error(`leaderElection : error : lock session invalidated : ${err}`)
       IS_LEADER = false
     })
 }
