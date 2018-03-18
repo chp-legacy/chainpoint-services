@@ -34,8 +34,8 @@ var debug = {
 // direct debug to output over STDOUT
 debugPkg.log = console.info.bind(console)
 
-const PRUNE_AGG_STATES_KEY = 'PruneAggStates'
-const AUDIT_LOG_WRITES_KEY = 'AuditLogWrites'
+const PRUNE_AGG_STATES_KEY = 'Task_Acc:PruneAggStates'
+const AUDIT_LOG_WRITES_KEY = 'Task_Acc:AuditLogWrites'
 
 // Variable indicating if prune agg states accumulation pool is currently being drained
 let PRUNE_AGG_STATES_POOL_DRAINING = false
@@ -74,7 +74,7 @@ function processMessage (msg) {
         consumePruneAggMessageAsync(msg)
         break
       case 'write_audit_log':
-      // Consumes an audit log write message from the task handler
+        // Consumes an audit log write message from the task handler
         // accumulates audit log write tasks and issues batch to task handler
         consumeWriteAuditLogMessageAsync(msg)
         break
@@ -121,15 +121,20 @@ async function drainPruneAggStatesPoolAsync () {
   if (!PRUNE_AGG_STATES_POOL_DRAINING) {
     PRUNE_AGG_STATES_POOL_DRAINING = true
 
-    let currentHashCount = await redis.scardAsync(PRUNE_AGG_STATES_KEY)
-    let pruneBatchesNeeded = Math.ceil(currentHashCount / pruneAggStatesBatchSize)
-    if (currentHashCount > 0) debug.pruneAgg(`${currentHashCount} hash_ids currently in pool`)
-    for (let x = 0; x < pruneBatchesNeeded; x++) {
-      let hashIds = await redis.spopAsync(PRUNE_AGG_STATES_KEY, pruneAggStatesBatchSize)
+    let pooledHashIds = await redis.smembersAsync(PRUNE_AGG_STATES_KEY)
+    let pooledHashIdsCount = pooledHashIds.length
+    if (pooledHashIdsCount > 0) debug.pruneAgg(`${pooledHashIdsCount} hash_ids currently in pool`)
+    for (let x = 0; x < pooledHashIdsCount; x += pruneAggStatesBatchSize) {
+      let rangeStart = pruneAggStatesBatchSize * x
+      let rangeEnd = rangeStart + pruneAggStatesBatchSize
+      let hashIds = pooledHashIds.slice(rangeStart, rangeEnd)
       // delete the agg_states proof state rows for these hash_ids
       try {
         await taskQueue.enqueue('task-handler-queue', `prune_agg_states_ids`, [hashIds])
         debug.pruneAgg(`${hashIds.length} hash_ids queued for deletion`)
+        // process suceeded, remove items from redis
+        hashIds.unshift(PRUNE_AGG_STATES_KEY)
+        await redis.send_commandAsync('srem', hashIds)
       } catch (error) {
         console.error(`Could not enqueue prune task : ${error.message}`)
       }
@@ -143,15 +148,20 @@ async function drainAuditLogWritePoolAsync () {
   if (!AUDIT_LOG_WRITE_POOL_DRAINING) {
     AUDIT_LOG_WRITE_POOL_DRAINING = true
 
-    let currentPendingWriteCount = await redis.scardAsync(AUDIT_LOG_WRITES_KEY)
-    let writeBatchesNeeded = Math.ceil(currentPendingWriteCount / auditLogWriteBatchSize)
-    if (currentPendingWriteCount > 0) debug.writeAuditLog(`${currentPendingWriteCount} pending audit log writes currently in pool`)
-    for (let x = 0; x < writeBatchesNeeded; x++) {
-      let auditDataJSON = await redis.spopAsync(AUDIT_LOG_WRITES_KEY, auditLogWriteBatchSize)
+    let pooledPendingWrites = await redis.smembersAsync(AUDIT_LOG_WRITES_KEY)
+    let pooledPendingWritesCount = pooledPendingWrites.length
+    if (pooledPendingWritesCount > 0) debug.writeAuditLog(`${pooledPendingWritesCount} pending audit log writes currently in pool`)
+    for (let x = 0; x < pooledPendingWritesCount; x += auditLogWriteBatchSize) {
+      let rangeStart = auditLogWriteBatchSize * x
+      let rangeEnd = rangeStart + auditLogWriteBatchSize
+      let pendingWrites = pooledPendingWrites.slice(rangeStart, rangeEnd)
       // delete the agg_states proof state rows for these hash_ids
       try {
-        await taskQueue.enqueue('task-handler-queue', `write_audit_log_items`, [auditDataJSON])
-        debug.writeAuditLog(`${auditDataJSON.length} audit log items queued for writing`)
+        await taskQueue.enqueue('task-handler-queue', `write_audit_log_items`, [pendingWrites])
+        debug.writeAuditLog(`${pendingWrites.length} audit log items queued for writing`)
+        // process suceeded, remove items from redis
+        pendingWrites.unshift(AUDIT_LOG_WRITES_KEY)
+        await redis.send_commandAsync('srem', pendingWrites)
       } catch (error) {
         console.error(`Could not enqueue write task : ${error.message}`)
       }
