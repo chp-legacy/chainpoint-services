@@ -34,8 +34,8 @@ var debug = {
 // direct debug to output over STDOUT
 debugPkg.log = console.info.bind(console)
 
-const PRUNE_AGG_STATES_KEY = 'Task_Acc:PruneAggStates'
-const AUDIT_LOG_WRITES_KEY = 'Task_Acc:AuditLogWrites'
+let PRUNE_AGG_STATES_POOL = []
+let AUDIT_LOG_WRITE_POOL = []
 
 // Variable indicating if prune agg states accumulation pool is currently being drained
 let PRUNE_AGG_STATES_POOL_DRAINING = false
@@ -91,14 +91,12 @@ async function consumePruneAggMessageAsync (msg) {
   if (msg !== null) {
     let hashId = msg.content.toString()
 
-    try {
-      // add the hashId to the redis set
-      await redis.saddAsync(PRUNE_AGG_STATES_KEY, hashId)
-      amqpChannel.ack(msg)
-    } catch (error) {
-      amqpChannel.nack(msg)
-      console.error(env.RMQ_WORK_IN_TASK_ACC_QUEUE, `[${msg.properties.type}] consume message nacked`)
+    // add msg to the hash object so that we can ack it later
+    let hashObj = {
+      hashId: hashId,
+      msg: msg
     }
+    PRUNE_AGG_STATES_POOL.push(hashObj)
   }
 }
 
@@ -106,37 +104,45 @@ async function consumeWriteAuditLogMessageAsync (msg) {
   if (msg !== null) {
     let auditDataJSON = msg.content.toString()
 
-    try {
-      // add the hashId to the redis set
-      await redis.saddAsync(AUDIT_LOG_WRITES_KEY, auditDataJSON)
-      amqpChannel.ack(msg)
-    } catch (error) {
-      amqpChannel.nack(msg)
-      console.error(env.RMQ_WORK_IN_TASK_ACC_QUEUE, `[${msg.properties.type}] consume message nacked`)
+    // add msg to the hash object so that we can ack it later
+    let hashObj = {
+      auditDataJSON: auditDataJSON,
+      msg: msg
     }
+    AUDIT_LOG_WRITE_POOL.push(hashObj)
   }
 }
 
 async function drainPruneAggStatesPoolAsync () {
-  if (!PRUNE_AGG_STATES_POOL_DRAINING) {
+  if (!PRUNE_AGG_STATES_POOL_DRAINING && amqpChannel != null) {
     PRUNE_AGG_STATES_POOL_DRAINING = true
 
-    let pooledHashIds = await redis.smembersAsync(PRUNE_AGG_STATES_KEY)
-    let pooledHashIdsCount = pooledHashIds.length
-    if (pooledHashIdsCount > 0) debug.pruneAgg(`${pooledHashIdsCount} hash_ids currently in pool`)
-    for (let x = 0; x < pooledHashIdsCount; x += pruneAggStatesBatchSize) {
-      let rangeStart = pruneAggStatesBatchSize * x
-      let rangeEnd = rangeStart + pruneAggStatesBatchSize
-      let hashIds = pooledHashIds.slice(rangeStart, rangeEnd)
+    let currentHashCount = PRUNE_AGG_STATES_POOL.length
+    let pruneBatchesNeeded = Math.ceil(currentHashCount / pruneAggStatesBatchSize)
+    if (currentHashCount > 0) debug.pruneAgg(`${currentHashCount} hash_ids currently in pool`)
+    for (let x = 0; x < pruneBatchesNeeded; x++) {
+      let pruneAggStatesObjs = PRUNE_AGG_STATES_POOL.splice(0, pruneAggStatesBatchSize)
+      let hashIds = pruneAggStatesObjs.map((item) => item.hashId)
       // delete the agg_states proof state rows for these hash_ids
       try {
         await taskQueue.enqueue('task-handler-queue', `prune_agg_states_ids`, [hashIds])
         debug.pruneAgg(`${hashIds.length} hash_ids queued for deletion`)
-        // process suceeded, remove items from redis
-        hashIds.unshift(PRUNE_AGG_STATES_KEY)
-        await redis.send_commandAsync('srem', hashIds)
+
+        // This batch has been submitted to task handler successfully
+        // ack consumption of all original messages part of this batch
+        pruneAggStatesObjs.forEach((item) => {
+          if (item.msg !== null) {
+            amqpChannel.ack(item.msg)
+          }
+        })
       } catch (error) {
         console.error(`Could not enqueue prune task : ${error.message}`)
+        // nack consumption of all original messages part of this batch
+        pruneAggStatesObjs.forEach((item) => {
+          if (item.msg !== null) {
+            amqpChannel.nack(item.msg)
+          }
+        })
       }
     }
 
@@ -145,25 +151,35 @@ async function drainPruneAggStatesPoolAsync () {
 }
 
 async function drainAuditLogWritePoolAsync () {
-  if (!AUDIT_LOG_WRITE_POOL_DRAINING) {
+  if (!AUDIT_LOG_WRITE_POOL_DRAINING && amqpChannel != null) {
     AUDIT_LOG_WRITE_POOL_DRAINING = true
 
-    let pooledPendingWrites = await redis.smembersAsync(AUDIT_LOG_WRITES_KEY)
-    let pooledPendingWritesCount = pooledPendingWrites.length
-    if (pooledPendingWritesCount > 0) debug.writeAuditLog(`${pooledPendingWritesCount} pending audit log writes currently in pool`)
-    for (let x = 0; x < pooledPendingWritesCount; x += auditLogWriteBatchSize) {
-      let rangeStart = auditLogWriteBatchSize * x
-      let rangeEnd = rangeStart + auditLogWriteBatchSize
-      let pendingWrites = pooledPendingWrites.slice(rangeStart, rangeEnd)
+    let currentPendingWriteCount = AUDIT_LOG_WRITE_POOL.length
+    let writeBatchesNeeded = Math.ceil(currentPendingWriteCount / auditLogWriteBatchSize)
+    if (currentPendingWriteCount > 0) debug.writeAuditLog(`${currentPendingWriteCount} pending audit log writes currently in pool`)
+    for (let x = 0; x < writeBatchesNeeded; x++) {
+      let pendingWriteObjs = AUDIT_LOG_WRITE_POOL.splice(0, auditLogWriteBatchSize)
+      let auditDataJSON = pendingWriteObjs.map((item) => item.auditDataJSON)
       // delete the agg_states proof state rows for these hash_ids
       try {
-        await taskQueue.enqueue('task-handler-queue', `write_audit_log_items`, [pendingWrites])
-        debug.writeAuditLog(`${pendingWrites.length} audit log items queued for writing`)
-        // process suceeded, remove items from redis
-        pendingWrites.unshift(AUDIT_LOG_WRITES_KEY)
-        await redis.send_commandAsync('srem', pendingWrites)
+        await taskQueue.enqueue('task-handler-queue', `write_audit_log_items`, [auditDataJSON])
+        debug.writeAuditLog(`${auditDataJSON.length} audit log items queued for writing`)
+
+        // This batch has been submitted to task handler successfully
+        // ack consumption of all original messages part of this batch
+        pendingWriteObjs.forEach((item) => {
+          if (item.msg !== null) {
+            amqpChannel.ack(item.msg)
+          }
+        })
       } catch (error) {
         console.error(`Could not enqueue write task : ${error.message}`)
+        // nack consumption of all original messages part of this batch
+        pendingWriteObjs.forEach((item) => {
+          if (item.msg !== null) {
+            amqpChannel.nack(item.msg)
+          }
+        })
       }
     }
 
@@ -220,6 +236,9 @@ async function openRMQConnectionAsync (connectionString) {
       conn.on('close', async () => {
         console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
         amqpChannel = null
+        // un-acked messaged will be requeued, so clear all work in progress
+        PRUNE_AGG_STATES_POOL = []
+        AUDIT_LOG_WRITE_POOL = []
         await utils.sleep(5000)
         await openRMQConnectionAsync(connectionString)
       })
