@@ -105,11 +105,11 @@ async function consumeWriteAuditLogMessageAsync (msg) {
     let auditDataJSON = msg.content.toString()
 
     // add msg to the hash object so that we can ack it later
-    let hashObj = {
+    let auditDataObj = {
       auditDataJSON: auditDataJSON,
       msg: msg
     }
-    AUDIT_LOG_WRITE_POOL.push(hashObj)
+    AUDIT_LOG_WRITE_POOL.push(auditDataObj)
   }
 }
 
