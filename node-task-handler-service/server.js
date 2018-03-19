@@ -91,7 +91,9 @@ const jobs = {
   // tasks from the audit producer service
   'audit_node': Object.assign({ perform: performAuditAsync }, pluginOptions),
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
-  'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions)
+  'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
+  // tasks from proof-gen
+  'send_to_proof_proxy': Object.assign({ perform: sendToProofProxyAsync }, pluginOptions)
 }
 
 // ******************************************************
@@ -293,6 +295,28 @@ async function writeAuditLogItemsAsync (auditDataJSON) {
   }
 }
 
+// ******************************************************
+// tasks from the proof gen service
+// ******************************************************
+
+async function sendToProofProxyAsync (hashIdCore, proofBase64) {
+  try {
+    await retry(async bail => {
+      await proofProxyPostAsync(hashIdCore, proofBase64)
+    }, {
+      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
+      factor: 1,       // The exponential factor to use. Default is 2
+      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 400,
+      randomize: true
+    })
+    return `Core proof sent to proof proxy : ${hashIdCore}`
+  } catch (error) {
+    let errorMessage = `sendToProofProxyAsync : send error : ${error.message}`
+    throw errorMessage
+  }
+}
+
 // ****************************************************
 // support functions for all tasks
 // ****************************************************
@@ -339,6 +363,27 @@ async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, 
     let errorMessage = `${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} publish message nacked`
     throw errorMessage
   }
+}
+
+async function proofProxyPostAsync (hashIdCore, proofBase64) {
+  let nodeResponse
+  let options = {
+    headers: [
+      {
+        name: 'Content-Type',
+        value: 'application/json'
+      }
+    ],
+    method: 'POST',
+    uri: `https://proof-proxy.chainpoint.org/proofs`,
+    body: [[hashIdCore, proofBase64]],
+    json: true,
+    gzip: true,
+    resolveWithFullResponse: true
+  }
+
+  nodeResponse = await rp(options)
+  return nodeResponse.body
 }
 
 // ****************************************************
