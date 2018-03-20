@@ -52,7 +52,7 @@ async function consumeBtcTxIdMessageAsync (msg) {
     let btcTxIdObjJSON = msg.content.toString()
 
     try {
-      // add the hashId to the redis set
+      // add the transaction id to the redis set
       await redis.saddAsync(BTC_TX_IDS_KEY, btcTxIdObjJSON)
       amqpChannel.ack(msg)
     } catch (error) {

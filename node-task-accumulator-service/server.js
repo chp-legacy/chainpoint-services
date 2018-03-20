@@ -104,7 +104,7 @@ async function consumeWriteAuditLogMessageAsync (msg) {
   if (msg !== null) {
     let auditDataJSON = msg.content.toString()
 
-    // add msg to the hash object so that we can ack it later
+    // add msg to the auditData object so that we can ack it later
     let auditDataObj = {
       auditDataJSON: auditDataJSON,
       msg: msg
@@ -160,7 +160,7 @@ async function drainAuditLogWritePoolAsync () {
     for (let x = 0; x < writeBatchesNeeded; x++) {
       let pendingWriteObjs = AUDIT_LOG_WRITE_POOL.splice(0, auditLogWriteBatchSize)
       let auditDataJSON = pendingWriteObjs.map((item) => item.auditDataJSON)
-      // delete the agg_states proof state rows for these hash_ids
+      // write the audit log items to the database
       try {
         await taskQueue.enqueue('task-handler-queue', `write_audit_log_items`, [auditDataJSON])
         debug.writeAuditLog(`${auditDataJSON.length} audit log items queued for writing`)
