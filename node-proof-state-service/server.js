@@ -28,6 +28,7 @@ const { URL } = require('url')
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 
 const r = require('redis')
+bluebird.promisifyAll(r.Multi.prototype)
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -42,6 +43,11 @@ let redis = null
 
 // This value is set once the connection has been established
 let taskQueue = null
+
+const CAL_STATE_WRITE_BATCH_SIZE = 200
+const CAL_PROOF_GEN_BATCH_SIZE = 5000
+const ANCHOR_BTC_STATE_WRITE_BATCH_SIZE = 200
+const BTC_PROOF_GEN_BATCH_SIZE = 5000
 
 /**
 * Writes the state data to persistent storage and logs aggregation event
@@ -109,7 +115,6 @@ async function ConsumeCalendarMessageAsync (msg) {
       let hashIdRow = rows[x]
       // construct a calendar 'proof ready' message for a given hash
       let dataOutObj = {}
-      dataOutObj.type = 'cal'
       dataOutObj.hash_id = hashIdRow.hash_id
       try {
         await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'cal' })
@@ -118,6 +123,59 @@ async function ConsumeCalendarMessageAsync (msg) {
         throw new Error(error.message)
       }
     }
+    // New messages have been published, ack consumption of original message
+    amqpChannel.ack(msg)
+    console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
+  } catch (error) {
+    console.error(`Unable to process calendar message: ${error.message}`)
+    // An error as occurred publishing a message, nack consumption of original message
+    amqpChannel.nack(msg)
+    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
+  }
+}
+
+/**
+* Writes the state data to persistent storage and queues proof ready messages bound for the proof gen
+*
+* @param {amqp message object} msg - The AMQP message received from the queue
+*/
+async function ConsumeCalendarBatchMessageAsync (msg) {
+  let messageObj = JSON.parse(msg.content.toString())
+
+  // transform batch message data into cal_state objects ready for insertion
+  let stateObjs = messageObj.proofData.map((proofDataItem) => {
+    return {
+      agg_id: proofDataItem.agg_id,
+      cal_id: messageObj.cal_id,
+      cal_state: { ops: proofDataItem.proof, anchor: messageObj.anchor }
+    }
+  })
+
+  try {
+    // Get all the hash_ids for all the agg_ids part of this calendar block
+    let aggIds = stateObjs.map((item) => item.agg_id)
+    let hashIdRows = await cachedProofState.getHashIdsByAggIdsAsync(aggIds)
+    let hashIds = hashIdRows.map((item) => item.hash_id)
+
+    // Write the cal state objects to the database
+    // The writes are split into batches to limit the total insert query size
+    // CRDB has a query limit of 256k
+    while (stateObjs.length > 0) {
+      await cachedProofState.writeCalStateObjectsBulkAsync(stateObjs.splice(0, CAL_STATE_WRITE_BATCH_SIZE))
+    }
+
+    while (hashIds.length > 0) {
+      // construct a calendar 'proof ready' message for a batch of hashes
+      let dataOutObj = {}
+      dataOutObj.hash_ids = hashIds.splice(0, CAL_PROOF_GEN_BATCH_SIZE)
+      try {
+        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'cal-batch' })
+      } catch (error) {
+        console.error(env.RMQ_WORK_OUT_GEN_QUEUE, '[cal] publish message nacked')
+        throw new Error(error.message)
+      }
+    }
+
     // New messages have been published, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
@@ -199,7 +257,6 @@ async function ConsumeBtcMonMessageAsync (msg) {
       let hashIdRow = rows[x]
       // construct a calendar 'proof ready' message for a given hash
       let dataOutObj = {}
-      dataOutObj.type = 'btc'
       dataOutObj.hash_id = hashIdRow.hash_id
       try {
         await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'btc' })
@@ -294,8 +351,13 @@ function processMessage (msg) {
         break
       case 'cal':
         // Consumes a calendar state message from the Calendar service
-        // Stores state information and publishes proof ready messages bound for the proof state service
+        // Stores state information and publishes proof ready messages bound for the proof gen service
         ConsumeCalendarMessageAsync(msg)
+        break
+      case 'cal-batch':
+        // Consumes a calendar batch state message from the Calendar service
+        // Stores the batch of state information and publishes proof ready messages bound for the proof gen service
+        ConsumeCalendarBatchMessageAsync(msg)
         break
       case 'anchor_btc_agg':
         // Consumes a anchor BTC aggregation state message from the Calendar service

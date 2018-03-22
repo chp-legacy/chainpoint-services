@@ -588,55 +588,50 @@ async function lastBtcAnchorBlockIdForStackIdAsync () {
 }
 
 // queue messages for state service with cal state data and ack original messages
-async function queueCalStateDataAsync (treeDataObj, block) {
+async function queueCalStateDataMessageAsync (treeDataObj, block) {
   // get an array of messages to be acked or nacked in this process
   let messages = treeDataObj.proofData.map((proofDataItem) => {
     return proofDataItem.agg_msg
   })
 
-  // queue proof state messages for each aggregation root in the tree
-  // for each aggregation root, queue up message containing
-  // updated proof state bound for proof state service
+  // create proof state objects for each aggregation root in the tree bound for proof state service
+  let calStateData = {}
+  calStateData.cal_id = block.id
+  // Build the anchors uris using the locations configured in CHAINPOINT_CORE_BASE_URI
+  let BASE_URIS = [env.CHAINPOINT_CORE_BASE_URI]
+  let uris = []
+  for (let x = 0; x < BASE_URIS.length; x++) uris.push(`${BASE_URIS[x]}/calendar/${block.id}/hash`)
+  calStateData.anchor = {
+    anchor_id: block.id,
+    uris: uris
+  }
+
+  let proofData = []
   for (let x = 0; x < treeDataObj.proofData.length; x++) {
     let proofDataItem = treeDataObj.proofData[x]
-    let stateObj = {}
-    stateObj.agg_id = proofDataItem.agg_id
-    stateObj.cal_id = block.id
-    stateObj.cal_state = {}
-    // add ops connecting agg_root to cal_root
-    stateObj.cal_state.ops = proofDataItem.proof
     // add ops extending proof path beyond cal_root to calendar block's block_hash
-    stateObj.cal_state.ops.push({ l: `${block.id}:${block.time}:${block.version}:${block.stackId}:${block.type}:${block.dataId}` })
-    stateObj.cal_state.ops.push({ r: block.prevHash })
-    stateObj.cal_state.ops.push({ op: 'sha-256' })
+    proofDataItem.proof.push({ l: `${block.id}:${block.time}:${block.version}:${block.stackId}:${block.type}:${block.dataId}` })
+    proofDataItem.proof.push({ r: block.prevHash })
+    proofDataItem.proof.push({ op: 'sha-256' })
+    proofData.push(proofDataItem)
+  }
+  calStateData.proofData = proofData
 
-    // Build the anchors uris using the locations configured in CHAINPOINT_CORE_BASE_URI
-    let BASE_URIS = [env.CHAINPOINT_CORE_BASE_URI]
-    let uris = []
-    for (let x = 0; x < BASE_URIS.length; x++) uris.push(`${BASE_URIS[x]}/calendar/${block.id}/hash`)
-    stateObj.cal_state.anchor = {
-      anchor_id: block.id,
-      uris: uris
-    }
-
-    try {
-      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(stateObj)), { persistent: true, type: 'cal' })
-      // New message has been published
-      // debug.general(env.RMQ_WORK_OUT_STATE_QUEUE, '[cal] publish message acked')
-    } catch (error) {
-      // An error as occurred publishing a message
-      console.error(`queueCalStateDataAsync : ${env.RMQ_WORK_OUT_STATE_QUEUE} [cal] publish message nacked`)
-      console.error(`queueCalStateDataAsync : Unable to publish state message : ${error.message}`)
-      _.forEach(messages, (message) => {
-        // nack consumption of all original messages part of this aggregation event
-        if (message !== null) {
-          amqpChannel.nack(message)
-          let rootObj = JSON.parse(message.content.toString())
-          console.error(`queueCalStateDataAsync : [aggregator] consume message nacked : ${rootObj.agg_id}`)
-        }
-      })
-      return
-    }
+  try {
+    await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(calStateData)), { persistent: true, type: 'cal-batch' })
+  } catch (error) {
+    // An error as occurred publishing a message
+    console.error(`queueCalStateDataMessageAsync : ${env.RMQ_WORK_OUT_STATE_QUEUE} [cal] publish message nacked`)
+    console.error(`queueCalStateDataMessageAsync : Unable to publish state message : ${error.message}`)
+    _.forEach(messages, (message) => {
+      // nack consumption of all original messages part of this aggregation event
+      if (message !== null) {
+        amqpChannel.nack(message)
+        let rootObj = JSON.parse(message.content.toString())
+        console.error(`queueCalStateDataMessageAsync : [aggregator] consume message nacked : ${rootObj.agg_id}`)
+      }
+    })
+    return
   }
 
   _.forEach(messages, (message) => {
@@ -644,7 +639,7 @@ async function queueCalStateDataAsync (treeDataObj, block) {
       // ack consumption of all original messages part of this aggregation event
       let rootObj = JSON.parse(message.content.toString())
       amqpChannel.ack(message)
-      debug.calendar(`queueCalStateDataAsync : [aggregator] consume message acked : ${rootObj.agg_id}`)
+      debug.calendar(`queueCalStateDataMessageAsync : [aggregator] consume message acked : ${rootObj.agg_id}`)
     }
   })
 }
@@ -788,8 +783,8 @@ async function processCalendarInterval () {
     if (!_.isEmpty(treeDataObj)) {
       let block = await persistCalendarTreeAsync(treeDataObj)
 
-      // queue messages for state service
-      setImmediate(() => { queueCalStateDataAsync(treeDataObj, block) })
+      // queue message for state service
+      await queueCalStateDataMessageAsync(treeDataObj, block)
     } else {
       debug.calendar('scheduleJob : processCalendarInterval : no treeData (hashes) to process for calendar interval')
     }
