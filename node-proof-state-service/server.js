@@ -282,23 +282,24 @@ async function ConsumeBtcMonMessageAsync (msg) {
   stateObj.btchead_state = messageObj.btchead_state
 
   try {
-    // CRDB
-    let rows = await cachedProofState.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
+    // Get all the hash_ids included in this btc_tx
+    let hashIdRows = await cachedProofState.getHashIdsByBtcTxIdAsync(stateObj.btctx_id)
+    let hashIds = hashIdRows.map((item) => item.hash_id)
 
     await cachedProofState.writeBTCHeadStateObjectAsync(stateObj)
 
-    for (let x = 0; x < rows.length; x++) {
-      let hashIdRow = rows[x]
-      // construct a calendar 'proof ready' message for a given hash
+    while (hashIds.length > 0) {
+      // construct a btc 'proof ready' message for a batch of hashes
       let dataOutObj = {}
-      dataOutObj.hash_id = hashIdRow.hash_id
+      dataOutObj.hash_ids = hashIds.splice(0, BTC_PROOF_GEN_BATCH_SIZE)
       try {
-        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'btc' })
+        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'btc_batch' })
       } catch (error) {
-        console.error(env.RMQ_WORK_OUT_GEN_QUEUE, '[btc] publish message nacked')
+        console.error(env.RMQ_WORK_OUT_GEN_QUEUE, '[cal] publish message nacked')
         throw new Error(error.message)
       }
     }
+
     // New messages have been published, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')

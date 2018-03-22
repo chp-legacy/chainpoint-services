@@ -375,7 +375,7 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
       }
     ],
     method: 'POST',
-    uri: `https://proof-proxy.chainpoint.org/proofs`,
+    uri: `https://proofs.chainpoint.org/proofs`,
     body: [[hashIdCore, proofBase64]],
     json: true,
     gzip: true,
