@@ -606,19 +606,18 @@ async function queueCalStateDataMessageAsync (treeDataObj, block) {
     uris: uris
   }
 
-  let proofData = []
-  for (let x = 0; x < treeDataObj.proofData.length; x++) {
-    let proofDataItem = treeDataObj.proofData[x]
-    // add ops extending proof path beyond cal_root to calendar block's block_hash
-    proofDataItem.proof.push({ l: `${block.id}:${block.time}:${block.version}:${block.stackId}:${block.type}:${block.dataId}` })
-    proofDataItem.proof.push({ r: block.prevHash })
-    proofDataItem.proof.push({ op: 'sha-256' })
-    proofData.push(proofDataItem)
-  }
-  calStateData.proofData = proofData
+  // decalre ops extending proof path beyond cal_root to calendar block's block_hash
+  let opsToBlockHash = [
+    { l: `${block.id}:${block.time}:${block.version}:${block.stackId}:${block.type}:${block.dataId}` },
+    { r: block.prevHash },
+    { op: 'sha-256' }
+  ]
+  calStateData.proofData = treeDataObj.proofData.map((proofDataItem) => {
+    return { agg_id: proofDataItem.agg_id, proof: [...proofDataItem.proof, ...opsToBlockHash] }
+  })
 
   try {
-    await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(calStateData)), { persistent: true, type: 'cal-batch' })
+    await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(calStateData)), { persistent: true, type: 'cal_batch' })
   } catch (error) {
     // An error as occurred publishing a message
     console.error(`queueCalStateDataMessageAsync : ${env.RMQ_WORK_OUT_STATE_QUEUE} [cal] publish message nacked`)
@@ -644,34 +643,28 @@ async function queueCalStateDataMessageAsync (treeDataObj, block) {
   })
 }
 
-// queue messages for state service with btc-a state data
-async function queueBtcAStateDataAsync (treeData) {
-  // For each calendar record block in the tree, add proof state
-  // item containing proof ops from block_hash to anchor_btc_agg_root
-  // queue up message containing updated proof state bound for proof state service
-  for (let x = 0; x < treeData.proofData.length; x++) {
-    let proofDataItem = treeData.proofData[x]
+// queue message for state service with btc-a state data
+async function queueBtcAStateDataMessageAsync (treeDataObj) {
+  // create proof state objects for each cal_id in the tree bound for proof state service
+  let btcAnchorStateData = {}
+  btcAnchorStateData.anchor_btc_agg_id = treeDataObj.anchor_btc_agg_id
+  btcAnchorStateData.proofData = treeDataObj.proofData.map((proofDataItem) => {
+    return { cal_id: proofDataItem.cal_id, proof: proofDataItem.proof }
+  })
 
-    let stateObj = {}
-    stateObj.cal_id = proofDataItem.cal_id
-    stateObj.anchor_btc_agg_id = treeData.anchor_btc_agg_id
-    stateObj.anchor_btc_agg_state = {}
-    stateObj.anchor_btc_agg_state.ops = proofDataItem.proof
-
-    try {
-      // Publish new message
-      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(stateObj)), { persistent: true, type: 'anchor_btc_agg' })
-      // debug.btcConfirm(env.RMQ_WORK_OUT_STATE_QUEUE, '[anchor_btc_agg] publish message acked')
-    } catch (error) {
-      console.error('queueBtcAStateDataAsync : [anchor_btc_agg] publish message nacked')
-      console.error(`queueBtcAStateDataAsync : unable to publish state message : ${error.message}`)
-      return
-    }
+  try {
+    // Publish new message
+    await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_STATE_QUEUE, Buffer.from(JSON.stringify(btcAnchorStateData)), { persistent: true, type: 'anchor_btc_agg_batch' })
+    // debug.btcConfirm(env.RMQ_WORK_OUT_STATE_QUEUE, '[anchor_btc_agg] publish message acked')
+  } catch (error) {
+    console.error('queueBtcAStateDataAsync : [anchor_btc_agg] publish message nacked')
+    console.error(`queueBtcAStateDataAsync : unable to publish state message : ${error.message}`)
+    return
   }
 
   let anchorData = {
-    anchor_btc_agg_id: treeData.anchor_btc_agg_id,
-    anchor_btc_agg_root: treeData.anchor_btc_agg_root
+    anchor_btc_agg_id: treeDataObj.anchor_btc_agg_id,
+    anchor_btc_agg_root: treeDataObj.anchor_btc_agg_root
   }
 
   // Send anchorData to the BTC tx service for anchoring
@@ -808,8 +801,8 @@ async function processBtcAnchorInterval (lastBtcAnchorBlockId) {
   try {
     let treeData = await aggregateAndAnchorBTCAsync(lastBtcAnchorBlockId)
 
-    // queue messages for state service
-    setImmediate(() => { queueBtcAStateDataAsync(treeData) })
+    // queue message for state service
+    await queueBtcAStateDataMessageAsync(treeData)
   } catch (error) {
     console.error(`scheduleJob : processBtcAnchorInterval : unable to aggregate and create BTC anchor block : ${error.message}`)
   }

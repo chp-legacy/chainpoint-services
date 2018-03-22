@@ -519,6 +519,44 @@ async function writeAnchorBTCAggStateObjectAsync (stateObject) {
   return true
 }
 
+async function writeAnchorBTCAggStateObjectsAsync (stateObjects) {
+  let insertCmd = 'INSERT INTO chainpoint_proof_anchor_btc_agg_states (cal_id, anchor_btc_agg_id, anchor_btc_agg_state, created_at, updated_at) VALUES '
+
+  stateObjects = stateObjects.map((stateObj) => {
+    stateObj.cal_id = parseInt(stateObj.cal_id, 10)
+    if (isNaN(stateObj.cal_id)) throw new Error(`cal_id value '${stateObj.cal_id}' is not an integer`)
+    stateObj.anchor_btc_agg_state = JSON.stringify(stateObj.anchor_btc_agg_state)
+    return stateObj
+  })
+  let insertValues = stateObjects.map((stateObject) => {
+    // use sequelize.escape() to sanitize input values just to be safe
+    let calId = sequelize.escape(stateObject.cal_id)
+    let anchorBTCAggId = sequelize.escape(stateObject.anchor_btc_agg_id)
+    let anchorBTCAggState = sequelize.escape(stateObject.anchor_btc_agg_state)
+    return `(${calId}, ${anchorBTCAggId}, ${anchorBTCAggState}, now(), now())`
+  })
+
+  insertCmd = insertCmd + insertValues.join(', ') + ' ON CONFLICT (cal_id) DO NOTHING'
+
+  await sequelize.query(insertCmd, { type: sequelize.QueryTypes.INSERT })
+
+  // Store the state object in redis to cache for next request
+  if (redis) {
+    let multi = redis.multi()
+
+    stateObjects.forEach((stateObj) => {
+      multi.set(`${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObj.cal_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    })
+
+    try {
+      await multi.execAsync()
+    } catch (error) {
+      console.error(`Redis write error : writeAnchorBTCAggStateObjectsAsync : ${error.message}`)
+    }
+  }
+  return true
+}
+
 async function writeBTCTxStateObjectAsync (stateObject) {
   let btcTxStateObject = {
     anchor_btc_agg_id: stateObject.anchor_btc_agg_id,
@@ -635,6 +673,7 @@ module.exports = {
   writeCalStateObjectAsync: writeCalStateObjectAsync,
   writeCalStateObjectsBulkAsync: writeCalStateObjectsBulkAsync,
   writeAnchorBTCAggStateObjectAsync: writeAnchorBTCAggStateObjectAsync,
+  writeAnchorBTCAggStateObjectsAsync: writeAnchorBTCAggStateObjectsAsync,
   writeBTCTxStateObjectAsync: writeBTCTxStateObjectAsync,
   writeBTCHeadStateObjectAsync: writeBTCHeadStateObjectAsync,
   pruneAggStatesByIdsAsync: pruneAggStatesByIdsAsync,

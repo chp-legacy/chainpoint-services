@@ -144,7 +144,7 @@ async function consumeProofReadyMessageAsync (msg) {
         console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
       }
       break
-    case 'cal-batch':
+    case 'cal_batch':
       try {
         let hashIds = messageObj.hash_ids
         let aggStateRows = await cachedProofState.getAggStateObjectsByHashIdsAsync(hashIds)

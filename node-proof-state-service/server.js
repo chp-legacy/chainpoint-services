@@ -169,7 +169,7 @@ async function ConsumeCalendarBatchMessageAsync (msg) {
       let dataOutObj = {}
       dataOutObj.hash_ids = hashIds.splice(0, CAL_PROOF_GEN_BATCH_SIZE)
       try {
-        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'cal-batch' })
+        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'cal_batch' })
       } catch (error) {
         console.error(env.RMQ_WORK_OUT_GEN_QUEUE, '[cal] publish message nacked')
         throw new Error(error.message)
@@ -201,6 +201,40 @@ async function ConsumeAnchorBTCAggMessageAsync (msg) {
 
   try {
     await cachedProofState.writeAnchorBTCAggStateObjectAsync(stateObj)
+
+    // New message has been published and event logged, ack consumption of original message
+    amqpChannel.ack(msg)
+    console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
+  } catch (error) {
+    amqpChannel.nack(msg)
+    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
+  }
+}
+
+/**
+* Writes the state data to persistent storage
+*
+* @param {amqp message object} msg - The AMQP message received from the queue
+*/
+async function ConsumeAnchorBTCAggBatchMessageAsync (msg) {
+  let messageObj = JSON.parse(msg.content.toString())
+
+  // transform batch message data into cal_state objects ready for insertion
+  let stateObjs = messageObj.proofData.map((proofDataItem) => {
+    return {
+      cal_id: proofDataItem.cal_id,
+      anchor_btc_agg_id: messageObj.anchor_btc_agg_id,
+      anchor_btc_agg_state: { ops: proofDataItem.proof }
+    }
+  })
+
+  try {
+    // Write the anchor_btc_agg state objects to the database
+    // The writes are split into batches to limit the total insert query size
+    // CRDB has a query limit of 256k
+    while (stateObjs.length > 0) {
+      await cachedProofState.writeAnchorBTCAggStateObjectsAsync(stateObjs.splice(0, ANCHOR_BTC_STATE_WRITE_BATCH_SIZE))
+    }
 
     // New message has been published and event logged, ack consumption of original message
     amqpChannel.ack(msg)
@@ -354,7 +388,7 @@ function processMessage (msg) {
         // Stores state information and publishes proof ready messages bound for the proof gen service
         ConsumeCalendarMessageAsync(msg)
         break
-      case 'cal-batch':
+      case 'cal_batch':
         // Consumes a calendar batch state message from the Calendar service
         // Stores the batch of state information and publishes proof ready messages bound for the proof gen service
         ConsumeCalendarBatchMessageAsync(msg)
@@ -363,6 +397,11 @@ function processMessage (msg) {
         // Consumes a anchor BTC aggregation state message from the Calendar service
         // Stores state information for anchor agregation events
         ConsumeAnchorBTCAggMessageAsync(msg)
+        break
+      case 'anchor_btc_agg_batch':
+        // Consumes a anchor BTC aggregation state message from the Calendar service
+        // Stores state information for anchor agregation events
+        ConsumeAnchorBTCAggBatchMessageAsync(msg)
         break
       case 'btctx':
         // Consumes a btctx state message from the Calendar service
