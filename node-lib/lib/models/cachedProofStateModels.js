@@ -207,7 +207,19 @@ async function getHashIdsByAggIdAsync (aggId) {
     attributes: ['hash_id'],
     where: {
       agg_id: aggId
-    }
+    },
+    raw: true
+  })
+  return results
+}
+
+async function getHashIdsByAggIdsAsync (aggIds) {
+  let results = await AggStates.findAll({
+    attributes: ['hash_id'],
+    where: {
+      agg_id: { [Op.in]: aggIds }
+    },
+    raw: true
   })
   return results
 }
@@ -225,9 +237,20 @@ async function getAggStateObjectByHashIdAsync (hashId) {
   let result = await AggStates.findOne({
     where: {
       hash_id: hashId
-    }
+    },
+    raw: true
   })
   return result
+}
+
+async function getAggStateObjectsByHashIdsAsync (hashIds) {
+  let results = await AggStates.findAll({
+    where: {
+      hash_id: { [Op.in]: hashIds }
+    },
+    raw: true
+  })
+  return results
 }
 
 async function getCalStateObjectByAggIdAsync (aggId) {
@@ -243,7 +266,8 @@ async function getCalStateObjectByAggIdAsync (aggId) {
   let result = await CalStates.findOne({
     where: {
       agg_id: aggId
-    }
+    },
+    raw: true
   })
   // We've made it this far, so either redis is null,
   // or more likely, there was no cache hit and the database was queried.
@@ -256,6 +280,63 @@ async function getCalStateObjectByAggIdAsync (aggId) {
     }
   }
   return result
+}
+
+async function getCalStateObjectsByAggIdsAsync (aggIds) {
+  let aggIdData = aggIds.map((aggId) => { return { aggId: aggId, data: null } })
+
+  if (redis) {
+    let multi = redis.multi()
+
+    aggIdData.forEach((aggIdDataItem) => {
+      multi.get(`${CAL_STATE_KEY_PREFIX}:${aggIdDataItem.aggId}`)
+    })
+
+    let redisResults
+    try {
+      redisResults = await multi.execAsync()
+    } catch (error) {
+      console.error(`Redis write error : getCalStateObjectsByAggIdsAsync : ${error.message}`)
+    }
+
+    // assign the redis results to the corresponding item in aggIdData
+    aggIdData = aggIdData.map((item, index) => { item.data = redisResults[index]; return item })
+
+    let nullDataCount = aggIdData.reduce((total, item) => item.data === null ? total : ++total, 0)
+    // if all data was retrieved from redis, we are done, return it
+    if (nullDataCount === 0) return aggIdData.map((item) => item.data)
+  }
+
+  // get an array of aggIds that we need cal state data for
+  let aggIdsNullData = aggIdData.filter((item) => item.data === null).map((item) => item.aggId)
+  let dbResult = await CalStates.findAll({
+    where: {
+      agg_id: { [Op.in]: aggIdsNullData }
+    },
+    raw: true
+  })
+  // construct a final result array from the aggIdData data and from dbResult
+  let cachedData = aggIdData.filter((item) => item.data != null).map((item) => JSON.parse(item.data))
+
+  let finalResult = [...dbResult, ...cachedData]
+
+  // We've made it this far, so either redis is null,
+  // or more likely, there was no cache hit for some data and the database was queried.
+  // Store the query result in redis to cache for next request
+  if (redis) {
+    let multi = redis.multi()
+
+    dbResult.forEach((dbRow) => {
+      multi.set(`${CAL_STATE_KEY_PREFIX}:${dbRow.agg_id}`, JSON.stringify(dbRow), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    })
+
+    try {
+      await multi.execAsync()
+    } catch (error) {
+      console.error(`Redis write error : getCalStateObjectsByAggIdsAsync : ${error.message}`)
+    }
+  }
+  return finalResult
 }
 
 async function getAnchorBTCAggStateObjectByCalIdAsync (calId) {
@@ -271,7 +352,8 @@ async function getAnchorBTCAggStateObjectByCalIdAsync (calId) {
   let result = await AnchorBTCAggStates.findOne({
     where: {
       cal_id: calId
-    }
+    },
+    raw: true
   })
   // We've made it this far, so either redis is null,
   // or more likely, there was no cache hit and the database was queried.
@@ -284,6 +366,63 @@ async function getAnchorBTCAggStateObjectByCalIdAsync (calId) {
     }
   }
   return result
+}
+
+async function getAnchorBTCAggStateObjectsByCalIdsAsync (calIds) {
+  let calIdData = calIds.map((calId) => { return { calId: calId, data: null } })
+
+  if (redis) {
+    let multi = redis.multi()
+
+    calIdData.forEach((calIdDataItem) => {
+      multi.get(`${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${calIdDataItem.calId}`)
+    })
+
+    let redisResults
+    try {
+      redisResults = await multi.execAsync()
+    } catch (error) {
+      console.error(`Redis write error : getAnchorBTCAggStateObjectsByCalIdsAsync : ${error.message}`)
+    }
+
+    // assign the redis results to the corresponding item in calIdData
+    calIdData = calIdData.map((item, index) => { item.data = redisResults[index]; return item })
+
+    let nullDataCount = calIdData.reduce((total, item) => item.data === null ? total : ++total, 0)
+    // if all data was retrieved from redis, we are done, return it
+    if (nullDataCount === 0) return calIdData.map((item) => item.data)
+  }
+
+  // get an array of calIds that we need anchor_btc_agg state data for
+  let calIdsNullData = calIdData.filter((item) => item.data === null).map((item) => item.calId)
+  let dbResult = await AnchorBTCAggStates.findAll({
+    where: {
+      cal_id: { [Op.in]: calIdsNullData }
+    },
+    raw: true
+  })
+  // construct a final result array from the calIdData data and from dbResult
+  let cachedData = calIdData.filter((item) => item.data != null).map((item) => JSON.parse(item.data))
+
+  let finalResult = [...dbResult, ...cachedData]
+
+  // We've made it this far, so either redis is null,
+  // or more likely, there was no cache hit for some data and the database was queried.
+  // Store the query result in redis to cache for next request
+  if (redis) {
+    let multi = redis.multi()
+
+    dbResult.forEach((dbRow) => {
+      multi.set(`${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${dbRow.cal_id}`, JSON.stringify(dbRow), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    })
+
+    try {
+      await multi.execAsync()
+    } catch (error) {
+      console.error(`Redis write error : getAnchorBTCAggStateObjectsByCalIdsAsync : ${error.message}`)
+    }
+  }
+  return finalResult
 }
 
 async function getBTCTxStateObjectByAnchorBTCAggIdAsync (anchorBTCAggId) {
@@ -299,7 +438,8 @@ async function getBTCTxStateObjectByAnchorBTCAggIdAsync (anchorBTCAggId) {
   let result = await BtcTxStates.findOne({
     where: {
       anchor_btc_agg_id: anchorBTCAggId
-    }
+    },
+    raw: true
   })
   // We've made it this far, so either redis is null,
   // or more likely, there was no cache hit and the database was queried.
@@ -327,7 +467,8 @@ async function getBTCHeadStateObjectByBTCTxIdAsync (btcTxId) {
   let result = await BtcHeadStates.findOne({
     where: {
       btctx_id: btcTxId
-    }
+    },
+    raw: true
   })
   // We've made it this far, so either redis is null,
   // or more likely, there was no cache hit and the database was queried.
@@ -381,6 +522,39 @@ async function writeCalStateObjectAsync (stateObject) {
   return true
 }
 
+async function writeCalStateObjectsBulkAsync (stateObjects) {
+  let insertCmd = 'INSERT INTO chainpoint_proof_cal_states (agg_id, cal_id, cal_state, created_at, updated_at) VALUES '
+
+  stateObjects = stateObjects.map((stateObj) => { stateObj.cal_state = JSON.stringify(stateObj.cal_state); return stateObj })
+  let insertValues = stateObjects.map((stateObject) => {
+    // use sequelize.escape() to sanitize input values just to be safe
+    let aggId = sequelize.escape(stateObject.agg_id)
+    let calId = sequelize.escape(stateObject.cal_id)
+    let calState = sequelize.escape(stateObject.cal_state)
+    return `(${aggId}, ${calId}, ${calState}, now(), now())`
+  })
+
+  insertCmd = insertCmd + insertValues.join(', ') + ' ON CONFLICT (agg_id) DO NOTHING'
+
+  await sequelize.query(insertCmd, { type: sequelize.QueryTypes.INSERT })
+
+  // Store the state object in redis to cache for next request
+  if (redis) {
+    let multi = redis.multi()
+
+    stateObjects.forEach((stateObj) => {
+      multi.set(`${CAL_STATE_KEY_PREFIX}:${stateObj.agg_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    })
+
+    try {
+      await multi.execAsync()
+    } catch (error) {
+      console.error(`Redis write error : writeCalStateObjectsBulkAsync : ${error.message}`)
+    }
+  }
+  return true
+}
+
 async function writeAnchorBTCAggStateObjectAsync (stateObject) {
   let calId = parseInt(stateObject.cal_id, 10)
   if (isNaN(calId)) throw new Error(`cal_id value '${stateObject.cal_id}' is not an integer`)
@@ -397,6 +571,44 @@ async function writeAnchorBTCAggStateObjectAsync (stateObject) {
       await redis.setAsync(redisKey, JSON.stringify(anchorBTCAggStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
     } catch (error) {
       console.error(`Redis write error : writeAnchorBTCAggStateObjectAsync : ${error.message}`)
+    }
+  }
+  return true
+}
+
+async function writeAnchorBTCAggStateObjectsAsync (stateObjects) {
+  let insertCmd = 'INSERT INTO chainpoint_proof_anchor_btc_agg_states (cal_id, anchor_btc_agg_id, anchor_btc_agg_state, created_at, updated_at) VALUES '
+
+  stateObjects = stateObjects.map((stateObj) => {
+    stateObj.cal_id = parseInt(stateObj.cal_id, 10)
+    if (isNaN(stateObj.cal_id)) throw new Error(`cal_id value '${stateObj.cal_id}' is not an integer`)
+    stateObj.anchor_btc_agg_state = JSON.stringify(stateObj.anchor_btc_agg_state)
+    return stateObj
+  })
+  let insertValues = stateObjects.map((stateObject) => {
+    // use sequelize.escape() to sanitize input values just to be safe
+    let calId = sequelize.escape(stateObject.cal_id)
+    let anchorBTCAggId = sequelize.escape(stateObject.anchor_btc_agg_id)
+    let anchorBTCAggState = sequelize.escape(stateObject.anchor_btc_agg_state)
+    return `(${calId}, ${anchorBTCAggId}, ${anchorBTCAggState}, now(), now())`
+  })
+
+  insertCmd = insertCmd + insertValues.join(', ') + ' ON CONFLICT (cal_id) DO NOTHING'
+
+  await sequelize.query(insertCmd, { type: sequelize.QueryTypes.INSERT })
+
+  // Store the state object in redis to cache for next request
+  if (redis) {
+    let multi = redis.multi()
+
+    stateObjects.forEach((stateObj) => {
+      multi.set(`${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObj.cal_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+    })
+
+    try {
+      await multi.execAsync()
+    } catch (error) {
+      console.error(`Redis write error : writeAnchorBTCAggStateObjectsAsync : ${error.message}`)
     }
   }
   return true
@@ -497,7 +709,7 @@ async function getExpiredPKValuesForModel (modelName) {
   }
   if (model === null) throw new Error(`Unknown modelName : ${modelName}`)
   let pruneCutoffDate = new Date(Date.now() - PROOF_STATE_EXPIRE_HOURS * 60 * 60 * 1000)
-  let primaryKeyVals = await model.findAll({ where: { created_at: { [Op.lte]: pruneCutoffDate } }, attributes: [pkColName] })
+  let primaryKeyVals = await model.findAll({ where: { created_at: { [Op.lte]: pruneCutoffDate } }, raw: true, attributes: [pkColName] })
   primaryKeyVals = primaryKeyVals.map((item) => { return item[pkColName] })
   return primaryKeyVals
 }
@@ -505,15 +717,21 @@ async function getExpiredPKValuesForModel (modelName) {
 module.exports = {
   openConnectionAsync: openConnectionAsync,
   getHashIdsByAggIdAsync: getHashIdsByAggIdAsync,
+  getHashIdsByAggIdsAsync: getHashIdsByAggIdsAsync,
   getHashIdsByBtcTxIdAsync: getHashIdsByBtcTxIdAsync,
   getAggStateObjectByHashIdAsync: getAggStateObjectByHashIdAsync,
+  getAggStateObjectsByHashIdsAsync: getAggStateObjectsByHashIdsAsync,
   getCalStateObjectByAggIdAsync: getCalStateObjectByAggIdAsync,
+  getCalStateObjectsByAggIdsAsync: getCalStateObjectsByAggIdsAsync,
   getAnchorBTCAggStateObjectByCalIdAsync: getAnchorBTCAggStateObjectByCalIdAsync,
+  getAnchorBTCAggStateObjectsByCalIdsAsync: getAnchorBTCAggStateObjectsByCalIdsAsync,
   getBTCTxStateObjectByAnchorBTCAggIdAsync: getBTCTxStateObjectByAnchorBTCAggIdAsync,
   getBTCHeadStateObjectByBTCTxIdAsync: getBTCHeadStateObjectByBTCTxIdAsync,
   writeAggStateObjectsBulkAsync: writeAggStateObjectsBulkAsync,
   writeCalStateObjectAsync: writeCalStateObjectAsync,
+  writeCalStateObjectsBulkAsync: writeCalStateObjectsBulkAsync,
   writeAnchorBTCAggStateObjectAsync: writeAnchorBTCAggStateObjectAsync,
+  writeAnchorBTCAggStateObjectsAsync: writeAnchorBTCAggStateObjectsAsync,
   writeBTCTxStateObjectAsync: writeBTCTxStateObjectAsync,
   writeBTCHeadStateObjectAsync: writeBTCHeadStateObjectAsync,
   pruneAggStatesByIdsAsync: pruneAggStatesByIdsAsync,

@@ -18,73 +18,68 @@ const _ = require('lodash')
 const chpParse = require('chainpoint-parse')
 const restify = require('restify')
 const env = require('../parse-env.js')('api')
-const async = require('async')
 const calendarBlock = require('../models/CalendarBlock.js')
 
 // pull in variables defined in shared CalendarBlock module
 let sequelize = calendarBlock.sequelize
 let CalendarBlock = calendarBlock.CalendarBlock
 
-function ProcessVerifyTasks (verifyTasks, callback) {
+async function ProcessVerifyTasksAsync (verifyTasks) {
   let processedTasks = []
 
-  async.eachSeries(verifyTasks, (verifyTask, eachCallback) => {
+  for (let x = 0; x < verifyTasks.length; x++) {
+    let verifyTask = verifyTasks[x]
     let status = verifyTask.status
+
     if (status === 'malformed') {
       processedTasks.push({
         proof_index: verifyTask.proof_index,
         status: status
       })
-      return eachCallback(null)
-    }
+    } else {
+      let anchors = []
+      let totalCount = 0
+      let validCount = 0
 
-    let anchors = []
-    let totalCount = 0
-    let validCount = 0
+      let anchorResults = []
 
-    async.mapSeries(verifyTask.anchors, (anchor, mapCallback) => {
-      confirmExpectedValue(anchor.anchor, (err, result) => {
-        if (err) return mapCallback(err)
+      for (let x = 0; x < verifyTask.anchors.length; x++) {
+        let anchor = verifyTask.anchors[x]
+        let confirmResult = await confirmExpectedValueAsync(anchor.anchor)
         let anchorResult = {
           branch: anchor.branch || undefined,
           type: anchor.anchor.type,
-          valid: result
+          valid: confirmResult
         }
         totalCount++
         validCount = validCount + (anchorResult.valid === true ? 1 : 0)
-        return mapCallback(null, anchorResult)
-      })
-    }, (err, anchorResults) => {
-      if (err) {
-        console.error('verification error - ' + err)
-      } else {
-        anchors = anchors.concat(anchorResults)
-        if (validCount === 0) {
-          status = 'invalid'
-        } else if (validCount === totalCount) {
-          status = 'verified'
-        } else {
-          status = 'mixed'
-        }
-
-        let result = {
-          proof_index: verifyTask.proof_index,
-          hash: verifyTask.hash,
-          hash_id_node: verifyTask.hash_id_node,
-          hash_submitted_node_at: verifyTask.hash_submitted_node_at,
-          hash_id_core: verifyTask.hash_id_core,
-          hash_submitted_core_at: verifyTask.hash_submitted_core_at,
-          anchors: anchors,
-          status: status
-        }
-        processedTasks.push(result)
-        return eachCallback(null)
+        anchorResults.push(anchorResult)
       }
-    })
-  }, (err) => {
-    if (err) return callback(err)
-    return callback(null, processedTasks)
-  })
+
+      anchors = anchors.concat(anchorResults)
+      if (validCount === 0) {
+        status = 'invalid'
+      } else if (validCount === totalCount) {
+        status = 'verified'
+      } else {
+        status = 'mixed'
+      }
+
+      let result = {
+        proof_index: verifyTask.proof_index,
+        hash: verifyTask.hash,
+        hash_id_node: verifyTask.hash_id_node,
+        hash_submitted_node_at: verifyTask.hash_submitted_node_at,
+        hash_id_core: verifyTask.hash_id_core,
+        hash_submitted_core_at: verifyTask.hash_submitted_core_at,
+        anchors: anchors,
+        status: status
+      }
+      processedTasks.push(result)
+    }
+  }
+
+  return processedTasks
 }
 
 function BuildVerifyTaskList (proofs) {
@@ -120,27 +115,19 @@ function BuildVerifyTaskList (proofs) {
   return results
 }
 
-function confirmExpectedValue (anchorInfo, callback) {
+async function confirmExpectedValueAsync (anchorInfo) {
   let anchorId = anchorInfo.anchor_id
   let expectedValue = anchorInfo.expected_value
+  let block = null
   switch (anchorInfo.type) {
     case 'cal':
-      CalendarBlock.findOne({ where: { type: 'cal', data_id: anchorId }, attributes: ['hash'] }).then((block) => {
-        if (!block) return callback(null, null)
-        return callback(null, block.hash === expectedValue)
-      }).catch((err) => {
-        return callback(err)
-      })
-      break
+      block = await CalendarBlock.findOne({ where: { type: 'cal', data_id: anchorId }, attributes: ['hash'], raw: true })
+      if (!block) return false
+      return block.hash === expectedValue
     case 'btc':
-      CalendarBlock.findOne({ where: { type: 'btc-c', dataId: anchorId }, attributes: ['dataVal'] }).then((block) => {
-        if (!block) return callback(null, null)
-        let blockRoot = block.dataVal.match(/.{2}/g).reverse().join('')
-        return callback(null, blockRoot === expectedValue)
-      }).catch((err) => {
-        return callback(err)
-      })
-      break
+      block = await CalendarBlock.findOne({ where: { type: 'btc-c', dataId: anchorId }, attributes: ['dataVal'], raw: true })
+      if (!block) return false
+      return block.dataVal === expectedValue
     case 'eth':
       break
   }
@@ -177,7 +164,7 @@ function flattenExpectedValues (branchArray) {
  * Proofs may be in either JSON form or base64 encoded binary form.
  *
  */
-function postProofsForVerificationV1 (req, res, next) {
+async function postProofsForVerificationV1 (req, res, next) {
   // validate content-type sent was 'application/json'
   if (req.contentType() !== 'application/json') {
     return next(new restify.InvalidArgumentError('invalid content type'))
@@ -203,15 +190,15 @@ function postProofsForVerificationV1 (req, res, next) {
     return next(new restify.InvalidArgumentError(`invalid JSON body, proofs Array max size of ${env.POST_VERIFY_PROOFS_MAX} exceeded`))
   }
 
-  let verifyTasks = BuildVerifyTaskList(req.params.proofs)
-  ProcessVerifyTasks(verifyTasks, (err, verifyResults) => {
-    if (err) {
-      console.error(err)
-      return next(new restify.InternalError('internal error verifying proof(s)'))
-    }
+  try {
+    let verifyTasks = BuildVerifyTaskList(req.params.proofs)
+    let verifyResults = await ProcessVerifyTasksAsync(verifyTasks)
     res.send(verifyResults)
     return next()
-  })
+  } catch (error) {
+    console.error(error.message)
+    return next(new restify.InternalError('internal error verifying proof(s)'))
+  }
 }
 
 module.exports = {
