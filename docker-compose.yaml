@@ -209,6 +209,7 @@ services:
     container_name: btc-mon-core
     depends_on:
       - rabbitmq
+      - redis
     networks:
       - chainpoint
     environment:

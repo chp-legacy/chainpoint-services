@@ -23,10 +23,14 @@ const uuidTime = require('uuid-time')
 const chpBinary = require('chainpoint-binary')
 const utils = require('./lib/utils.js')
 const bluebird = require('bluebird')
+const nodeResque = require('node-resque')
+const exitHook = require('exit-hook')
+const { URL } = require('url')
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 
 const r = require('redis')
+bluebird.promisifyAll(r.Multi.prototype)
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -35,6 +39,9 @@ let amqpChannel = null
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
 let redis = null
+
+// This value is set once the connection has been established
+let taskQueue = null
 
 function addChainpointHeader (proof, hash, hashId) {
   proof['@context'] = 'https://w3id.org/chainpoint/v3'
@@ -92,7 +99,7 @@ function addBtcBranch (proof, anchorBTCAggState, btcTxState, btcHeadState) {
 async function consumeProofReadyMessageAsync (msg) {
   let messageObj = JSON.parse(msg.content.toString())
 
-  switch (messageObj.type) {
+  switch (msg.properties.type) {
     case 'cal':
       try {
         // CRDB
@@ -126,6 +133,43 @@ async function consumeProofReadyMessageAsync (msg) {
 
         // store in redis
         await storeProofAsync(proof)
+
+        // Proof ready message has been consumed, ack consumption of original message
+        amqpChannel.ack(msg)
+        console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
+      } catch (error) {
+        console.error(`Unable to process proof ready message: ${error.message}`)
+        // An error as occurred consuming a message, nack consumption of original message
+        amqpChannel.nack(msg)
+        console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
+      }
+      break
+    case 'cal_batch':
+      try {
+        let hashIds = messageObj.hash_ids
+        let aggStateRows = await cachedProofState.getAggStateObjectsByHashIdsAsync(hashIds)
+        let aggIds = aggStateRows.map((item) => item.agg_id)
+        let calStateRows = await cachedProofState.getCalStateObjectsByAggIdsAsync(aggIds)
+        // create a lookup table for calStateRows by agg_id
+        let calStateLookup = {}
+        calStateRows.forEach((calStateRow) => { calStateLookup[calStateRow.agg_id] = calStateRow.cal_state })
+
+        let proofs = []
+        aggStateRows.forEach((aggStateRow) => {
+          let proof = {}
+          proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
+          proof = addCalendarBranch(proof, JSON.parse(aggStateRow.agg_state), JSON.parse(calStateLookup[aggStateRow.agg_id]))
+
+          // ensure the proof is valid according to the defined Chainpoint v3 JSON schema
+          let isValidSchema = chainpointProofSchema.validate(proof).valid
+          if (!isValidSchema) {
+            console.error(`Proof ${aggStateRow.hash_id} has an invalid JSON schema`)
+          } else {
+            proofs.push(proof)
+          }
+        })
+
+        await storeProofsAsync(proofs)
 
         // Proof ready message has been consumed, ack consumption of original message
         amqpChannel.ack(msg)
@@ -212,16 +256,86 @@ async function consumeProofReadyMessageAsync (msg) {
         console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
       }
       break
+    case 'btc_batch':
+      try {
+        let hashIds = messageObj.hash_ids
+        let aggStateRows = await cachedProofState.getAggStateObjectsByHashIdsAsync(hashIds)
+        let aggIds = aggStateRows.map((item) => item.agg_id)
+        let calStateRows = await cachedProofState.getCalStateObjectsByAggIdsAsync(aggIds)
+        let calIds = calStateRows.map((item) => item.cal_id)
+        let anchorBTCAggStateRows = await cachedProofState.getAnchorBTCAggStateObjectsByCalIdsAsync(calIds)
+        let anchorBTCAggIds = anchorBTCAggStateRows.map((item) => item.anchor_btc_agg_id)
+        // all the anchorBTCAggIds should be the same, all being the event id for this btc transaction
+        // use the first one as the identifier to retrive the remaining 1-to-1 state
+        let anchorBTCAggId = anchorBTCAggIds[0]
+        let btcTxStateRow = await cachedProofState.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggId)
+        let btcHeadStateRow = await cachedProofState.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
+
+        // create a lookup table for calStateRows by agg_id
+        let calStateLookup = {}
+        calStateRows.forEach((calStateRow) => { calStateLookup[calStateRow.agg_id] = { cal_id: calStateRow.cal_id, state: calStateRow.cal_state } })
+        // create a lookup table for anchorBTCAggStateRows by cal_id
+        let anchorBTCAggStateLookup = {}
+        anchorBTCAggStateRows.forEach((anchorBTCAggStateRow) => { anchorBTCAggStateLookup[anchorBTCAggStateRow.cal_id] = anchorBTCAggStateRow.anchor_btc_agg_state })
+
+        let proofs = []
+        let btcTxState = JSON.parse(btcTxStateRow.btctx_state)
+        let btcHeadState = JSON.parse(btcHeadStateRow.btchead_state)
+
+        aggStateRows.forEach((aggStateRow) => {
+          let proof = {}
+          proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
+          proof = addCalendarBranch(proof, JSON.parse(aggStateRow.agg_state), JSON.parse(calStateLookup[aggStateRow.agg_id].state))
+          proof = addBtcBranch(proof, JSON.parse(anchorBTCAggStateLookup[calStateLookup[aggStateRow.agg_id].cal_id]), btcTxState, btcHeadState)
+
+          // ensure the proof is valid according to the defined Chainpoint v3 JSON schema
+          let isValidSchema = chainpointProofSchema.validate(proof).valid
+          if (!isValidSchema) {
+            console.error(`Proof ${aggStateRow.hash_id} has an invalid JSON schema`)
+          } else {
+            proofs.push(proof)
+          }
+        })
+
+        await storeProofsAsync(proofs)
+
+        // Proof ready message has been consumed, ack consumption of original message
+        amqpChannel.ack(msg)
+        console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
+      } catch (error) {
+        console.error(`Unable to process proof ready message: ${error.message}`)
+        // An error as occurred consuming a message, nack consumption of original message
+        amqpChannel.nack(msg)
+        console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
+      }
+      break
     case 'eth':
       console.log('building eth proof')
       amqpChannel.ack(msg)
       break
     default:
       // This is an unknown proof ready type
-      console.error('Unknown proof ready type', messageObj.type)
+      console.error('Unknown proof ready type', msg.properties.type)
       // cannot handle unknown type messages, ack message and do nothing
       amqpChannel.ack(msg)
   }
+}
+
+async function storeProofsAsync (proofs) {
+  // compress proofs to binary format Base64
+  let proofsBase64 = proofs.map((proof) => chpBinary.objectToBase64Sync(proof))
+  // save proof to redis
+  let multi = redis.multi()
+  proofs.forEach((proof, index) => {
+    multi.set(proof.hash_id_core, proofsBase64[index], 'EX', env.PROOF_EXPIRE_MINUTES * 60)
+  })
+  await multi.execAsync()
+  // save proof to proof proxy
+  /*
+  proofs.forEach(async (proof, index) => {
+    await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, proofsBase64[index]])
+  })
+  */
 }
 
 async function storeProofAsync (proof) {
@@ -229,6 +343,8 @@ async function storeProofAsync (proof) {
   let proofBase64 = chpBinary.objectToBase64Sync(proof)
   // save proof to redis
   await redis.setAsync(proof.hash_id_core, proofBase64, 'EX', env.PROOF_EXPIRE_MINUTES * 60)
+  // save proof to proof proxy
+  // await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, proofBase64])
 }
 
 /**
@@ -312,6 +428,35 @@ async function openStorageConnectionAsync () {
   }
 }
 
+/**
+ * Initializes the connection to the Resque queue when Redis is ready
+ */
+async function initResqueQueueAsync () {
+  // wait until redis is initialized
+  let redisReady = (redis !== null)
+  while (!redisReady) {
+    await utils.sleep(100)
+    redisReady = (redis !== null)
+  }
+  const redisURI = new URL(env.REDIS_CONNECT_URI)
+  var connectionDetails = {
+    host: redisURI.hostname,
+    port: redisURI.port,
+    namespace: 'resque'
+  }
+
+  const queue = new nodeResque.Queue({ connection: connectionDetails })
+  queue.on('error', function (error) { console.error(error) })
+  await queue.connect()
+  taskQueue = queue
+
+  exitHook(async () => {
+    await queue.end()
+  })
+
+  console.log('Resque queue connection established')
+}
+
 // process all steps need to start the application
 async function start () {
   if (env.NODE_ENV === 'test') return
@@ -322,6 +467,8 @@ async function start () {
     openRedisConnection(env.REDIS_CONNECT_URI)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
+    // init Resque queue
+    await initResqueQueueAsync()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)

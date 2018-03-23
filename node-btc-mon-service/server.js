@@ -21,10 +21,11 @@ const MerkleTools = require('merkle-tools')
 const BlockchainAnchor = require('blockchain-anchor')
 const amqp = require('amqplib')
 const utils = require('./lib/utils.js')
+const r = require('redis')
+const bluebird = require('bluebird')
 
-// An array of all Bitcoin transaction id objects needing to be monitored.
-// Will be filled as new trasnactions ids arrive on the queue.
-let BTCTXIDS = []
+// Key for the Redis set of all Bitcoin transaction id objects needing to be monitored.
+const BTC_TX_IDS_KEY = 'BTC_Mon:BTCTxIds'
 
 // The merkle tools object for building trees and generating proof paths
 const merkleTools = new MerkleTools()
@@ -32,6 +33,11 @@ const merkleTools = new MerkleTools()
 // The channel used for all amqp communication
 // This value is set once the connection has been established
 var amqpChannel = null
+
+// This value is set once the connection has been established
+let redis = null
+
+let CHECKS_IN_PROGRESS = false
 
 // Initialize BlockchainAnchor object
 let anchor = new BlockchainAnchor({
@@ -41,14 +47,18 @@ let anchor = new BlockchainAnchor({
   insightFallback: true
 })
 
-function consumeBtcTxIdMessage (msg) {
+async function consumeBtcTxIdMessageAsync (msg) {
   if (msg !== null) {
-    let btcTxIdObj = JSON.parse(msg.content.toString())
+    let btcTxIdObjJSON = msg.content.toString()
 
-    // add msg to the btc tx id object so that we can ack it once requisite confirmations
-    // are achieved and monitoring for this tx id is completed
-    btcTxIdObj.msg = msg
-    BTCTXIDS.push(btcTxIdObj)
+    try {
+      // add the transaction id to the redis set
+      await redis.saddAsync(BTC_TX_IDS_KEY, btcTxIdObjJSON)
+      amqpChannel.ack(msg)
+    } catch (error) {
+      amqpChannel.nack(msg)
+      console.error(`${env.RMQ_WORK_IN_AGG_QUEUE} consume message nacked`)
+    }
   }
 }
 
@@ -58,28 +68,25 @@ function consumeBtcTxIdMessage (msg) {
 // return that information to calendar service, ack message.
 let monitorTransactionsAsync = async () => {
   // if the amqp channel is null (closed), processing should not continue, defer to next monitorTransactions call
-  if (amqpChannel === null) return
+  if (amqpChannel === null || redis === null) return
 
-  // process each set of btctxid data
-  let btcTxIdsToMonitor = BTCTXIDS.splice(0)
-  console.log(`Btc Tx monitoring process starting for ${btcTxIdsToMonitor.length} transaction(s)`)
+  CHECKS_IN_PROGRESS = true
+  let btcTxObjJSONArray = await redis.smembersAsync(BTC_TX_IDS_KEY)
+  console.log(`Btc Tx monitoring check starting for ${btcTxObjJSONArray.length} transaction(s)`)
 
-  for (let index = 0; index < btcTxIdsToMonitor.length; index++) {
-    let btcTxIdObj = btcTxIdsToMonitor[index]
-
+  for (let x = 0; x < btcTxObjJSONArray.length; x++) {
+    let btcTxObjJSON = btcTxObjJSONArray[x]
+    let btcTxIdObj = JSON.parse(btcTxObjJSON)
     try {
       // Get BTC Transaction Stats
       let txStats
       try {
         txStats = await anchor.btcGetTxStatsAsync(btcTxIdObj.tx_id)
       } catch (error) {
-        console.error(`Could not get stats for transaction ${btcTxIdObj.tx_id}`)
-        throw new Error(error.message)
+        throw new Error(`Could not get stats for transaction ${btcTxIdObj.tx_id}`)
       }
       if (txStats.confirmations < env.MIN_BTC_CONFIRMS) {
-        // nack consumption of this message
-        amqpChannel.nack(btcTxIdObj.msg)
-        console.log(`${txStats.id} monitoring requeued: ${txStats.confirmations} of ${env.MIN_BTC_CONFIRMS} confirmations`)
+        console.log(`${txStats.id} not ready : ${txStats.confirmations} of ${env.MIN_BTC_CONFIRMS} confirmations`)
         continue
       }
 
@@ -88,8 +95,7 @@ let monitorTransactionsAsync = async () => {
       try {
         blockStats = await anchor.btcGetBlockStatsAsync(txStats.blockHash)
       } catch (error) {
-        console.error(`Could not get stats for block ${txStats.blockHeight} (${txStats.blockHash})`)
-        throw new Error(error.message)
+        throw new Error(`Could not get stats for block ${txStats.blockHeight} (${txStats.blockHash})`)
       }
       let txIndex = blockStats.txIds.indexOf(txStats.id)
       if (txIndex === -1) throw new Error(`transaction ${txStats.id} not found in block ${txStats.blockHeight}`)
@@ -123,19 +129,38 @@ let monitorTransactionsAsync = async () => {
         console.error(env.RMQ_WORK_OUT_CAL_QUEUE, '[btcmon] publish message nacked', messageObj.btctx_id)
         throw new Error(error.message)
       }
-      // if minimim confirms have been achieved and return message to calendar published, ack consumption of this message
-      amqpChannel.ack(btcTxIdObj.msg)
-      console.log(btcTxIdObj.tx_id + ' confirmed and processed')
-      // console.log(env.RMQ_WORK_IN_BTCMON_QUEUE, 'consume message acked')
+
+      await redis.sremAsync(BTC_TX_IDS_KEY, btcTxObjJSON)
+
+      console.log(`${btcTxIdObj.tx_id} ready with ${txStats.confirmations} confirmations`)
     } catch (error) {
       console.error(error.message)
-      // nack consumption of this message
-      amqpChannel.nack(btcTxIdObj.msg)
-      console.error(env.RMQ_WORK_IN_BTCMON_QUEUE, 'consume message nacked')
     }
   }
 
-  console.log(`Btc Tx monitoring process complete`)
+  console.log(`Btc Tx monitoring checks complete`)
+  CHECKS_IN_PROGRESS = false
+}
+
+/**
+ * Opens a Redis connection
+ *
+ * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ */
+function openRedisConnection (redisURI) {
+  redis = r.createClient(redisURI)
+  redis.on('ready', () => {
+    bluebird.promisifyAll(redis)
+    console.log('Redis connection established')
+  })
+  redis.on('error', async (err) => {
+    console.error(`A redis error has ocurred: ${err}`)
+    redis.quit()
+    redis = null
+    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
+    await utils.sleep(5000)
+    openRedisConnection(redisURI)
+  })
 }
 
 /**
@@ -159,14 +184,12 @@ async function openRMQConnectionAsync (connectionString) {
       amqpChannel = chan
       // Continuously load the HASHES from RMQ with hash objects to process)
       chan.consume(env.RMQ_WORK_IN_BTCMON_QUEUE, (msg) => {
-        consumeBtcTxIdMessage(msg)
+        consumeBtcTxIdMessageAsync(msg)
       })
       // if the channel closes for any reason, attempt to reconnect
       conn.on('close', async () => {
         console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
         amqpChannel = null
-        // un-acked messaged will be requeued, so clear all work in progress
-        BTCTXIDS = []
         await utils.sleep(5000)
         await openRMQConnectionAsync(connectionString)
       })
@@ -181,13 +204,15 @@ async function openRMQConnectionAsync (connectionString) {
 }
 
 function startIntervals () {
-  setInterval(() => monitorTransactionsAsync(), env.MONITOR_INTERVAL_SECONDS * 1000)
+  setInterval(() => { if (!CHECKS_IN_PROGRESS) monitorTransactionsAsync() }, env.MONITOR_INTERVAL_SECONDS * 1000)
 }
 
 // process all steps need to start the application
 async function start () {
   if (env.NODE_ENV === 'test') return
   try {
+    // init Redis
+    openRedisConnection(env.REDIS_CONNECT_URI)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // init interval functions
@@ -204,11 +229,9 @@ start()
 
 // export these functions for unit tests
 module.exports = {
-  getBTCTXIDS: function () { return BTCTXIDS },
-  setBTCTXIDS: function (btctxids) { BTCTXIDS = btctxids },
   getAMQPChannel: function () { return amqpChannel },
   setAMQPChannel: (chan) => { amqpChannel = chan },
   openRMQConnectionAsync: openRMQConnectionAsync,
-  consumeBtcTxIdMessage: consumeBtcTxIdMessage,
+  consumeBtcTxIdMessageAsync: consumeBtcTxIdMessageAsync,
   monitorTransactionsAsync: monitorTransactionsAsync
 }
