@@ -331,9 +331,11 @@ async function storeProofsAsync (proofs) {
   })
   await multi.execAsync()
   // save proof to proof proxy
+  /*
   proofs.forEach(async (proof, index) => {
     await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, proofsBase64[index]])
   })
+  */
 }
 
 async function storeProofAsync (proof) {
@@ -342,7 +344,7 @@ async function storeProofAsync (proof) {
   // save proof to redis
   await redis.setAsync(proof.hash_id_core, proofBase64, 'EX', env.PROOF_EXPIRE_MINUTES * 60)
   // save proof to proof proxy
-  await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, proofBase64])
+  // await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, proofBase64])
 }
 
 /**
