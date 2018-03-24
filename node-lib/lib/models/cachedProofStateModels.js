@@ -233,16 +233,6 @@ async function getHashIdsByBtcTxIdAsync (btcTxId) {
   return results
 }
 
-async function getAggStateObjectByHashIdAsync (hashId) {
-  let result = await AggStates.findOne({
-    where: {
-      hash_id: hashId
-    },
-    raw: true
-  })
-  return result
-}
-
 async function getAggStateObjectsByHashIdsAsync (hashIds) {
   let results = await AggStates.findAll({
     where: {
@@ -251,36 +241,6 @@ async function getAggStateObjectsByHashIdsAsync (hashIds) {
     raw: true
   })
   return results
-}
-
-async function getCalStateObjectByAggIdAsync (aggId) {
-  if (aggId === null) return null
-  let redisKey = `${CAL_STATE_KEY_PREFIX}:${aggId}`
-  if (redis) {
-    try {
-      let cacheResult = await redis.getAsync(redisKey)
-      if (cacheResult) return JSON.parse(cacheResult)
-    } catch (error) {
-      console.error(`Redis read error : getCalStateObjectByAggIdAsync : ${error.message}`)
-    }
-  }
-  let result = await CalStates.findOne({
-    where: {
-      agg_id: aggId
-    },
-    raw: true
-  })
-  // We've made it this far, so either redis is null,
-  // or more likely, there was no cache hit and the database was queried.
-  // Store the query result in redis to cache for next request
-  if (redis) {
-    try {
-      await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
-    } catch (error) {
-      console.error(`Redis write error : getCalStateObjectByAggIdAsync : ${error.message}`)
-    }
-  }
-  return result
 }
 
 async function getCalStateObjectsByAggIdsAsync (aggIds) {
@@ -338,36 +298,6 @@ async function getCalStateObjectsByAggIdsAsync (aggIds) {
     }
   }
   return finalResult
-}
-
-async function getAnchorBTCAggStateObjectByCalIdAsync (calId) {
-  if (calId === null) return null
-  let redisKey = `${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${calId}`
-  if (redis) {
-    try {
-      let cacheResult = await redis.getAsync(redisKey)
-      if (cacheResult) return JSON.parse(cacheResult)
-    } catch (error) {
-      console.error(`Redis read error : getAnchorBTCAggStateObjectByCalIdAsync : ${error.message}`)
-    }
-  }
-  let result = await AnchorBTCAggStates.findOne({
-    where: {
-      cal_id: calId
-    },
-    raw: true
-  })
-  // We've made it this far, so either redis is null,
-  // or more likely, there was no cache hit and the database was queried.
-  // Store the query result in redis to cache for next request
-  if (redis) {
-    try {
-      await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
-    } catch (error) {
-      console.error(`Redis write error : getAnchorBTCAggStateObjectByCalIdAsync : ${error.message}`)
-    }
-  }
-  return result
 }
 
 async function getAnchorBTCAggStateObjectsByCalIdsAsync (calIds) {
@@ -723,11 +653,8 @@ module.exports = {
   getHashIdsByAggIdAsync: getHashIdsByAggIdAsync,
   getHashIdsByAggIdsAsync: getHashIdsByAggIdsAsync,
   getHashIdsByBtcTxIdAsync: getHashIdsByBtcTxIdAsync,
-  getAggStateObjectByHashIdAsync: getAggStateObjectByHashIdAsync,
   getAggStateObjectsByHashIdsAsync: getAggStateObjectsByHashIdsAsync,
-  getCalStateObjectByAggIdAsync: getCalStateObjectByAggIdAsync,
   getCalStateObjectsByAggIdsAsync: getCalStateObjectsByAggIdsAsync,
-  getAnchorBTCAggStateObjectByCalIdAsync: getAnchorBTCAggStateObjectByCalIdAsync,
   getAnchorBTCAggStateObjectsByCalIdsAsync: getAnchorBTCAggStateObjectsByCalIdsAsync,
   getBTCTxStateObjectByAnchorBTCAggIdAsync: getBTCTxStateObjectByAnchorBTCAggIdAsync,
   getBTCHeadStateObjectByBTCTxIdAsync: getBTCHeadStateObjectByBTCTxIdAsync,
