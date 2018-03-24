@@ -254,6 +254,7 @@ async function getAggStateObjectsByHashIdsAsync (hashIds) {
 }
 
 async function getCalStateObjectByAggIdAsync (aggId) {
+  if (aggId === null) return null
   let redisKey = `${CAL_STATE_KEY_PREFIX}:${aggId}`
   if (redis) {
     try {
@@ -302,9 +303,9 @@ async function getCalStateObjectsByAggIdsAsync (aggIds) {
     // assign the redis results to the corresponding item in aggIdData
     aggIdData = aggIdData.map((item, index) => { item.data = redisResults[index]; return item })
 
-    let nullDataCount = aggIdData.reduce((total, item) => item.data === null ? total : ++total, 0)
+    let nullDataCount = aggIdData.reduce((total, item) => item.data === null ? ++total : total, 0)
     // if all data was retrieved from redis, we are done, return it
-    if (nullDataCount === 0) return aggIdData.map((item) => item.data)
+    if (nullDataCount === 0) return aggIdData.map((item) => JSON.parse(item.data))
   }
 
   // get an array of aggIds that we need cal state data for
@@ -340,6 +341,7 @@ async function getCalStateObjectsByAggIdsAsync (aggIds) {
 }
 
 async function getAnchorBTCAggStateObjectByCalIdAsync (calId) {
+  if (calId === null) return null
   let redisKey = `${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${calId}`
   if (redis) {
     try {
@@ -388,9 +390,9 @@ async function getAnchorBTCAggStateObjectsByCalIdsAsync (calIds) {
     // assign the redis results to the corresponding item in calIdData
     calIdData = calIdData.map((item, index) => { item.data = redisResults[index]; return item })
 
-    let nullDataCount = calIdData.reduce((total, item) => item.data === null ? total : ++total, 0)
+    let nullDataCount = calIdData.reduce((total, item) => item.data === null ? ++total : total, 0)
     // if all data was retrieved from redis, we are done, return it
-    if (nullDataCount === 0) return calIdData.map((item) => item.data)
+    if (nullDataCount === 0) return calIdData.map((item) => JSON.parse(item.data))
   }
 
   // get an array of calIds that we need anchor_btc_agg state data for
@@ -426,6 +428,7 @@ async function getAnchorBTCAggStateObjectsByCalIdsAsync (calIds) {
 }
 
 async function getBTCTxStateObjectByAnchorBTCAggIdAsync (anchorBTCAggId) {
+  if (anchorBTCAggId === null) return null
   let redisKey = `${BTC_TX_STATE_KEY_PREFIX}:${anchorBTCAggId}`
   if (redis) {
     try {
@@ -455,6 +458,7 @@ async function getBTCTxStateObjectByAnchorBTCAggIdAsync (anchorBTCAggId) {
 }
 
 async function getBTCHeadStateObjectByBTCTxIdAsync (btcTxId) {
+  if (btcTxId === null) return null
   let redisKey = `${BTC_HEAD_STATE_KEY_PREFIX}:${btcTxId}`
   if (redis) {
     try {
