@@ -296,7 +296,7 @@ async function getCalStateObjectsByAggIdsAsync (aggIds) {
     try {
       redisResults = await multi.execAsync()
     } catch (error) {
-      console.error(`Redis write error : getCalStateObjectsByAggIdsAsync : ${error.message}`)
+      console.error(`Redis read error : getCalStateObjectsByAggIdsAsync : ${error.message}`)
     }
 
     // assign the redis results to the corresponding item in aggIdData
@@ -382,7 +382,7 @@ async function getAnchorBTCAggStateObjectsByCalIdsAsync (calIds) {
     try {
       redisResults = await multi.execAsync()
     } catch (error) {
-      console.error(`Redis write error : getAnchorBTCAggStateObjectsByCalIdsAsync : ${error.message}`)
+      console.error(`Redis read error : getAnchorBTCAggStateObjectsByCalIdsAsync : ${error.message}`)
     }
 
     // assign the redis results to the corresponding item in calIdData
