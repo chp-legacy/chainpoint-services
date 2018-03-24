@@ -265,11 +265,22 @@ async function consumeProofReadyMessageAsync (msg) {
         let calIds = calStateRows.map((item) => item.cal_id)
         let anchorBTCAggStateRows = await cachedProofState.getAnchorBTCAggStateObjectsByCalIdsAsync(calIds)
         let anchorBTCAggIds = anchorBTCAggStateRows.map((item) => item.anchor_btc_agg_id)
-        // all the anchorBTCAggIds should be the same, all being the event id for this btc transaction
-        // use the first one as the identifier to retrive the remaining 1-to-1 state
-        let anchorBTCAggId = anchorBTCAggIds[0]
-        let btcTxStateRow = await cachedProofState.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggId)
-        let btcHeadStateRow = await cachedProofState.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
+
+        let btcTxStateRow, btcHeadStateRow
+        try {
+          // if any of these calls fail, there is an unrecoverable problem with the proof state data for these hash_ids
+          // in this case, we log an error message and ack the message since it will never be able to process successfully
+          //
+          // all the anchorBTCAggIds should be the same, all being the event id for this btc transaction
+          // use the first one as the identifier to retrive the remaining 1-to-1 state
+          let anchorBTCAggId = anchorBTCAggIds[0]
+          btcTxStateRow = await cachedProofState.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggId)
+          btcHeadStateRow = await cachedProofState.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
+        } catch (error) {
+          console.error(`Unrecoverable proof state read error for hash_ids ${hashIds} : ${error.message}`)
+          amqpChannel.ack(msg)
+          return
+        }
 
         // create a lookup table for calStateRows by agg_id
         let calStateLookup = {}
