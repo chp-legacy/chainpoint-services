@@ -192,6 +192,7 @@ module.exports = (service) => {
       break
     case 'eth-tnt-tx':
       envDefinitions.ETH_TNT_TOKEN_ADDR = validateETHAddress({ desc: 'The address where the contract is on the blockchain.' })
+      envDefinitions.INFURA_API_KEY = envalid.str({ desc: 'The Infura API key used for all Infura API calls.' })
       break
     case 'eth-contracts':
       envDefinitions.ETH_TNT_TOKEN_ADDR = validateETHAddress({ desc: 'The address where the contract is on the blockchain.' })
