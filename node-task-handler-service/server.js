@@ -371,16 +371,6 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
   // send 'core' header to ensure that the proof is stored in the
   // short lifetime core proofs bucket.
   let options = {
-    headers: [
-      {
-        name: 'Content-Type',
-        value: 'application/json'
-      },
-      {
-        name: 'core',
-        value: 'true'
-      }
-    ],
     method: 'POST',
     uri: `https://proofs.chainpoint.org/proofs`,
     body: [[hashIdCore, proofBase64]],
@@ -388,6 +378,8 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
     gzip: true,
     resolveWithFullResponse: true
   }
+
+  options.headers['core'] = 'true'
 
   nodeResponse = await rp(options)
   return nodeResponse.body
