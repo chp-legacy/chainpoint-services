@@ -368,8 +368,6 @@ async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, 
 async function proofProxyPostAsync (hashIdCore, proofBase64) {
   let nodeResponse
 
-  // send 'core' header to ensure that the proof is stored in the
-  // short lifetime core proofs bucket.
   let options = {
     method: 'POST',
     uri: `https://proofs.chainpoint.org/proofs`,
@@ -379,6 +377,8 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
     resolveWithFullResponse: true
   }
 
+  // send 'core' header to ensure that the proof is stored in the
+  // short lifetime core proofs bucket.
   options.headers['core'] = 'true'
 
   nodeResponse = await rp(options)
