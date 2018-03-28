@@ -325,12 +325,7 @@ async function getNodeConfigObjectAsync (publicUri) {
   // perform the /config checks for the Node
   let nodeResponse
   let options = {
-    headers: [
-      {
-        name: 'Content-Type',
-        value: 'application/json'
-      }
-    ],
+    headers: {},
     method: 'GET',
     uri: `${publicUri}/config`,
     json: true,
@@ -369,7 +364,7 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
   let nodeResponse
 
   let options = {
-    headers: [],
+    headers: {},
     method: 'POST',
     uri: `https://proofs.chainpoint.org/proofs`,
     body: [[hashIdCore, proofBase64]],
