@@ -100,50 +100,6 @@ async function consumeProofReadyMessageAsync (msg) {
   let messageObj = JSON.parse(msg.content.toString())
 
   switch (msg.properties.type) {
-    case 'cal':
-      try {
-        // CRDB
-        let aggStateRow = await cachedProofState.getAggStateObjectByHashIdAsync(messageObj.hash_id)
-        if (!aggStateRow) {
-          console.error(`No matching agg_state data for hash_id ${messageObj.hash_id}`)
-          amqpChannel.ack(msg)
-          return
-        }
-        let calStateRow = await cachedProofState.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
-        if (!calStateRow) {
-          console.error(`No matching cal_state data for agg_id ${aggStateRow.agg_id}`)
-          amqpChannel.ack(msg)
-          return
-        }
-
-        let proof = {}
-        proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
-        proof = addCalendarBranch(proof, JSON.parse(aggStateRow.agg_state), JSON.parse(calStateRow.cal_state))
-
-        // ensure the proof is valid according to the defined Chainpoint v3 JSON schema
-        let isValidSchema = chainpointProofSchema.validate(proof).valid
-        if (!isValidSchema) {
-          // This schema is not valid, ack the message but log an error and end processing
-          // We are not nacking here because the poorly formatted proof would just be
-          // re-qeueud and re-processed on and on forever
-          amqpChannel.ack(msg)
-          console.error(env.RMQ_WORK_IN_GEN_QUEUE, 'consume message acked, but with invalid JSON schema error')
-          return
-        }
-
-        // store in redis
-        await storeProofAsync(proof)
-
-        // Proof ready message has been consumed, ack consumption of original message
-        amqpChannel.ack(msg)
-        console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
-      } catch (error) {
-        console.error(`Unable to process proof ready message: ${error.message}`)
-        // An error as occurred consuming a message, nack consumption of original message
-        amqpChannel.nack(msg)
-        console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
-      }
-      break
     case 'cal_batch':
       try {
         let hashIds = messageObj.hash_ids
@@ -181,81 +137,6 @@ async function consumeProofReadyMessageAsync (msg) {
         console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
       }
       break
-    case 'btc':
-      try {
-        // CRDB
-        // get the agg_state object for the hash_id
-        let aggStateRow = await cachedProofState.getAggStateObjectByHashIdAsync(messageObj.hash_id)
-        if (!aggStateRow) {
-          console.error(`No matching agg_state data for hash_id ${messageObj.hash_id}`)
-          amqpChannel.ack(msg)
-          return
-        }
-        // get the cal_state object for the agg_id
-        let calStateRow = await cachedProofState.getCalStateObjectByAggIdAsync(aggStateRow.agg_id)
-        if (!calStateRow) {
-          console.error(`No matching cal_state data for agg_id ${aggStateRow.agg_id}`)
-          amqpChannel.ack(msg)
-          return
-        }
-        // get the anchorBTCAgg_state object for the cal_id
-        let anchorBTCAggStateRow = await cachedProofState.getAnchorBTCAggStateObjectByCalIdAsync(calStateRow.cal_id)
-        if (!anchorBTCAggStateRow) {
-          console.error(`No matching anchor_btc_agg_state data for cal_id ${calStateRow.cal_id}`)
-          amqpChannel.ack(msg)
-          return
-        }
-        // get the btctx_state object for the anchor_btc_agg_id
-        let btcTxStateRow = await cachedProofState.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggStateRow.anchor_btc_agg_id)
-        if (!btcTxStateRow) {
-          console.error(`No matching btctx_state data for anchor_btc_agg_id ${aggStateRow.anchor_btc_agg_id}`)
-          amqpChannel.ack(msg)
-          return
-        }
-        // get the btcthead_state object for the btctx_id
-        let btcHeadStateRow = await cachedProofState.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
-        if (!btcHeadStateRow) {
-          console.error(`No matching btcthead_state data for btctx_id ${aggStateRow.btctx_id}`)
-          amqpChannel.ack(msg)
-          return
-        }
-
-        let proof = {}
-        proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
-        proof = addCalendarBranch(proof, JSON.parse(aggStateRow.agg_state), JSON.parse(calStateRow.cal_state))
-        proof = addBtcBranch(proof, JSON.parse(anchorBTCAggStateRow.anchor_btc_agg_state), JSON.parse(btcTxStateRow.btctx_state), JSON.parse(btcHeadStateRow.btchead_state))
-
-        // ensure the proof is valid according to the defined Chainpoint v3 JSON schema
-        let isValidSchema = chainpointProofSchema.validate(proof).valid
-        if (!isValidSchema) {
-          // This schema is not valid, ack the message but log an error and end processing
-          // We are not nacking here because the poorly formatted proof would just be
-          // re-qeueud and re-processed on and on forever
-          amqpChannel.ack(msg)
-          console.error(env.RMQ_WORK_IN_GEN_QUEUE, 'consume message acked, but with invalid JSON schema error')
-          return
-        }
-
-        // store in redis
-        await storeProofAsync(proof)
-
-        // Proof ready message has been consumed, ack consumption of original message
-        amqpChannel.ack(msg)
-        console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
-
-        // queue prune message containing hash_id for this agg_state row
-        try {
-          await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(aggStateRow.hash_id), { persistent: true, type: 'prune_agg' })
-        } catch (error) {
-          console.error(`${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} publish message nacked`)
-        }
-      } catch (error) {
-        console.error(`Unable to process proof ready message: ${error.message}`)
-        // An error as occurred consuming a message, nack consumption of original message
-        amqpChannel.nack(msg)
-        console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
-      }
-      break
     case 'btc_batch':
       try {
         let hashIds = messageObj.hash_ids
@@ -265,11 +146,22 @@ async function consumeProofReadyMessageAsync (msg) {
         let calIds = calStateRows.map((item) => item.cal_id)
         let anchorBTCAggStateRows = await cachedProofState.getAnchorBTCAggStateObjectsByCalIdsAsync(calIds)
         let anchorBTCAggIds = anchorBTCAggStateRows.map((item) => item.anchor_btc_agg_id)
-        // all the anchorBTCAggIds should be the same, all being the event id for this btc transaction
-        // use the first one as the identifier to retrive the remaining 1-to-1 state
-        let anchorBTCAggId = anchorBTCAggIds[0]
-        let btcTxStateRow = await cachedProofState.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggId)
-        let btcHeadStateRow = await cachedProofState.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
+
+        let btcTxStateRow, btcHeadStateRow
+        try {
+          // if any of these calls fail, there is an unrecoverable problem with the proof state data for these hash_ids
+          // in this case, we log an error message and ack the message since it will never be able to process successfully
+          //
+          // all the anchorBTCAggIds should be the same, all being the event id for this btc transaction
+          // use the first one as the identifier to retrive the remaining 1-to-1 state
+          let anchorBTCAggId = anchorBTCAggIds[0]
+          btcTxStateRow = await cachedProofState.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggId)
+          btcHeadStateRow = await cachedProofState.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
+        } catch (error) {
+          console.error(`Unrecoverable proof state read error for hash_ids ${hashIds} : ${error.message}`)
+          amqpChannel.ack(msg)
+          return
+        }
 
         // create a lookup table for calStateRows by agg_id
         let calStateLookup = {}
@@ -331,20 +223,9 @@ async function storeProofsAsync (proofs) {
   })
   await multi.execAsync()
   // save proof to proof proxy
-  /*
   proofs.forEach(async (proof, index) => {
     await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, proofsBase64[index]])
   })
-  */
-}
-
-async function storeProofAsync (proof) {
-  // compress proof to binary format Base64
-  let proofBase64 = chpBinary.objectToBase64Sync(proof)
-  // save proof to redis
-  await redis.setAsync(proof.hash_id_core, proofBase64, 'EX', env.PROOF_EXPIRE_MINUTES * 60)
-  // save proof to proof proxy
-  // await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, proofBase64])
 }
 
 /**

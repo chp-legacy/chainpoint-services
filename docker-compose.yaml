@@ -404,6 +404,7 @@ services:
       NODE_ENV: development
       LISTEN_TX_PORT: 8085
       ETH_TNT_TOKEN_ADDR: ${ETH_TNT_TOKEN_ADDR}
+      INFURA_API_KEY: ${INFURA_API_KEY}
       # Standard Ethereum Keystore encrypted private key file
       ETH_WALLET: ${ETH_WALLET}
       ETH_WALLET_PASSWORD: ${ETH_WALLET_PASSWORD}

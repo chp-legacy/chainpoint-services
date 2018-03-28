@@ -233,16 +233,6 @@ async function getHashIdsByBtcTxIdAsync (btcTxId) {
   return results
 }
 
-async function getAggStateObjectByHashIdAsync (hashId) {
-  let result = await AggStates.findOne({
-    where: {
-      hash_id: hashId
-    },
-    raw: true
-  })
-  return result
-}
-
 async function getAggStateObjectsByHashIdsAsync (hashIds) {
   let results = await AggStates.findAll({
     where: {
@@ -251,35 +241,6 @@ async function getAggStateObjectsByHashIdsAsync (hashIds) {
     raw: true
   })
   return results
-}
-
-async function getCalStateObjectByAggIdAsync (aggId) {
-  let redisKey = `${CAL_STATE_KEY_PREFIX}:${aggId}`
-  if (redis) {
-    try {
-      let cacheResult = await redis.getAsync(redisKey)
-      if (cacheResult) return JSON.parse(cacheResult)
-    } catch (error) {
-      console.error(`Redis read error : getCalStateObjectByAggIdAsync : ${error.message}`)
-    }
-  }
-  let result = await CalStates.findOne({
-    where: {
-      agg_id: aggId
-    },
-    raw: true
-  })
-  // We've made it this far, so either redis is null,
-  // or more likely, there was no cache hit and the database was queried.
-  // Store the query result in redis to cache for next request
-  if (redis) {
-    try {
-      await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
-    } catch (error) {
-      console.error(`Redis write error : getCalStateObjectByAggIdAsync : ${error.message}`)
-    }
-  }
-  return result
 }
 
 async function getCalStateObjectsByAggIdsAsync (aggIds) {
@@ -296,15 +257,15 @@ async function getCalStateObjectsByAggIdsAsync (aggIds) {
     try {
       redisResults = await multi.execAsync()
     } catch (error) {
-      console.error(`Redis write error : getCalStateObjectsByAggIdsAsync : ${error.message}`)
+      console.error(`Redis read error : getCalStateObjectsByAggIdsAsync : ${error.message}`)
     }
 
     // assign the redis results to the corresponding item in aggIdData
     aggIdData = aggIdData.map((item, index) => { item.data = redisResults[index]; return item })
 
-    let nullDataCount = aggIdData.reduce((total, item) => item.data === null ? total : ++total, 0)
+    let nullDataCount = aggIdData.reduce((total, item) => item.data === null ? ++total : total, 0)
     // if all data was retrieved from redis, we are done, return it
-    if (nullDataCount === 0) return aggIdData.map((item) => item.data)
+    if (nullDataCount === 0) return aggIdData.map((item) => JSON.parse(item.data))
   }
 
   // get an array of aggIds that we need cal state data for
@@ -339,35 +300,6 @@ async function getCalStateObjectsByAggIdsAsync (aggIds) {
   return finalResult
 }
 
-async function getAnchorBTCAggStateObjectByCalIdAsync (calId) {
-  let redisKey = `${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${calId}`
-  if (redis) {
-    try {
-      let cacheResult = await redis.getAsync(redisKey)
-      if (cacheResult) return JSON.parse(cacheResult)
-    } catch (error) {
-      console.error(`Redis read error : getAnchorBTCAggStateObjectByCalIdAsync : ${error.message}`)
-    }
-  }
-  let result = await AnchorBTCAggStates.findOne({
-    where: {
-      cal_id: calId
-    },
-    raw: true
-  })
-  // We've made it this far, so either redis is null,
-  // or more likely, there was no cache hit and the database was queried.
-  // Store the query result in redis to cache for next request
-  if (redis) {
-    try {
-      await redis.setAsync(redisKey, JSON.stringify(result), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
-    } catch (error) {
-      console.error(`Redis write error : getAnchorBTCAggStateObjectByCalIdAsync : ${error.message}`)
-    }
-  }
-  return result
-}
-
 async function getAnchorBTCAggStateObjectsByCalIdsAsync (calIds) {
   let calIdData = calIds.map((calId) => { return { calId: calId, data: null } })
 
@@ -382,15 +314,15 @@ async function getAnchorBTCAggStateObjectsByCalIdsAsync (calIds) {
     try {
       redisResults = await multi.execAsync()
     } catch (error) {
-      console.error(`Redis write error : getAnchorBTCAggStateObjectsByCalIdsAsync : ${error.message}`)
+      console.error(`Redis read error : getAnchorBTCAggStateObjectsByCalIdsAsync : ${error.message}`)
     }
 
     // assign the redis results to the corresponding item in calIdData
     calIdData = calIdData.map((item, index) => { item.data = redisResults[index]; return item })
 
-    let nullDataCount = calIdData.reduce((total, item) => item.data === null ? total : ++total, 0)
+    let nullDataCount = calIdData.reduce((total, item) => item.data === null ? ++total : total, 0)
     // if all data was retrieved from redis, we are done, return it
-    if (nullDataCount === 0) return calIdData.map((item) => item.data)
+    if (nullDataCount === 0) return calIdData.map((item) => JSON.parse(item.data))
   }
 
   // get an array of calIds that we need anchor_btc_agg state data for
@@ -426,6 +358,7 @@ async function getAnchorBTCAggStateObjectsByCalIdsAsync (calIds) {
 }
 
 async function getBTCTxStateObjectByAnchorBTCAggIdAsync (anchorBTCAggId) {
+  if (anchorBTCAggId === null) return null
   let redisKey = `${BTC_TX_STATE_KEY_PREFIX}:${anchorBTCAggId}`
   if (redis) {
     try {
@@ -455,6 +388,7 @@ async function getBTCTxStateObjectByAnchorBTCAggIdAsync (anchorBTCAggId) {
 }
 
 async function getBTCHeadStateObjectByBTCTxIdAsync (btcTxId) {
+  if (btcTxId === null) return null
   let redisKey = `${BTC_HEAD_STATE_KEY_PREFIX}:${btcTxId}`
   if (redis) {
     try {
@@ -719,11 +653,8 @@ module.exports = {
   getHashIdsByAggIdAsync: getHashIdsByAggIdAsync,
   getHashIdsByAggIdsAsync: getHashIdsByAggIdsAsync,
   getHashIdsByBtcTxIdAsync: getHashIdsByBtcTxIdAsync,
-  getAggStateObjectByHashIdAsync: getAggStateObjectByHashIdAsync,
   getAggStateObjectsByHashIdsAsync: getAggStateObjectsByHashIdsAsync,
-  getCalStateObjectByAggIdAsync: getCalStateObjectByAggIdAsync,
   getCalStateObjectsByAggIdsAsync: getCalStateObjectsByAggIdsAsync,
-  getAnchorBTCAggStateObjectByCalIdAsync: getAnchorBTCAggStateObjectByCalIdAsync,
   getAnchorBTCAggStateObjectsByCalIdsAsync: getAnchorBTCAggStateObjectsByCalIdsAsync,
   getBTCTxStateObjectByAnchorBTCAggIdAsync: getBTCTxStateObjectByAnchorBTCAggIdAsync,
   getBTCHeadStateObjectByBTCTxIdAsync: getBTCHeadStateObjectByBTCTxIdAsync,

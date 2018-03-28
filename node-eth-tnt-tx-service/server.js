@@ -24,6 +24,9 @@ const loadToken = require('./lib/eth-tnt/tokenLoader.js')
 const TokenOps = require('./lib/eth-tnt/tokenOps.js')
 const _ = require('lodash')
 var Web3 = require('web3')
+const retry = require('async-retry')
+const rp = require('request-promise-native')
+const keccak256 = require('js-sha3').keccak256
 
 // The provider, token contract, and create the TokenOps class
 let web3Provider = null
@@ -58,8 +61,70 @@ let isEthereumAddr = (address) => {
   return /^0x[0-9a-fA-F]{40}$/i.test(address)
 }
 
+async function getBalanceFromInfuraAsync (tntAddr) {
+  // Hex encoding needs to start with 0x.
+  // First comes the function selector, which is the first 4 bytes of the
+  // keccak256 hash of the function signature.
+  // ABI-encoded arguments follow. The address must be left-padded to 32 bytes.
+  let functionSelectorHex = keccak256.hex('balanceOf(address)').substr(0, 8)
+  let tntAddrNo0x = tntAddr.substr(2) // chop off the 0x
+  let requestDataHexString = `0x${functionSelectorHex}000000000000000000000000${tntAddrNo0x}`
+
+  let options = {
+    headers: [
+      {
+        name: 'Content-Type',
+        value: 'application/json'
+      }
+    ],
+    method: 'POST',
+    uri: `https://mainnet.infura.io/${env.INFURA_API_KEY}`,
+    body: {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_call',
+      params: [{
+        to: env.ETH_TNT_TOKEN_ADDR,
+        data: requestDataHexString
+      }, 'latest']
+    },
+    json: true,
+    gzip: true,
+    timeout: 2000,
+    resolveWithFullResponse: true
+  }
+
+  let balanceGrains
+  try {
+    await retry(async bail => {
+      let balanceResponse = await rp(options)
+      balanceGrains = parseInt(balanceResponse.body.result, 16)
+    }, {
+      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
+      factor: 1,       // The exponential factor to use. Default is 2
+      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 400,
+      randomize: true
+    })
+  } catch (error) {
+    let errorMessage = `getBalanceFromInfuraAsync : ${error.message}`
+    throw errorMessage
+  }
+
+  return balanceGrains
+}
+
+async function getBalanceFromGethAsync (tntAddr) {
+  return new Promise((resolve, reject) => {
+    ops.getBalance(tntAddr, (error, grains) => {
+      if (error) return reject(error.message)
+      return resolve(grains)
+    })
+  })
+}
+
 // get the TNT balance of node in grains
-server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, (req, res, next) => {
+server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, async (req, res, next) => {
   // Verify address
   if (!req.params.hasOwnProperty('tnt_addr')) {
     return next(new restify.InvalidArgumentError('invalid JSON body, missing tnt_addr'))
@@ -73,20 +138,33 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, (req, res, next) =
     return next(new restify.InvalidArgumentError('invalid JSON body, malformed tnt_addr'))
   }
 
-  ops.getBalance(req.params.tnt_addr, (error, grains) => {
-    if (error) {
-      console.error(error)
-      return next(new restify.InternalServerError('server error'))
+  let grainsBalance = null
+  // get grainsBalance from Infura API
+  try {
+    grainsBalance = await getBalanceFromInfuraAsync(req.params.tnt_addr)
+  } catch (error) {
+    console.error(`Could not get balance from Infura for address ${req.params.tnt_addr} : ${error.message}`)
+  }
+
+  // if Infura did not return a balance, retrieve from geth
+  if (grainsBalance === null) {
+    try {
+      grainsBalance = await getBalanceFromGethAsync(req.params.tnt_addr)
+    } catch (error) {
+      console.error(`Could not get balance from geth for address ${req.params.tnt_addr} : ${error.message}`)
     }
+  }
 
-    res.send({
-      balance: grains
-    })
+  // if grainsBalance is still null, return an error
+  if (grainsBalance === null) return next(new restify.InternalServerError('server error'))
 
-    console.log(`Balance requested for ${req.params.tnt_addr}: ${grains} grains (${grains / 10 ** 8} TNT)`)
-
-    return next()
+  res.send({
+    balance: grainsBalance
   })
+
+  console.log(`Balance requested for ${req.params.tnt_addr}: ${grainsBalance} grains (${grainsBalance / 10 ** 8} TNT)`)
+
+  return next()
 })
 
 // send TNT grains to an address

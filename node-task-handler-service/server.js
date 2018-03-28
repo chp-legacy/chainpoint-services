@@ -367,11 +367,18 @@ async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, 
 
 async function proofProxyPostAsync (hashIdCore, proofBase64) {
   let nodeResponse
+
+  // send 'core' header to ensure that the proof is stored in the
+  // short lifetime core proofs bucket.
   let options = {
     headers: [
       {
         name: 'Content-Type',
         value: 'application/json'
+      },
+      {
+        name: 'core',
+        value: 'true'
       }
     ],
     method: 'POST',

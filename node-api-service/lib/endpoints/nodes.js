@@ -235,16 +235,6 @@ async function postNodeV1Async (req, res, next) {
   }
 
   try {
-    let totalCount = await RegisteredNode.count()
-    if (totalCount >= regNodesLimit) {
-      return next(new restify.ForbiddenError('Maximum number of Node registrations has been reached'))
-    }
-  } catch (error) {
-    console.error(`Unable to count registered Nodes: ${error.message}`)
-    return next(new restify.InternalServerError('unable to count registered Nodes'))
-  }
-
-  try {
     let count = await RegisteredNode.count({ where: { tntAddr: lowerCasedTntAddrParam } })
     if (count >= 1) {
       return next(new restify.ConflictError('the Ethereum address provided is already registered'))
@@ -264,6 +254,29 @@ async function postNodeV1Async (req, res, next) {
       console.error(`Unable to count registered Nodes: ${error.message}`)
       return next(new restify.InternalServerError('unable to count registered Nodes'))
     }
+  }
+
+  // check to see if the Node has the min balance required for Node operation
+  try {
+    let nodeBalance = await getTNTGrainsBalanceForAddressAsync(lowerCasedTntAddrParam)
+    if (nodeBalance < minGrainsBalanceNeeded) {
+      let minTNTBalanceNeeded = tntUnits.grainsToTNT(minGrainsBalanceNeeded)
+      return next(new restify.ForbiddenError(`TNT address ${lowerCasedTntAddrParam} does not have the minimum balance of ${minTNTBalanceNeeded} TNT for Node operation`))
+    }
+  } catch (error) {
+    return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
+  }
+
+  // Do the registered Node count last to be as close to the creation of the record
+  // as possible and avoid overrages to the extent we can.
+  try {
+    let totalCount = await RegisteredNode.count()
+    if (totalCount >= regNodesLimit) {
+      return next(new restify.ForbiddenError('Maximum number of Node registrations has been reached'))
+    }
+  } catch (error) {
+    console.error(`Unable to count registered Nodes: ${error.message}`)
+    return next(new restify.InternalServerError('unable to count registered Nodes'))
   }
 
   let randHMACKey = crypto.randomBytes(32).toString('hex')
