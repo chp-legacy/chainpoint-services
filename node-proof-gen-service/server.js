@@ -223,11 +223,9 @@ async function storeProofsAsync (proofs) {
   })
   await multi.execAsync()
   // save proof to proof proxy
-  /*
   proofs.forEach(async (proof, index) => {
     await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, proofsBase64[index]])
   })
-  */
 }
 
 /**
