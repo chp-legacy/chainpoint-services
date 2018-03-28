@@ -505,7 +505,7 @@ async function initResqueWorkerAsync () {
     connection: connectionDetails,
     queues: ['task-handler-queue'],
     minTaskProcessors: 10,
-    maxTaskProcessors: 100
+    maxTaskProcessors: 250
   }
 
   await cleanUpWorkersAndRequequeJobsAsync(connectionDetails)
