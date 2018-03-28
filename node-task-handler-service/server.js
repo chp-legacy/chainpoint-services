@@ -369,6 +369,7 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
   let nodeResponse
 
   let options = {
+    headers: [],
     method: 'POST',
     uri: `https://proofs.chainpoint.org/proofs`,
     body: [[hashIdCore, proofBase64]],
