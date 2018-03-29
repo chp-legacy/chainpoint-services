@@ -60,7 +60,7 @@ async function getProofsByIDV1Async (req, res, next) {
   }
 
   try {
-    let requestedType = req.accepts(JSONLD_MIME_TYPE) ? JSONLD_MIME_TYPE : BASE64_MIME_TYPE
+    let requestedType = req.accepts(JSONLD_MIME_TYPE) && !req.accepts(BASE64_MIME_TYPE) ? JSONLD_MIME_TYPE : BASE64_MIME_TYPE
     let hashIdResults = await getProofsFromProofProxyAsync(hashIds.join(), requestedType)
     res.contentType = 'application/json'
     res.noCache()
