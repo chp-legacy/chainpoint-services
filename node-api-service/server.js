@@ -198,7 +198,6 @@ function openRedisConnection (redisURI) {
   redis = r.createClient(redisURI)
   redis.on('ready', () => {
     bluebird.promisifyAll(redis)
-    proofs.setRedis(redis)
     hashes.setRedis(redis)
     config.setRedis(redis)
     console.log('Redis connection established')
@@ -207,7 +206,6 @@ function openRedisConnection (redisURI) {
     console.error(`A redis error has ocurred: ${err}`)
     redis.quit()
     redis = null
-    proofs.setRedis(null)
     hashes.setRedis(null)
     config.setRedis(null)
     console.error('Cannot establish Redis connection. Retrying...')
