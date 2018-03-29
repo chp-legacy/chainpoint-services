@@ -16,14 +16,8 @@
 
 const restify = require('restify')
 const env = require('../parse-env.js')('api')
-const async = require('async')
 const uuidValidate = require('uuid-validate')
-const uuidTime = require('uuid-time')
-const chpBinary = require('chainpoint-binary')
-
-// The redis connection used for all redis communication
-// This value is set once the connection has been established
-let redis = null
+const rp = require('request-promise-native')
 
 // The custom MIME type for JSON proof array results containing Base64 encoded proof data
 const BASE64_MIME_TYPE = 'application/vnd.chainpoint.json+base64'
@@ -39,7 +33,7 @@ const JSONLD_MIME_TYPE = 'application/vnd.chainpoint.ld+json'
  * Returns a chainpoint proof for the requested Hash ID
  */
 async function getProofsByIDV1Async (req, res, next) {
-  let hashIdResults = []
+  let hashIds = []
 
   // check if hash_id parameter was included
   if (req.params && req.params.hash_id) {
@@ -49,61 +43,58 @@ async function getProofsByIDV1Async (req, res, next) {
       return next(new restify.InvalidArgumentError('invalid request: bad hash_id'))
     }
 
-    hashIdResults.push(req.params.hash_id)
+    hashIds.push(req.params.hash_id)
   } else if (req.headers && req.headers.hashids) {
     // no hash_id was specified in url, read from headers.hashids
-    hashIdResults = req.headers.hashids.split(',')
+    hashIds = req.headers.hashids.split(',')
   }
 
   // ensure at least one hash_id was submitted
-  if (hashIdResults.length === 0) {
+  if (hashIds.length === 0) {
     return next(new restify.InvalidArgumentError('invalid request: at least one hash id required'))
   }
 
   // ensure that the request count does not exceed the maximum setting
-  if (hashIdResults.length > env.GET_PROOFS_MAX_REST) {
+  if (hashIds.length > env.GET_PROOFS_MAX_REST) {
     return next(new restify.InvalidArgumentError('invalid request: too many hash ids (' + env.GET_PROOFS_MAX_REST + ' max)'))
   }
 
-  // prepare results array to hold proof results
-  hashIdResults = hashIdResults.map((hashId) => {
-    return { hash_id: hashId.trim(), proof: null }
-  })
-  let requestedType = req.accepts(JSONLD_MIME_TYPE) ? JSONLD_MIME_TYPE : BASE64_MIME_TYPE
-
-  async.eachLimit(hashIdResults, 50, (hashIdResult, callback) => {
-    // validate id param is proper UUIDv1
-    if (!uuidValidate(hashIdResult.hash_id, 1)) return callback(null)
-    // validate uuid time is in in valid range
-    let uuidEpoch = parseInt(uuidTime.v1(hashIdResult.hash_id))
-    var nowEpoch = new Date().getTime()
-    let uuidDiff = nowEpoch - uuidEpoch
-    let maxDiff = env.PROOF_EXPIRE_MINUTES * 60 * 1000
-    if (uuidDiff > maxDiff) return callback(null)
-    // retrieve proof from storage
-    redis.get(hashIdResult.hash_id, (err, proofBase64) => {
-      if (err) return callback(null)
-      if (requestedType === BASE64_MIME_TYPE) {
-        hashIdResult.proof = proofBase64
-        return callback(null)
-      } else {
-        chpBinary.binaryToObject(proofBase64, (err, proofObj) => {
-          if (err) return callback(null)
-          hashIdResult.proof = proofObj
-          return callback(null)
-        })
-      }
-    })
-  }, (err) => {
-    if (err) return next(new restify.InternalError(err))
+  try {
+    let requestedType = req.accepts(JSONLD_MIME_TYPE) && !req.accepts(BASE64_MIME_TYPE) ? JSONLD_MIME_TYPE : BASE64_MIME_TYPE
+    let hashIdResults = await getProofsFromProofProxyAsync(hashIds.join(), requestedType)
     res.contentType = 'application/json'
     res.noCache()
     res.send(hashIdResults)
     return next()
-  })
+  } catch (error) {
+    return next(new restify.InternalError(error.message))
+  }
+}
+
+async function getProofsFromProofProxyAsync (hashIds, requestedType) {
+  let options = {
+    headers: {
+      'Accept': requestedType,
+      'hashids': hashIds,
+      'core': true
+    },
+    method: 'GET',
+    uri: `https://proofs.chainpoint.org/proofs`,
+    json: true,
+    gzip: true,
+    timeout: 2000,
+    resolveWithFullResponse: true
+  }
+
+  try {
+    let proofProxyResponse = await rp(options)
+    let proofArray = proofProxyResponse.body
+    return proofArray
+  } catch (error) {
+    throw new Error(`Could not complete request to Proof Proxy : ${error.message}`)
+  }
 }
 
 module.exports = {
-  getProofsByIDV1Async: getProofsByIDV1Async,
-  setRedis: (redisClient) => { redis = redisClient }
+  getProofsByIDV1Async: getProofsByIDV1Async
 }
