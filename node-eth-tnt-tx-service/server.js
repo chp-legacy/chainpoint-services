@@ -149,7 +149,7 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, async (req, res, n
     try {
       grainsBalance = await getBalanceFromInfuraAsync(req.params.tnt_addr)
     } catch (error) {
-      console.error(`Could not get balance from Infura for address ${req.params.tnt_addr} : ${error.message}`)
+      console.error(`Could not get balance from Infura for address ${req.params.tnt_addr} : ${error}`)
     }
   } else {
     console.log(`req.headers['geth-only'] == ${req.headers['geth-only']}, skipping Infura`)

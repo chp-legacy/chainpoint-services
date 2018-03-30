@@ -149,7 +149,7 @@ async function postHashV1Async (req, res, next) {
   if (req.contentType() !== 'application/json') {
     return next(new restify.InvalidArgumentError('invalid content type'))
   }
-
+/*
   // validate authorization header key exists
   if (!req.headers || !req.headers.authorization) {
     return next(new restify.InvalidCredentialsError('authorization denied: missing authorization key'))
@@ -173,7 +173,7 @@ async function postHashV1Async (req, res, next) {
   } else {
     tntAddrHeaderParam = req.headers['tnt-address'].toLowerCase()
   }
-
+*/
   // validate params has parse a 'hash' key
   if (!req.params.hasOwnProperty('hash')) {
     return next(new restify.InvalidArgumentError('invalid JSON body: missing hash'))
@@ -204,7 +204,7 @@ async function postHashV1Async (req, res, next) {
   if (!amqpChannel) {
     return next(new restify.InternalServerError('Message could not be delivered'))
   }
-
+/*
   // Validate the calculated HMAC
   let regNode = null
   try {
@@ -248,8 +248,8 @@ async function postHashV1Async (req, res, next) {
   } catch (error) {
     return next(new restify.InvalidCredentialsError(`authorization denied: ${error.message}`))
   }
-
-  let responseObj = generatePostHashResponse(req.params.hash, regNode)
+*/
+  let responseObj = generatePostHashResponse(req.params.hash, { tntCredit: 100000 })
 
   let hashObj = {
     hash_id: responseObj.hash_id,
