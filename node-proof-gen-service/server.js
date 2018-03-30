@@ -216,12 +216,6 @@ async function consumeProofReadyMessageAsync (msg) {
 async function storeProofsAsync (proofs) {
   // compress proofs to binary format Base64
   let proofsBase64 = proofs.map((proof) => chpBinary.objectToBase64Sync(proof))
-  // save proof to redis
-  let multi = redis.multi()
-  proofs.forEach((proof, index) => {
-    multi.set(proof.hash_id_core, proofsBase64[index], 'EX', env.PROOF_EXPIRE_MINUTES * 60)
-  })
-  await multi.execAsync()
   // save proof to proof proxy
   proofs.forEach(async (proof, index) => {
     await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, proofsBase64[index]])
