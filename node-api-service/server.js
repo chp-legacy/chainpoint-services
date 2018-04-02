@@ -32,6 +32,9 @@ const root = require('./lib/endpoints/root.js')
 const r = require('redis')
 const bluebird = require('bluebird')
 const cnsl = require('consul')
+const nodeResque = require('node-resque')
+const exitHook = require('exit-hook')
+const { URL } = require('url')
 
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
@@ -121,6 +124,8 @@ server.get({ path: '/nodes/blacklist', version: '1.0.0' }, nodes.getNodesBlackli
 // server.get({ path: '/nodes/:tnt_addr', version: '1.0.0' }, nodes.getNodeByTNTAddrV1Async)
 // register a new node
 server.post({ path: '/nodes', version: '1.0.0' }, nodes.postNodeV1Async)
+// generate internal balance check test
+server.post({ path: '/nodes/balancetest', version: '1.0.0' }, nodes.postNodeBalanceTestV1Async)
 // update an existing node
 server.put({ path: '/nodes/:tnt_addr', version: '1.0.0' }, nodes.putNodeV1Async)
 // get configuration information for this stack
@@ -214,6 +219,35 @@ function openRedisConnection (redisURI) {
   })
 }
 
+/**
+ * Initializes the connection to the Resque queue when Redis is ready
+ */
+async function initResqueQueueAsync () {
+  // wait until redis is initialized
+  let redisReady = (redis !== null)
+  while (!redisReady) {
+    await utils.sleep(100)
+    redisReady = (redis !== null)
+  }
+  const redisURI = new URL(env.REDIS_CONNECT_URI)
+  var connectionDetails = {
+    host: redisURI.hostname,
+    port: redisURI.port,
+    namespace: 'resque'
+  }
+
+  const queue = new nodeResque.Queue({ connection: connectionDetails })
+  queue.on('error', function (error) { console.log(error) })
+  await queue.connect()
+  nodes.setTaskQueue(queue)
+
+  exitHook(async () => {
+    await queue.end()
+  })
+
+  console.log('Resque queue connection established')
+}
+
 // This initalizes all the consul watches
 function startWatches () {
   console.log('starting watches')
@@ -301,6 +335,8 @@ async function start () {
     await openStorageConnectionAsync()
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
+    // init Resque queue
+    await initResqueQueueAsync()
     // init watches
     startWatches()
     // Init Restify

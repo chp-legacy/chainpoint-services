@@ -93,7 +93,9 @@ const jobs = {
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
   'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
   // tasks from proof-gen
-  'send_to_proof_proxy': Object.assign({ perform: sendToProofProxyAsync }, pluginOptions)
+  'send_to_proof_proxy': Object.assign({ perform: sendToProofProxyAsync }, pluginOptions),
+  // tasks from API
+  'TNT_balance_check': Object.assign({ perform: tntBalanceCheckAsync }, pluginOptions)
 }
 
 // ******************************************************
@@ -317,6 +319,15 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
   }
 }
 
+// ******************************************************
+// tasks from the API
+// ******************************************************
+
+async function tntBalanceCheckAsync (tntAddr, checkMethod) {
+  let balanceGrains = await getTNTBalance(tntAddr, checkMethod)
+  return `Balance retrieved for ${tntAddr} : ${balanceGrains} (${balanceGrains / 10 ** 8} TNT) : ${checkMethod}`
+}
+
 // ****************************************************
 // support functions for all tasks
 // ****************************************************
@@ -379,6 +390,36 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
 
   nodeResponse = await rp(options)
   return nodeResponse.body
+}
+
+async function getTNTBalance (tntAddress, checkMethod) {
+  let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
+
+  let headers = {}
+  if (checkMethod === 'geth') headers = { 'geth-only': true }
+
+  let options = {
+    headers: headers,
+    method: 'GET',
+    uri: `${ethTntTxUri}/balance/${tntAddress}`,
+    json: true,
+    gzip: true,
+    timeout: 10000,
+    resolveWithFullResponse: true
+  }
+
+  try {
+    let balanceResponse = await rp(options)
+    let balanceTNTGrains = balanceResponse.body.balance
+    let intBalance = parseInt(balanceTNTGrains)
+    if (intBalance >= 0) {
+      return intBalance
+    } else {
+      throw new Error(`Bad TNT balance value: ${balanceTNTGrains}`)
+    }
+  } catch (error) {
+    throw new Error(`TNT balance read error: ${error.message}`)
+  }
 }
 
 // ****************************************************

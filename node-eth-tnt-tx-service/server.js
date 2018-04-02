@@ -138,12 +138,21 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, async (req, res, n
     return next(new restify.InvalidArgumentError('invalid JSON body, malformed tnt_addr'))
   }
 
+  let gethOnly = false
+  if (req.headers && !_.isEmpty(req.headers['geth-only'])) {
+    gethOnly = true
+  }
+
   let grainsBalance = null
-  // get grainsBalance from Infura API
-  try {
-    grainsBalance = await getBalanceFromInfuraAsync(req.params.tnt_addr)
-  } catch (error) {
-    console.error(`Could not get balance from Infura for address ${req.params.tnt_addr} : ${error.message}`)
+  if (!gethOnly) {
+    // get grainsBalance from Infura API
+    try {
+      grainsBalance = await getBalanceFromInfuraAsync(req.params.tnt_addr)
+    } catch (error) {
+      console.error(`Could not get balance from Infura for address ${req.params.tnt_addr} : ${error}`)
+    }
+  } else {
+    console.log(`req.headers['geth-only'] == ${req.headers['geth-only']}, skipping Infura`)
   }
 
   // if Infura did not return a balance, retrieve from geth
