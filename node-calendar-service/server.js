@@ -1089,7 +1089,7 @@ async function scheduleActionsAsync () {
   schedule.scheduleJob('0 25,55 * * * *', async () => {
     debug.nist(`scheduleJob : NIST : leader? : ${IS_LEADER}`)
 
-    // Don't consume a lock unless this Calendar is the zone leader
+    // Don't add a NIST block unless this Calendar is the zone leader
     // and there is NIST data available.
     if (IS_LEADER && !_.isEmpty(nistLatest)) {
       processNistInterval()
@@ -1104,9 +1104,7 @@ async function scheduleActionsAsync () {
   schedule.scheduleJob(cronScheduleBtcAnchor, async () => {
     if (IS_LEADER && env.ANCHOR_BTC === 'enabled') {
       debug.btcAnchor(`scheduleJob : BTC anchor : ANCHOR_BTC enabled`)
-      // Look up last anchor block in DB outside of a lock to reduce
-      // time spent inside the lock which is blocking for all other
-      // lock users.
+      // Create a btc-a block using new blocks since lastBtcAnchorBlockId
       try {
         let lastBtcAnchorBlockId = await lastBtcAnchorBlockIdAsync()
         processBtcAnchorInterval(lastBtcAnchorBlockId)
