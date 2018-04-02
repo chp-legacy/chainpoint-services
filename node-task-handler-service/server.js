@@ -323,9 +323,9 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
 // tasks from the API
 // ******************************************************
 
-async function tntBalanceCheckAsync (tntAddr) {
-  let balanceGrains = await getTNTBalance(tntAddr)
-  return `Balance retrieved for ${tntAddr} : ${balanceGrains} (${balanceGrains / 10 ** 8} TNT)`
+async function tntBalanceCheckAsync (tntAddr, checkMethod) {
+  let balanceGrains = await getTNTBalance(tntAddr, checkMethod)
+  return `Balance retrieved for ${tntAddr} : ${balanceGrains} (${balanceGrains / 10 ** 8} TNT) : ${checkMethod}`
 }
 
 // ****************************************************
@@ -392,13 +392,14 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
   return nodeResponse.body
 }
 
-async function getTNTBalance (tntAddress) {
+async function getTNTBalance (tntAddress, checkMethod) {
   let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
 
+  let headers = {}
+  if (checkMethod === 'geth') headers = { 'geth-only': true }
+
   let options = {
-    headers: {
-      'geth-only': true
-    },
+    headers: headers,
     method: 'GET',
     uri: `${ethTntTxUri}/balance/${tntAddress}`,
     json: true,

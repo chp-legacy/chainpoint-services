@@ -457,6 +457,11 @@ async function postNodeBalanceTestV1Async (req, res, next) {
     return next(new restify.InvalidArgumentError('count must be an integer between 1 and 10,000'))
   }
 
+  let checkMethod = 'geth'
+  if (req.params.hasOwnProperty('infura')) {
+    checkMethod = 'infura'
+  }
+
   // create an array of `count` size containing random TNT addresses from the tnt addr list
   let tntAddrs = []
   for (let x = 0; x < count; x++) {
@@ -465,7 +470,7 @@ async function postNodeBalanceTestV1Async (req, res, next) {
   }
   // Queue a check balance task for each of the addresses in that array
   tntAddrs.forEach(async (tntAddr) => {
-    await taskQueue.enqueue('task-handler-queue', `TNT_balance_check`, [tntAddr])
+    await taskQueue.enqueue('task-handler-queue', `TNT_balance_check`, [tntAddr, checkMethod])
   })
 
   res.send({
