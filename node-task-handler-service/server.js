@@ -67,6 +67,9 @@ const MAX_NODE_RESPONSE_CHALLENGE_AGE_MIN = 75
 // The minimum credit balance to receive awards and be publicly advertised
 const MIN_PASSING_CREDIT_BALANCE = 10800
 
+// The minimium TNT grains required to operate a Node
+const minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
+
 // This value is set once the connection has been established
 let redis = null
 
@@ -93,9 +96,7 @@ const jobs = {
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
   'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
   // tasks from proof-gen
-  'send_to_proof_proxy': Object.assign({ perform: sendToProofProxyAsync }, pluginOptions),
-  // tasks from API
-  'TNT_balance_check': Object.assign({ perform: tntBalanceCheckAsync }, pluginOptions)
+  'send_to_proof_proxy': Object.assign({ perform: sendToProofProxyAsync }, pluginOptions)
 }
 
 // ******************************************************
@@ -163,13 +164,15 @@ async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
   let minCreditsPass = false
   let nodeVersion = null
   let nodeVersionPass = false
+  let tntBalanceGrains = null
+  let tntBalancePass = false
 
   // perform the minimum credit check
   minCreditsPass = (currentCreditBalance >= MIN_PASSING_CREDIT_BALANCE)
 
   // if there is no public_uri set for this Node, fail all remaining audit tests and continue to the next
   if (!publicUri) {
-    await addAuditToLogAsync(tntAddr, null, Date.now(), publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass)
+    await addAuditToLogAsync(tntAddr, null, Date.now(), publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
     return `performAuditAsync : no publicUri defined for address ${tntAddr}`
   }
 
@@ -181,24 +184,24 @@ async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
   } catch (error) {
     let resultText = `getNodeConfigObjectAsync : GET failed for ${publicUri}: ${error.message}`
     if (error.statusCode) resultText = `getNodeConfigObjectAsync : GET failed with status code ${error.statusCode} for ${publicUri}: ${error.message}`
-    await addAuditToLogAsync(tntAddr, publicUri, Date.now(), publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass)
+    await addAuditToLogAsync(tntAddr, publicUri, Date.now(), publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
     return resultText
   }
 
   if (!configResultsBody) {
-    await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass)
+    await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
     return `getNodeConfigObjectAsync : GET failed with empty result for ${publicUri}`
   }
   if (!configResultsBody.calendar) {
-    await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass)
+    await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
     return `getNodeConfigObjectAsync : GET failed with missing calendar data for ${publicUri}`
   }
   if (!configResultsBody.time) {
-    await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass)
+    await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
     return `getNodeConfigObjectAsync : GET failed with missing time for ${publicUri}`
   }
   if (!configResultsBody.version) {
-    await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass)
+    await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
     return `getNodeConfigObjectAsync : GET failed with missing version for ${publicUri}`
   }
 
@@ -254,7 +257,14 @@ async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
     nodeVersionPass = false
   }
 
-  await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass)
+  try {
+    tntBalanceGrains = await getTNTBalance(tntAddr)
+    tntBalancePass = tntBalanceGrains >= minGrainsBalanceNeeded
+  } catch (error) {
+    console.error(`getTNTBalance : Unable to query for TNT balance : ${error.message}`)
+  }
+
+  await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
 
   let results = {}
   results.auditAt = configResultTime
@@ -319,15 +329,6 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
   }
 }
 
-// ******************************************************
-// tasks from the API
-// ******************************************************
-
-async function tntBalanceCheckAsync (tntAddr, checkMethod) {
-  let balanceGrains = await getTNTBalance(tntAddr, checkMethod)
-  return `Balance retrieved for ${tntAddr} : ${balanceGrains} (${balanceGrains / 10 ** 8} TNT) : ${checkMethod}`
-}
-
 // ****************************************************
 // support functions for all tasks
 // ****************************************************
@@ -349,7 +350,7 @@ async function getNodeConfigObjectAsync (publicUri) {
   return nodeResponse.body
 }
 
-async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass) {
+async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass) {
   // queue prune message containing audit data
   try {
     let auditData = {
@@ -362,7 +363,9 @@ async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, 
       calStatePass: calStatePass,
       minCreditsPass: minCreditsPass,
       nodeVersion: nodeVersion,
-      nodeVersionPass: nodeVersionPass
+      nodeVersionPass: nodeVersionPass,
+      tntBalanceGrains: tntBalanceGrains,
+      tntBalancePass: tntBalancePass
     }
     await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(JSON.stringify(auditData)), { persistent: true, type: 'write_audit_log' })
   } catch (error) {
