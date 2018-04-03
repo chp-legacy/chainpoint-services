@@ -16,7 +16,7 @@ help : Makefile
 ## cockroach                 : Local CockroachDB console
 .PHONY : cockroachdb
 cockroach:
-	./bin/cockroach --insecure -d chainpoint sql
+	./bin/cockroach -d chainpoint sql
 
 ## cockroachdb-reset         : Bring the system down, delete CockroachDB data, setup DB as needed, and start cluster
 .PHONY : cockroachdb-reset

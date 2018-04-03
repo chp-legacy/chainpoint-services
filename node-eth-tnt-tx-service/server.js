@@ -143,22 +143,23 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, async (req, res, n
     gethOnly = true
   }
 
+  let serviceUsed
   let grainsBalance = null
   if (!gethOnly) {
     // get grainsBalance from Infura API
     try {
       grainsBalance = await getBalanceFromInfuraAsync(req.params.tnt_addr)
+      serviceUsed = 'infura'
     } catch (error) {
       console.error(`Could not get balance from Infura for address ${req.params.tnt_addr} : ${error}`)
     }
-  } else {
-    console.log(`req.headers['geth-only'] == ${req.headers['geth-only']}, skipping Infura`)
   }
 
   // if Infura did not return a balance, retrieve from geth
   if (grainsBalance === null) {
     try {
       grainsBalance = await getBalanceFromGethAsync(req.params.tnt_addr)
+      serviceUsed = 'geth'
     } catch (error) {
       console.error(`Could not get balance from geth for address ${req.params.tnt_addr} : ${error.message}`)
     }
@@ -171,7 +172,7 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, async (req, res, n
     balance: grainsBalance
   })
 
-  console.log(`Balance requested for ${req.params.tnt_addr}: ${grainsBalance} grains (${grainsBalance / 10 ** 8} TNT)`)
+  console.log(`Balance requested for ${req.params.tnt_addr}: ${grainsBalance} grains (${grainsBalance / 10 ** 8} TNT) : ${serviceUsed}`)
 
   return next()
 })
