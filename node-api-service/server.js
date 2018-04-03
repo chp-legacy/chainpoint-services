@@ -199,6 +199,7 @@ function openRedisConnection (redisURI) {
   redis.on('ready', () => {
     bluebird.promisifyAll(redis)
     hashes.setRedis(redis)
+    nodes.setRedis(redis)
     config.setRedis(redis)
     console.log('Redis connection established')
   })
@@ -207,6 +208,7 @@ function openRedisConnection (redisURI) {
     redis.quit()
     redis = null
     hashes.setRedis(null)
+    nodes.setRedis(null)
     config.setRedis(null)
     console.error('Cannot establish Redis connection. Retrying...')
     await utils.sleep(5000)
@@ -321,6 +323,7 @@ module.exports = {
     redis = redisClient
     proofs.setRedis(redis)
     hashes.setRedis(redis)
+    nodes.setRedis(redis)
   },
   setAMQPChannel: (chan) => {
     hashes.setAMQPChannel(chan)
