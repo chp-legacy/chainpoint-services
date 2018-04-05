@@ -134,7 +134,7 @@ var NodeAuditLog = sequelize.define(env.COCKROACH_AUDIT_TABLE_NAME,
       allowNull: true
     },
     tntBalancePass: {
-      comment: 'Boolean logging if the reported Node version was equal to or above the minimum required version.',
+      comment: 'Boolean logging if the TNT balance was sufficient to pass this audit.',
       type: Sequelize.BOOLEAN,
       field: 'tnt_balance_pass',
       allowNull: false
