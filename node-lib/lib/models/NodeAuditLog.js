@@ -126,6 +126,18 @@ var NodeAuditLog = sequelize.define(env.COCKROACH_AUDIT_TABLE_NAME,
       type: Sequelize.BOOLEAN,
       field: 'node_version_pass',
       allowNull: false
+    },
+    tntBalanceGrains: {
+      comment: 'The TNT balance for this Node at the time of audit in Grains.',
+      type: Sequelize.INTEGER,
+      field: 'tnt_balance_grains',
+      allowNull: true
+    },
+    tntBalancePass: {
+      comment: 'Boolean logging if the TNT balance was sufficient to pass this audit.',
+      type: Sequelize.BOOLEAN,
+      field: 'tnt_balance_pass',
+      allowNull: false
     }
   },
   {
