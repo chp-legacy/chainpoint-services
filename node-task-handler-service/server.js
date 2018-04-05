@@ -342,7 +342,7 @@ async function getNodeConfigObjectAsync (publicUri) {
     uri: `${publicUri}/config`,
     json: true,
     gzip: true,
-    timeout: 2500,
+    timeout: 5000,
     resolveWithFullResponse: true
   }
 
