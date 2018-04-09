@@ -167,6 +167,13 @@ async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
   let tntBalanceGrains = null
   let tntBalancePass = false
 
+  try {
+    tntBalanceGrains = await getTNTBalance(tntAddr)
+    tntBalancePass = tntBalanceGrains >= minGrainsBalanceNeeded
+  } catch (error) {
+    console.error(`getTNTBalance : Unable to query for TNT balance : ${error.message}`)
+  }
+
   // perform the minimum credit check
   minCreditsPass = (currentCreditBalance >= MIN_PASSING_CREDIT_BALANCE)
 
@@ -255,13 +262,6 @@ async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
     nodeVersionPass = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION_EXISTING}`)
   } catch (error) {
     nodeVersionPass = false
-  }
-
-  try {
-    tntBalanceGrains = await getTNTBalance(tntAddr)
-    tntBalancePass = tntBalanceGrains >= minGrainsBalanceNeeded
-  } catch (error) {
-    console.error(`getTNTBalance : Unable to query for TNT balance : ${error.message}`)
   }
 
   await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
