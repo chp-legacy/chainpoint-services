@@ -47,11 +47,6 @@ async function getConfigInfoV1Async (req, res, next) {
 
     result = {
       chainpoint_core_base_uri: env.CHAINPOINT_CORE_BASE_URI,
-      anchor_btc: env.ANCHOR_BTC,
-      anchor_eth: env.ANCHOR_ETH,
-      get_proofs_max_rest: env.GET_PROOFS_MAX_REST,
-      post_verify_proofs_max: env.POST_VERIFY_PROOFS_MAX,
-      get_calendar_blocks_max: 1000,
       public_keys: getCorePublicKeyList(),
       calendar: {
         height: parseInt(topCoreBlock.id),
