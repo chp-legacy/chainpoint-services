@@ -55,7 +55,6 @@ let envDefinitions = {
   // CHAINPOINT_CORE_BASE_URI: Base URI for this Chainpoint Core stack of services
   // ANCHOR_BTC: flag for enabling and disabling BTC anchoring
   // ANCHOR_ETH: flag for enabling and disabling ETH anchoring
-  // PROOF_EXPIRE_MINUTES: The lifespan of stored proofs, in minutes
   // GET_PROOFS_MAX_REST: The maximum number of proofs that can be requested in one GET /proofs request
   // POST_VERIFY_PROOFS_MAX: The maximum number of proofs allowed to be verified in one request
 
@@ -65,9 +64,6 @@ let envDefinitions = {
 
   // Chainpoint stack related variables
   NODE_ENV: envalid.str({ default: 'production', desc: 'The type of environment in which the service is running' }),
-
-  // Proof retention setting
-  PROOF_EXPIRE_MINUTES: envalid.num({ default: 1440, desc: 'The lifespan of stored proofs, in minutes' }),
 
   // Anchor to external blockchains toggle variables
   // Using string values in place of a Bool due to issues with storing bool values in K8s secrets
