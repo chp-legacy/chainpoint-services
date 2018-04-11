@@ -274,7 +274,7 @@ async function initAuditScoresAsync () {
           chainpoint_registered_nodes WHERE tnt_addr IN (SELECT tnt_addr AS active_address FROM chainpoint_node_audit_log 
           WHERE tnt_addr NOT IN (${blacklistString}) AND public_ip_pass = true AND time_pass = true AND cal_state_pass = true AND 
           min_credits_pass = true AND node_version_pass = true AND tnt_balance_pass = true AND audit_at >= ${twoHoursAgoMS} 
-          GROUP BY tnt_addr HAVING COUNT(tnt_addr) >= 4) ORDER BY created_at`
+          GROUP BY tnt_addr HAVING COUNT(tnt_addr) >= 1) ORDER BY created_at`
       let startScores = await registeredNodeSequelize.query(getNodeScores, { type: registeredNodeSequelize.QueryTypes.SELECT })
       console.log(`Initializing audit score values for ${startScores.length} Nodes`)
 
