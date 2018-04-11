@@ -52,7 +52,8 @@ async function getConfigInfoV1Async (req, res, next) {
         height: parseInt(topCoreBlock.id),
         audit_challenge: mostRecentChallenge || undefined
       },
-      core_eth_address: coreEthAddress
+      core_eth_address: coreEthAddress,
+      node_min_version: env.MIN_NODE_VERSION_EXISTING
     }
   } catch (error) {
     console.error(`Could not generate config object: ${error.message}`)
