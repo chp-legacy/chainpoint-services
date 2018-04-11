@@ -26,7 +26,6 @@ const registeredNode = require('./lib/models/RegisteredNode.js')
 const csprng = require('random-number-csprng')
 const heartbeats = require('heartbeats')
 const leaderElection = require('exp-leader-election')
-const parallel = require('async-await-parallel')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -260,38 +259,6 @@ async function calculateCurrentRewardShares () {
   }
 }
 
-async function initAuditScoresAsync () {
-  // only attempt this initialization from the leader
-  if (IS_LEADER) {
-    try {
-      let nodesWithScoresCount = await RegisteredNode.count({ where: { auditScore: { [Op.gt]: 0 } } })
-      // if any Node already has a score, initialization has already occurred, do not perform
-      if (nodesWithScoresCount > 0) return
-
-      let blacklistString = NODE_REWARD_TNT_ADDR_BLACKLIST.map((item) => `'${item}'`).join()
-      let twoHoursAgoMS = Date.now() - 2 * 60 * 60000
-      let getNodeScores = `SELECT tnt_addr, row_number() OVER (ORDER BY created_at DESC) as start_score FROM 
-          chainpoint_registered_nodes WHERE tnt_addr IN (SELECT tnt_addr AS active_address FROM chainpoint_node_audit_log 
-          WHERE tnt_addr NOT IN (${blacklistString}) AND public_ip_pass = true AND time_pass = true AND cal_state_pass = true AND 
-          min_credits_pass = true AND node_version_pass = true AND tnt_balance_pass = true AND audit_at >= ${twoHoursAgoMS} 
-          GROUP BY tnt_addr HAVING COUNT(tnt_addr) >= 1) ORDER BY created_at`
-      let startScores = await registeredNodeSequelize.query(getNodeScores, { type: registeredNodeSequelize.QueryTypes.SELECT })
-      console.log(`Initializing audit score values for ${startScores.length} Nodes`)
-
-      let initScoreTasks = []
-      // creating array of update score task promises
-      startScores.forEach((startScoreItem) => {
-        initScoreTasks.push(async () => { return RegisteredNode.update({ auditScore: startScoreItem.start_score }, { where: { tntAddr: startScoreItem.tnt_addr } }) })
-      })
-      // await the resolution of all promises and then process the array of results
-      if (initScoreTasks.length > 0) await parallel(initScoreTasks, 10)
-      console.log(`Initialization complete`)
-    } catch (error) {
-      console.error(`Could not generate initial audit scores : ${error.message}`)
-    }
-  }
-}
-
 /**
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
@@ -407,9 +374,6 @@ function startIntervals () {
   // PERIODIC TIMERS
 
   setTNTRewardInterval()
-
-  // Wait 30 seconds for leader election to occurs, then init audit_scores if needed
-  setTimeout(initAuditScoresAsync, 30000)
 }
 
 // Set the TNT Reward interval
