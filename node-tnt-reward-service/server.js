@@ -284,7 +284,7 @@ async function initAuditScoresAsync () {
         initScoreTasks.push(async () => { return RegisteredNode.update({ auditScore: startScoreItem.start_score }, { where: { tntAddr: startScoreItem.tnt_addr } }) })
       })
       // await the resolution of all promises and then process the array of results
-      if (initScoreTasks.length > 0) await parallel(initScoreTasks, 100)
+      if (initScoreTasks.length > 0) await parallel(initScoreTasks, 10)
       console.log(`Initialization complete`)
     } catch (error) {
       console.error(`Could not generate initial audit scores : ${error.message}`)
