@@ -15,7 +15,7 @@
 */
 
 // See : https://www.future-processing.pl/blog/on-problems-with-threads-in-node-js/
-process.env.UV_THREADPOOL_SIZE = 128;
+process.env.UV_THREADPOOL_SIZE = 128
 
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('task-handler')
@@ -367,7 +367,7 @@ async function getNodeConfigObjectAsync (publicUri) {
   let options = {
     headers: {},
     agent: false,
-    pool: {maxSockets: Infinity},
+    pool: { maxSockets: Infinity },
     method: 'GET',
     uri: `${publicUri}/config`,
     json: true,
@@ -424,7 +424,7 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
   let options = {
     headers: {},
     agent: false,
-    pool: {maxSockets: Infinity},
+    pool: { maxSockets: Infinity },
     method: 'POST',
     uri: `https://proofs.chainpoint.org/proofs`,
     body: [[hashIdCore, proofBase64]],
@@ -450,7 +450,7 @@ async function getTNTBalance (tntAddress, checkMethod) {
   let options = {
     headers: headers,
     agent: false,
-    pool: {maxSockets: Infinity},
+    pool: { maxSockets: Infinity },
     method: 'GET',
     uri: `${ethTntTxUri}/balance/${tntAddress}`,
     json: true,
