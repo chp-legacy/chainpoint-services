@@ -64,8 +64,7 @@ var AuditChallenge = sequelize.define(env.COCKROACH_AUDIT_CHALLENGE_TABLE_NAME,
         isInt: true
       },
       field: 'time',
-      allowNull: false,
-      unique: true
+      allowNull: false
     },
     minBlock: {
       comment: 'The minimum block height included in the challenge calculation',

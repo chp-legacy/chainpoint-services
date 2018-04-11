@@ -64,8 +64,7 @@ var BtcTxLog = sequelize.define(env.COCKROACH_BTC_TX_LOG_TABLE_NAME,
         is: ['^[a-fA-F0-9:]{1,255}$', 'i']
       },
       field: 'tx_id',
-      allowNull: false,
-      unique: true
+      allowNull: false
     },
     publishDate: {
       comment: 'Transaction publish time in milliseconds since unix epoch',

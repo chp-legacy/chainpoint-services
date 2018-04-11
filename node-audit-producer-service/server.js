@@ -72,10 +72,11 @@ async function auditNodesAsync () {
   // get list of all Registered Nodes to audit
   let nodesReadyForAudit = []
   try {
-    nodesReadyForAudit = await RegisteredNode.findAll({ attributes: ['tntAddr', 'publicUri', 'tntCredit'] })
+    nodesReadyForAudit = await RegisteredNode.findAll({ where: { publicUri: { [Op.ne]: null } }, attributes: ['tntAddr', 'publicUri', 'tntCredit'] })
     console.log(`${nodesReadyForAudit.length} public Nodes ready for audit were found`)
   } catch (error) {
-    console.error(`Could not retrieve public Node list: ${error.message}`)
+    let message = `Could not retrieve public Node list : ${error.message}`
+    throw new Error(message)
   }
 
   // iterate through each Registered Node, queue up an audit task for task handler
@@ -87,6 +88,15 @@ async function auditNodesAsync () {
     }
   }
   console.log(`Audit tasks queued for task-handler`)
+
+  try {
+    let decPrivateNodesQuery = `UPDATE chainpoint_registered_nodes SET audit_score = GREATEST(audit_score - 1, 0) WHERE public_uri IS NULL`
+    await regNodeSequelize.query(decPrivateNodesQuery, { type: regNodeSequelize.QueryTypes.UPDATE })
+  } catch (error) {
+    let message = `Could not decrement private Node scores by 1 : ${error.message}`
+    throw new Error(message)
+  }
+  console.log(`Private Node scores decremented by 1`)
 
   // wait 1 minute and then prune any old data from the table
   setTimeout(() => { pruneAuditDataAsync() }, 60000)
@@ -346,7 +356,7 @@ function setPerformNodeAuditInterval () {
         try {
           await auditNodesAsync()
         } catch (error) {
-          console.error('auditNodesAsync err: ', error.message)
+          console.error(`auditNodesAsync : error : ${error.message}`)
         }
       }
     }

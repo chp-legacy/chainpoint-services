@@ -20,13 +20,13 @@ const env = require('./lib/parse-env.js')('tnt-reward')
 const utils = require('./lib/utils')
 const tntUnits = require('./lib/tntUnits.js')
 const amqp = require('amqplib')
-const rp = require('request-promise-native')
-const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
 const calendarBlock = require('./lib/models/CalendarBlock.js')
 const registeredCore = require('./lib/models/RegisteredCore.js')
+const registeredNode = require('./lib/models/RegisteredNode.js')
 const csprng = require('random-number-csprng')
 const heartbeats = require('heartbeats')
 const leaderElection = require('exp-leader-election')
+const parallel = require('async-await-parallel')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -52,102 +52,46 @@ let NODE_REWARD_TNT_ADDR_BLACKLIST = [
 ]
 
 // pull in variables defined in shared database models
-let nodeAuditSequelize = nodeAuditLog.sequelize
-let NodeAuditLog = nodeAuditLog.NodeAuditLog
 let calBlockSequelize = calendarBlock.sequelize
 let CalendarBlock = calendarBlock.CalendarBlock
 let registeredCoreSequelize = registeredCore.sequelize
 let RegisteredCore = registeredCore.RegisteredCore
-let Op = nodeAuditSequelize.Op
+let registeredNodeSequelize = registeredNode.sequelize
+let RegisteredNode = registeredNode.RegisteredNode
+let Op = registeredNodeSequelize.Op
+
+const REWARD_SELECTION_COUNT = 100 // Selecting from the top 100 of audit scores
 
 // Randomly select and deliver token reward from the list
 // of registered nodes that meet the minimum audit and TNT balance
 // eligibility requirements for receiving TNT rewards
 async function performRewardAsync () {
-  let minAuditPasses = env.MIN_CONSECUTIVE_AUDIT_PASSES_FOR_REWARD
-  let minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
-  let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
-  let auditsPerHour = env.NODE_AUDIT_ROUNDS_PER_HOUR
-
-  // find all audit qualifying registered Nodes
-  let auditIntervalMinutes = (60 / auditsPerHour)
-  // look back enough time to see last {minAuditPasses} audits, looking back extra time without including {minAuditPasses + 1} audits ago
-  let auditCheckRangeMinutes = (minAuditPasses * auditIntervalMinutes) + (2 / 3 * auditIntervalMinutes)
-  let auditCheckRangeMS = auditCheckRangeMinutes * 60 * 1000 // convert minutes to MS
-  let auditsFromDateMS = Date.now() - auditCheckRangeMS
-  let qualifiedNodes
+  let candidateNodeAddresses
   try {
-    // SELECT all tnt addresses in the audit log that have minAuditPasses full pass entries since auditsFromDateMS
-    qualifiedNodes = await NodeAuditLog.findAll({
-      attributes: ['tntAddr'],
-      where: { tntAddr: { [Op.notIn]: NODE_REWARD_TNT_ADDR_BLACKLIST }, publicIPPass: true, timePass: true, calStatePass: true, minCreditsPass: true, nodeVersionPass: true, auditAt: { [Op.gte]: auditsFromDateMS } },
-      group: 'tnt_addr',
-      having: nodeAuditSequelize.literal(`COUNT(tnt_addr) >= ${minAuditPasses}`),
-      raw: true
-    })
-    if (!qualifiedNodes || qualifiedNodes.length < 1) {
-      console.log('No qualifying Nodes were found for reward')
+    // retrieve a list of the top REWARD_SELECTION_PC public Nodes
+    candidateNodeAddresses = await RegisteredNode.findAll({ where: { publicUri: { [Op.ne]: null }, tntAddr: { [Op.notIn]: NODE_REWARD_TNT_ADDR_BLACKLIST } }, attributes: ['tntAddr'], order: [['auditScore', 'DESC'], ['created_at', 'ASC']], limit: REWARD_SELECTION_COUNT })
+    if (!candidateNodeAddresses || candidateNodeAddresses.length < 1) {
+      console.log('No reward candidiate Nodes were found')
       return
     } else {
-      console.log(`${qualifiedNodes.length} qualifying Nodes were found for reward`)
+      console.log(`${candidateNodeAddresses.length} reward candidiate Nodes were retrieved`)
     }
   } catch (error) {
-    console.error(`Audit Log read error: ${error.message}`)
-    return
+    let message = `Could not retrieve top scoring Nodes : ${error.message}`
+    throw new Error(message)
   }
 
-  // randomly select reward recipient from qualifying Nodes
-  let selectionIndex = qualifiedNodes.length === 1 ? 0 : await csprng(0, qualifiedNodes.length - 1)
-  let selectedNodeETHAddr = qualifiedNodes[selectionIndex].tntAddr
-
-  // if the selected Node does not have a sufficient minimum TNT balance,
-  // remove the Node from the qualifying list and make new random selection
-  let qualifiedNodeETHAddr = null
-
-  while (!qualifiedNodeETHAddr) {
-    let options = {
-      headers: [
-        {
-          name: 'Content-Type',
-          value: 'application/json'
-        }
-      ],
-      method: 'GET',
-      uri: `${ethTntTxUri}/balance/${selectedNodeETHAddr}`,
-      json: true,
-      gzip: true,
-      resolveWithFullResponse: true
-    }
-
-    try {
-      let balanceResponse = await rp(options)
-      let balanceTNTGrains = balanceResponse.body.balance
-      if (balanceTNTGrains < minGrainsBalanceNeeded) {
-        // disqualified, TNT balance too low, log occurance, remove from qualified list, perform new selection
-        console.log(`${selectedNodeETHAddr} was selected, but was disqualified due to a low TNT balance of ${balanceTNTGrains} grains, ${minGrainsBalanceNeeded} grains (${minGrainsBalanceNeeded / 10 ** 8} TNT) is required.`)
-        qualifiedNodes.splice(selectionIndex, 1)
-        if (qualifiedNodes.length === 0) {
-          console.log(`Qualifying Nodes were found for reward, but none had a sufficient TNT balance, ${minGrainsBalanceNeeded} grains (${minGrainsBalanceNeeded / 10 ** 8} TNT) is required.`)
-          return
-        }
-        selectionIndex = qualifiedNodes.length === 1 ? 0 : await csprng(0, qualifiedNodes.length - 1)
-        selectedNodeETHAddr = qualifiedNodes[selectionIndex].tntAddr
-      } else {
-        qualifiedNodeETHAddr = selectedNodeETHAddr
-      }
-    } catch (error) {
-      console.error(`TNT balance read error: ${error.message}`)
-      return
-    }
-  }
+  // randomly select reward recipient from candidate Nodes
+  let rewardIndex = candidateNodeAddresses.length === 1 ? 0 : await csprng(0, candidateNodeAddresses.length - 1)
+  let rewardTNTAddr = candidateNodeAddresses[rewardIndex].tntAddr
 
   // calculate reward share between Node and Core (if applicable)
   let calculatedShares
   try {
     calculatedShares = await calculateCurrentRewardShares()
   } catch (error) {
-    console.error(`Unable to calculate reward shares: ${error.message}`)
-    return
+    let message = `Unable to calculate reward shares: ${error.message}`
+    throw new Error(message)
   }
 
   let nodeTNTGrainsRewardShare = calculatedShares.nodeTNTGrainsRewardShare
@@ -159,8 +103,8 @@ async function performRewardAsync () {
     let lastBtcAnchorBlock = await CalendarBlock.findOne({ where: { type: 'btc-a' }, attributes: ['id', 'stackId'], order: [['id', 'DESC']] })
     if (lastBtcAnchorBlock) selectedCoreStackId = lastBtcAnchorBlock.stackId
   } catch (error) {
-    console.error(`Unable to query recent btc-a block: ${error.message}`)
-    return
+    let message = `Unable to query recent btc-a block: ${error.message}`
+    throw new Error(message)
   }
   // Get registered Core data for the Core having selectedCoreStackId
   try {
@@ -169,8 +113,8 @@ async function performRewardAsync () {
       coreRewardEthAddr = selectedCore.tntAddr
     }
   } catch (error) {
-    console.error(`Unable to query registered core table: ${error.message}`)
-    return
+    let message = `Unable to query registered core table: ${error.message}`
+    throw new Error(message)
   }
   // if the Core is not receiving a reward, distribute Core's share to the Node
   if (!coreRewardEthAddr) {
@@ -178,10 +122,12 @@ async function performRewardAsync () {
     coreTNTGrainsRewardShare = 0
   }
 
+  console.log(`${rewardTNTAddr} selected for this reward period`)
+
   // send reward calculation message to Calendar
   let messageObj = {}
   messageObj.node = {}
-  messageObj.node.address = qualifiedNodeETHAddr
+  messageObj.node.address = rewardTNTAddr
   messageObj.node.amount = nodeTNTGrainsRewardShare
   if (coreTNTGrainsRewardShare > 0) {
     messageObj.core = {}
@@ -193,8 +139,17 @@ async function performRewardAsync () {
     await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(messageObj)), { persistent: true, type: 'reward' })
     // console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[reward] publish message acked')
   } catch (error) {
-    console.error(env.RMQ_WORK_OUT_CAL_QUEUE, '[reward] publish message nacked')
-    throw new Error(error.message)
+    let message = `${env.RMQ_WORK_OUT_CAL_QUEUE} [reward] publish message nacked`
+    throw new Error(message)
+  }
+
+  // finally, now that we've sent the reward off to the next service for processing,
+  // we must reset the rewarded Node's audit score back to 0
+  try {
+    await RegisteredNode.update({ auditScore: 0 }, { where: { tntAddr: rewardTNTAddr } })
+  } catch (error) {
+    let message = `Could not reset audit score to 0 for Node with TNT address ${rewardTNTAddr} : ${error.message}`
+    throw new Error(message)
   }
 }
 
@@ -305,6 +260,38 @@ async function calculateCurrentRewardShares () {
   }
 }
 
+async function initAuditScoresAsync () {
+  // only attempt this initialization from the leader
+  if (IS_LEADER) {
+    try {
+      let nodesWithScoresCount = await RegisteredNode.count({ where: { auditScore: { [Op.gt]: 0 } } })
+      // if any Node already has a score, initialization has already occurred, do not perform
+      if (nodesWithScoresCount > 0) return
+
+      let blacklistString = NODE_REWARD_TNT_ADDR_BLACKLIST.map((item) => `'${item}'`).join()
+      let twoHoursAgoMS = Date.now() - 2 * 60 * 60000
+      let getNodeScores = `SELECT tnt_addr, row_number() OVER (ORDER BY created_at DESC) as start_score FROM 
+          chainpoint_registered_nodes WHERE tnt_addr IN (SELECT tnt_addr AS active_address FROM chainpoint_node_audit_log 
+          WHERE tnt_addr NOT IN (${blacklistString}) AND public_ip_pass = true AND time_pass = true AND cal_state_pass = true AND 
+          min_credits_pass = true AND node_version_pass = true AND tnt_balance_pass = true AND audit_at >= ${twoHoursAgoMS} 
+          GROUP BY tnt_addr HAVING COUNT(tnt_addr) >= 4) ORDER BY created_at`
+      let startScores = await registeredNodeSequelize.query(getNodeScores, { type: registeredNodeSequelize.QueryTypes.SELECT })
+      console.log(`Initializing audit score values for ${startScores.length} Nodes`)
+
+      let initScoreTasks = []
+      // creating array of update score task promises
+      startScores.forEach((startScoreItem) => {
+        initScoreTasks.push(async () => { return RegisteredNode.update({ auditScore: startScoreItem.start_score }, { where: { tntAddr: startScoreItem.tnt_addr } }) })
+      })
+      // await the resolution of all promises and then process the array of results
+      if (initScoreTasks.length > 0) await parallel(initScoreTasks, 10)
+      console.log(`Initialization complete`)
+    } catch (error) {
+      console.error(`Could not generate initial audit scores : ${error.message}`)
+    }
+  }
+}
+
 /**
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
@@ -370,9 +357,9 @@ async function openStorageConnectionAsync () {
   let dbConnected = false
   while (!dbConnected) {
     try {
-      await nodeAuditSequelize.sync({ logging: false })
       await calBlockSequelize.sync({ logging: false })
       await registeredCoreSequelize.sync({ logging: false })
+      await registeredNodeSequelize.sync({ logging: false })
       console.log('Sequelize connection established')
       dbConnected = true
     } catch (error) {
@@ -420,6 +407,9 @@ function startIntervals () {
   // PERIODIC TIMERS
 
   setTNTRewardInterval()
+
+  // Wait 30 seconds for leader election to occurs, then init audit_scores if needed
+  setTimeout(initAuditScoresAsync, 30000)
 }
 
 // Set the TNT Reward interval
@@ -444,7 +434,7 @@ function setTNTRewardInterval () {
         try {
           await performRewardAsync()
         } catch (error) {
-          console.error('performRewardAsync err: ', error.message)
+          console.error(`performRewardAsync  : error : ${error.message}`)
         }
       }
     }

@@ -55,7 +55,6 @@ let envDefinitions = {
   // CHAINPOINT_CORE_BASE_URI: Base URI for this Chainpoint Core stack of services
   // ANCHOR_BTC: flag for enabling and disabling BTC anchoring
   // ANCHOR_ETH: flag for enabling and disabling ETH anchoring
-  // PROOF_EXPIRE_MINUTES: The lifespan of stored proofs, in minutes
   // GET_PROOFS_MAX_REST: The maximum number of proofs that can be requested in one GET /proofs request
   // POST_VERIFY_PROOFS_MAX: The maximum number of proofs allowed to be verified in one request
 
@@ -65,9 +64,6 @@ let envDefinitions = {
 
   // Chainpoint stack related variables
   NODE_ENV: envalid.str({ default: 'production', desc: 'The type of environment in which the service is running' }),
-
-  // Proof retention setting
-  PROOF_EXPIRE_MINUTES: envalid.num({ default: 1440, desc: 'The lifespan of stored proofs, in minutes' }),
 
   // Anchor to external blockchains toggle variables
   // Using string values in place of a Bool due to issues with storing bool values in K8s secrets
@@ -94,8 +90,8 @@ let envDefinitions = {
 
   // Redis related variables
   REDIS_CONNECT_URI: envalid.url({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI' }),
-  MIN_NODE_VERSION_EXISTING: envalid.str({ default: '1.3.6', desc: 'The minimum acceptable Node version for existing registrations and to pass audits' }),
-  MIN_NODE_VERSION_NEW: envalid.str({ default: '1.3.7', desc: 'The minimum acceptable Node version for new registrations' }),
+  MIN_NODE_VERSION_EXISTING: envalid.str({ default: '1.3.7', desc: 'The minimum acceptable Node version for existing registrations and to pass audits' }),
+  MIN_NODE_VERSION_NEW: envalid.str({ default: '1.3.8', desc: 'The minimum acceptable Node version for new registrations' }),
 
   // Service Specific Variables
 
@@ -157,7 +153,6 @@ let envDefinitions = {
 
   // TNT Reward service specific variables
   REWARDS_PER_HOUR: validateFactorOfSixty({ default: 2, desc: 'The number of times per hour to calculate and distribute rewards, defaults to 2, must be a factor of 60, no greater than 20' }),
-  MIN_CONSECUTIVE_AUDIT_PASSES_FOR_REWARD: envalid.num({ default: 4, desc: 'The minimum number of consecutive audits, where all tests pass, that must occur to be eligible for a reward' }),
   MIN_TNT_GRAINS_BALANCE_FOR_REWARD: envalid.num({ default: 500000000000, desc: 'The minimum balance of TNT, in Grains, that an address must contain in order to be eligible for a reward' }),
   REWARDS_LEADER_KEY: envalid.str({ default: 'service/reward/leader/lock', desc: 'Key used for acquiring reward process leadership locks' }),
 

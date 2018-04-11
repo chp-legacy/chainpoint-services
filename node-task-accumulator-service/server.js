@@ -29,13 +29,15 @@ const { URL } = require('url')
 var debug = {
   general: debugPkg('task-accumulator:general'),
   pruneAgg: debugPkg('task-accumulator:prune_agg'),
-  writeAuditLog: debugPkg('task-accumulator:write_audit_log')
+  writeAuditLog: debugPkg('task-accumulator:write_audit_log'),
+  updateAuditScore: debugPkg('task-accumulator:update_audit_score')
 }
 // direct debug to output over STDOUT
 debugPkg.log = console.info.bind(console)
 
 let PRUNE_AGG_STATES_POOL = []
 let AUDIT_LOG_WRITE_POOL = []
+let AUDIT_SCORE_UPDATE_POOL = []
 
 // Variable indicating if prune agg states accumulation pool is currently being drained
 let PRUNE_AGG_STATES_POOL_DRAINING = false
@@ -48,6 +50,12 @@ let AUDIT_LOG_WRITE_POOL_DRAINING = false
 
 // The number of items to include in a single batch audit log write command
 let auditLogWriteBatchSize = 500
+
+// Variable indicating if update node audit score accumulation pool is currently being drained
+let AUDIT_SCORE_UPDATE_POOL_DRAINING = false
+
+// The number of items to include in a single batch node audit score update (insert on conflict update) command
+let auditScoreUpdateBatchSize = 1000
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -77,6 +85,11 @@ function processMessage (msg) {
         // Consumes an audit log write message from the task handler
         // accumulates audit log write tasks and issues batch to task handler
         consumeWriteAuditLogMessageAsync(msg)
+        break
+      case 'update_node_audit_score':
+        // Consumes an audit score update message from the task handler
+        // accumulates audit score update tasks and issues batch to task handler
+        consumeUpdateAuditScoreMessageAsync(msg)
         break
       default:
         // This is an unknown state type
@@ -110,6 +123,19 @@ async function consumeWriteAuditLogMessageAsync (msg) {
       msg: msg
     }
     AUDIT_LOG_WRITE_POOL.push(auditDataObj)
+  }
+}
+
+async function consumeUpdateAuditScoreMessageAsync (msg) {
+  if (msg !== null) {
+    let scoreUpdateJSON = msg.content.toString()
+
+    // add msg to the scoreUpdate object so that we can ack it later
+    let scoreUpdateObj = {
+      scoreUpdateJSON: scoreUpdateJSON,
+      msg: msg
+    }
+    AUDIT_SCORE_UPDATE_POOL.push(scoreUpdateObj)
   }
 }
 
@@ -184,6 +210,43 @@ async function drainAuditLogWritePoolAsync () {
     }
 
     AUDIT_LOG_WRITE_POOL_DRAINING = false
+  }
+}
+
+async function drainAuditScoreUpdatePoolAsync () {
+  if (!AUDIT_SCORE_UPDATE_POOL_DRAINING && amqpChannel != null) {
+    AUDIT_SCORE_UPDATE_POOL_DRAINING = true
+
+    let currentPendingUpdateCount = AUDIT_SCORE_UPDATE_POOL.length
+    let updateBatchesNeeded = Math.ceil(currentPendingUpdateCount / auditScoreUpdateBatchSize)
+    if (currentPendingUpdateCount > 0) debug.updateAuditScore(`${currentPendingUpdateCount} pending audit score updates currently in pool`)
+    for (let x = 0; x < updateBatchesNeeded; x++) {
+      let pendingUpdateObjs = AUDIT_SCORE_UPDATE_POOL.splice(0, auditScoreUpdateBatchSize)
+      let scoreUpdateJSON = pendingUpdateObjs.map((item) => item.scoreUpdateJSON)
+      // update audit scores in the database
+      try {
+        await taskQueue.enqueue('task-handler-queue', `update_audit_score_items`, [scoreUpdateJSON])
+        debug.updateAuditScore(`${scoreUpdateJSON.length} audit score items queued for updating`)
+
+        // This batch has been submitted to task handler successfully
+        // ack consumption of all original messages part of this batch
+        pendingUpdateObjs.forEach((item) => {
+          if (item.msg !== null) {
+            amqpChannel.ack(item.msg)
+          }
+        })
+      } catch (error) {
+        console.error(`Could not enqueue update task : ${error.message}`)
+        // nack consumption of all original messages part of this batch
+        pendingUpdateObjs.forEach((item) => {
+          if (item.msg !== null) {
+            amqpChannel.nack(item.msg)
+          }
+        })
+      }
+    }
+
+    AUDIT_SCORE_UPDATE_POOL_DRAINING = false
   }
 }
 
@@ -288,6 +351,7 @@ function startIntervals () {
   // PERIODIC TIMERS
   setInterval(() => drainPruneAggStatesPoolAsync(), 1000)
   setInterval(() => drainAuditLogWritePoolAsync(), 1000)
+  setInterval(() => drainAuditScoreUpdatePoolAsync(), 1000)
 }
 
 // process all steps need to start the application
