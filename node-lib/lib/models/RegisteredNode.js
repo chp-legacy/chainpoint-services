@@ -63,7 +63,6 @@ var RegisteredNode = sequelize.define(env.COCKROACH_REG_NODE_TABLE_NAME,
       },
       field: 'tnt_addr',
       allowNull: false,
-      unique: true,
       primaryKey: true
     },
     publicUri: {
@@ -90,6 +89,12 @@ var RegisteredNode = sequelize.define(env.COCKROACH_REG_NODE_TABLE_NAME,
       type: Sequelize.DOUBLE,
       field: 'tnt_credit',
       defaultValue: 0
+    },
+    auditScore: {
+      comment: 'The current score for this Node as calculated by the audit processes and used in the reward queue.',
+      type: Sequelize.INTEGER,
+      field: 'audit_score',
+      defaultValue: 0
     }
   },
   {
@@ -105,11 +110,11 @@ var RegisteredNode = sequelize.define(env.COCKROACH_REG_NODE_TABLE_NAME,
     indexes: [
       {
         unique: false,
-        fields: ['public_uri']
+        fields: ['tnt_credit']
       },
       {
         unique: false,
-        fields: ['tnt_credit']
+        fields: ['public_uri', 'tnt_addr', { attribute: 'audit_score', order: 'DESC' }, 'created_at']
       }
     ]
   }

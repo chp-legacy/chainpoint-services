@@ -51,11 +51,13 @@ debugPkg.log = console.info.bind(console)
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
+const registeredNode = require('./lib/models/RegisteredNode.js')
 const cachedAuditChallenge = require('./lib/models/cachedAuditChallenge.js')
 
 // pull in variables defined in shared database models
 let nodeAuditSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
+let registeredNodeSequelize = registeredNode.sequelize
 let Op = nodeAuditSequelize.Op
 
 // The acceptable time difference between Node and Core for a timestamp to be considered valid, in milliseconds
@@ -95,6 +97,7 @@ const jobs = {
   'audit_node': Object.assign({ perform: performAuditAsync }, pluginOptions),
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
   'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
+  'update_audit_score_items': Object.assign({ perform: updateAuditScoreItemsAsync }, pluginOptions),
   // tasks from proof-gen
   'send_to_proof_proxy': Object.assign({ perform: sendToProofProxyAsync }, pluginOptions)
 }
@@ -266,15 +269,7 @@ async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
 
   await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
 
-  let results = {}
-  results.auditAt = configResultTime
-  results.publicIPPass = publicIPPass
-  results.timePass = timePass
-  results.calStatePass = calStatePass
-  results.minCreditsPass = minCreditsPass
-  results.nodeVersionPass = nodeVersionPass
-
-  return `Audit complete for ${tntAddr} at ${publicUri} : Pass = ${publicIPPass && timePass && calStatePass && minCreditsPass && nodeVersionPass}`
+  return `Audit complete for ${tntAddr} at ${publicUri} : Pass = ${publicIPPass && timePass && calStatePass && minCreditsPass && nodeVersionPass && tntBalancePass}`
 }
 
 async function pruneAuditLogsByIdsAsync (ids) {
@@ -303,6 +298,36 @@ async function writeAuditLogItemsAsync (auditDataJSON) {
     return `Inserted ${auditDataItems.length} rows into chainpoint_node_audit_log with tntAddrs ${auditDataItems[0].tntAddr}...`
   } catch (error) {
     let errorMessage = `writeAuditLogItemsAsync : bulk write error : ${error.message}`
+    throw errorMessage
+  }
+}
+
+async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
+  // scoreUpdatesJSON is an array of JSON strings, convert to array of objects
+  let scoreUpdateItems = scoreUpdatesJSON.map((item) => { return JSON.parse(item) })
+  try {
+    // This should never actiually result in an INSERT operation because the TNT address we intend to update
+    // was retrieved from the database already in order to generate that update. This should only update
+    // existing records. Doing these updates in this manner allows for the efficient batching of update calls.
+    // While an INSERT should never happen, the dummy hmac_key used in the operation is sha256(random()::text)
+    // instead of a static string so that it will not be predictable. This is to prevent the very unlikely scenario
+    // where an INSERT actually occurs, and the hmac key is known because it is in the code, potentially creating
+    // a security risk.
+    await retry(async bail => {
+      let sqlCmd = `INSERT INTO chainpoint_registered_nodes (tnt_addr, hmac_key, created_at, updated_at, audit_score) VALUES `
+      sqlCmd += scoreUpdateItems.map((item) => `('${item.tntAddr}', sha256(random()::text), now(), now(), ${item.scoreAddend})`).join() + ' '
+      sqlCmd += `ON CONFLICT (tnt_addr) DO UPDATE SET audit_score = GREATEST(chainpoint_registered_nodes.audit_score + excluded.audit_score, 0)`
+      await registeredNodeSequelize.query(sqlCmd, { type: registeredNodeSequelize.QueryTypes.UPDATE })
+    }, {
+      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
+      factor: 1,       // The exponential factor to use. Default is 2
+      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 400,
+      randomize: true
+    })
+    return `Updated ${scoreUpdateItems.length} audit scores in chainpoint_registered_nodes with tntAddrs ${scoreUpdateItems[0].tntAddr}...`
+  } catch (error) {
+    let errorMessage = `updateAuditScoreItemsAsync : bulk update error : ${error.message}`
     throw errorMessage
   }
 }
@@ -351,7 +376,6 @@ async function getNodeConfigObjectAsync (publicUri) {
 }
 
 async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass) {
-  // queue prune message containing audit data
   try {
     let auditData = {
       tntAddr: tntAddr,
@@ -367,9 +391,24 @@ async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, 
       tntBalanceGrains: tntBalanceGrains,
       tntBalancePass: tntBalancePass
     }
+    // send audit log result to accumulator to be inserted as part of an audit log insert batch
     await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(JSON.stringify(auditData)), { persistent: true, type: 'write_audit_log' })
   } catch (error) {
-    let errorMessage = `${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} publish message nacked`
+    let errorMessage = `${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} [write_audit_log] publish message nacked`
+    throw errorMessage
+  }
+
+  try {
+    let auditPass = publicIPPass && timePass && calStatePass && minCreditsPass && nodeVersionPass && tntBalancePass
+    let scoreAddend = auditPass ? 1 : -1
+    let scoreUpdate = {
+      tntAddr: tntAddr,
+      scoreAddend: scoreAddend
+    }
+    // send node audit score value update to accumulator to be updated as part of a node audit score update batch
+    await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(JSON.stringify(scoreUpdate)), { persistent: true, type: 'update_node_audit_score' })
+  } catch (error) {
+    let errorMessage = `${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} [update_node_audit_score] publish message nacked`
     throw errorMessage
   }
 }
@@ -436,6 +475,7 @@ async function openStorageConnectionAsync () {
   let dbConnected = false
   while (!dbConnected) {
     try {
+      await registeredNodeSequelize.sync({ logging: false })
       await nodeAuditSequelize.sync({ logging: false })
       await cachedAuditChallenge.getAuditChallengeSequelize().sync({ logging: false })
       debug.general('Sequelize connection established')

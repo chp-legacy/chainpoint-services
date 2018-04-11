@@ -61,8 +61,7 @@ var EthTokenLog = sequelize.define(env.COCKROACH_ETH_TNT_TX_LOG_TABLE_NAME,
       primaryKey: true,
       type: Sequelize.STRING,
       field: 'tx_id',
-      allowNull: false,
-      unique: true
+      allowNull: false
     },
     transactionIndex: {
       comment: 'Integer of the transactions index position log was created from',

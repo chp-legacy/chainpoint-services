@@ -10,14 +10,13 @@
   },
   "dependencies": {
     "amqplib": "^0.5.1",
+    "async-await-parallel": "^1.0.0",
     "bignumber.js": "^4.0.3",
     "consul": "^0.30.0",
     "envalid": "^3.1.1",
     "exp-leader-election": "https://github.com/Tierion/exp-leader-election.git#258e6d8ea3644a9910dd9b78bc01563dfe19bc5b",
     "heartbeats": "^5.0.1",
     "random-number-csprng": "^1.0.2",
-    "request": "^2.81.0",
-    "request-promise-native": "^1.0.4",
     "sequelize": "^4.22.6",
     "sequelize-cockroachdb": "^1.0.2"
   }

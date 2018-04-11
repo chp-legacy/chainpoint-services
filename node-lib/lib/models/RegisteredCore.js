@@ -60,7 +60,6 @@ var RegisteredCore = sequelize.define(env.COCKROACH_REG_CORE_TABLE_NAME,
       type: Sequelize.STRING,
       field: 'stack_id',
       allowNull: false,
-      unique: true,
       primaryKey: true
     },
     tntAddr: {
