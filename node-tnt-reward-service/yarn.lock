@@ -27,10 +27,6 @@ ansi-styles@^2.2.1:
   version "2.2.1"
   resolved "https://registry.yarnpkg.com/ansi-styles/-/ansi-styles-2.2.1.tgz#b432dd3358b634cf75e1e4664368240533c1ddbe"
 
-async-await-parallel@^1.0.0:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/async-await-parallel/-/async-await-parallel-1.0.0.tgz#4913b0e0abfbec934a579331f8d8d75e31b0d349"
-
 bignumber.js@^4.0.3:
   version "4.0.3"
   resolved "https://registry.yarnpkg.com/bignumber.js/-/bignumber.js-4.0.3.tgz#b730be1a6025212b0836fdde0e93fb4f3359b133"

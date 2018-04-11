@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "amqplib": "^0.5.1",
-    "async-await-parallel": "^1.0.0",
     "bignumber.js": "^4.0.3",
     "consul": "^0.30.0",
     "envalid": "^3.1.1",
