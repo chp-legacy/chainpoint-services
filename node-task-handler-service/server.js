@@ -14,9 +14,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// See : https://www.future-processing.pl/blog/on-problems-with-threads-in-node-js/
-// process.env.UV_THREADPOOL_SIZE = 128
-
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('task-handler')
 
@@ -196,8 +193,8 @@ async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
       configResultsBody = await getNodeConfigObjectAsync(publicUri)
       configResultTime = Date.now()
     }, {
-      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
-      factor: 1.5,       // The exponential factor to use. Default is 2
+      retries: 3,    // The maximum amount of times to retry the operation. Default is 10
+      factor: 2,       // The exponential factor to use. Default is 2
       minTimeout: 500,   // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 5000,
       randomize: false
@@ -374,14 +371,11 @@ async function getNodeConfigObjectAsync (publicUri) {
   let nodeResponse
   let options = {
     headers: {},
-    // agent: false,
-    // forever: true,
-    // pool: { maxSockets: Infinity },
     method: 'GET',
     uri: `${publicUri}/config`,
     json: true,
     gzip: true,
-    timeout: 5000,
+    timeout: 2500,
     resolveWithFullResponse: true
   }
 
@@ -432,14 +426,12 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
 
   let options = {
     headers: {},
-    // agent: false,
-    // forever: true,
-    // pool: { maxSockets: Infinity },
     method: 'POST',
     uri: `https://proofs.chainpoint.org/proofs`,
     body: [[hashIdCore, proofBase64]],
     json: true,
     gzip: true,
+    timeout: 10000,
     resolveWithFullResponse: true
   }
 
@@ -459,9 +451,6 @@ async function getTNTBalance (tntAddress, checkMethod) {
 
   let options = {
     headers: headers,
-    // agent: false,
-    // forever: true,
-    // pool: { maxSockets: Infinity },
     method: 'GET',
     uri: `${ethTntTxUri}/balance/${tntAddress}`,
     json: true,
