@@ -367,6 +367,7 @@ async function getNodeConfigObjectAsync (publicUri) {
   let options = {
     headers: {},
     agent: false,
+    forever: true,
     pool: { maxSockets: Infinity },
     method: 'GET',
     uri: `${publicUri}/config`,
@@ -424,6 +425,7 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
   let options = {
     headers: {},
     agent: false,
+    forever: true,
     pool: { maxSockets: Infinity },
     method: 'POST',
     uri: `https://proofs.chainpoint.org/proofs`,
@@ -450,6 +452,7 @@ async function getTNTBalance (tntAddress, checkMethod) {
   let options = {
     headers: headers,
     agent: false,
+    forever: true,
     pool: { maxSockets: Infinity },
     method: 'GET',
     uri: `${ethTntTxUri}/balance/${tntAddress}`,
