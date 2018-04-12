@@ -95,6 +95,30 @@ var RegisteredNode = sequelize.define(env.COCKROACH_REG_NODE_TABLE_NAME,
       type: Sequelize.INTEGER,
       field: 'audit_score',
       defaultValue: 0
+    },
+    passCount: {
+      comment: 'The total number of times the Node has passed an audit.',
+      type: Sequelize.INTEGER,
+      field: 'pass_count',
+      defaultValue: 0
+    },
+    failCount: {
+      comment: 'The total number of times the Node has failed an audit.',
+      type: Sequelize.INTEGER,
+      field: 'fail_count',
+      defaultValue: 0
+    },
+    consecutivePasses: {
+      comment: 'The number of consecutive times the Node has passed an audit.',
+      type: Sequelize.INTEGER,
+      field: 'consecutive_passes',
+      defaultValue: 0
+    },
+    consecutiveFails: {
+      comment: 'The number of consecutive times the Node has failed an audit.',
+      type: Sequelize.INTEGER,
+      field: 'consecutive_fails',
+      defaultValue: 0
     }
   },
   {
@@ -115,6 +139,10 @@ var RegisteredNode = sequelize.define(env.COCKROACH_REG_NODE_TABLE_NAME,
       {
         unique: false,
         fields: ['public_uri', 'tnt_addr', { attribute: 'audit_score', order: 'DESC' }, 'created_at']
+      },
+      {
+        unique: false,
+        fields: ['consecutive_passes', 'public_uri']
       }
     ]
   }

@@ -325,9 +325,21 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
     // where an INSERT actually occurs, and the hmac key is known because it is in the code, potentially creating
     // a security risk.
     await retry(async bail => {
-      let sqlCmd = `INSERT INTO chainpoint_registered_nodes (tnt_addr, hmac_key, created_at, updated_at, audit_score) VALUES `
-      sqlCmd += scoreUpdateItems.map((item) => `('${item.tntAddr}', sha256(random()::text), now(), now(), ${item.scoreAddend})`).join() + ' '
-      sqlCmd += `ON CONFLICT (tnt_addr) DO UPDATE SET audit_score = GREATEST(chainpoint_registered_nodes.audit_score + excluded.audit_score, 0)`
+      let sqlCmd = `INSERT INTO chainpoint_registered_nodes (tnt_addr, hmac_key, created_at, updated_at, audit_score, pass_count, fail_count, consecutive_passes, consecutive_fails) VALUES `
+      sqlCmd += scoreUpdateItems.map((item) => {
+        let scoreAddend = item.auditPass ? 1 : -1
+        let passAddend = item.auditPass ? 1 : 0
+        let failAddend = item.auditPass ? 0 : 1
+        let consecPassAddend = item.auditPass ? 1 : 0
+        let consecFailAddend = item.auditPass ? 0 : 1
+        return `('${item.tntAddr}', sha256(random()::text), now(), now(), ${scoreAddend}, ${passAddend}, ${failAddend}, ${consecPassAddend}, ${consecFailAddend})`
+      }).join() + ' '
+      sqlCmd += `ON CONFLICT (tnt_addr) DO UPDATE SET (audit_score, pass_count, fail_count, consecutive_passes, consecutive_fails) = 
+      (GREATEST(chainpoint_registered_nodes.audit_score + EXCLUDED.audit_score, 0), 
+      chainpoint_registered_nodes.pass_count + EXCLUDED.pass_count, 
+      chainpoint_registered_nodes.fail_count + EXCLUDED.fail_count, 
+      CASE WHEN EXCLUDED.consecutive_passes > 0 THEN chainpoint_registered_nodes.consecutive_passes + EXCLUDED.consecutive_passes ELSE 0 END,
+      CASE WHEN EXCLUDED.consecutive_fails > 0 THEN chainpoint_registered_nodes.consecutive_fails + EXCLUDED.consecutive_fails ELSE 0 END)`
       await registeredNodeSequelize.query(sqlCmd, { type: registeredNodeSequelize.QueryTypes.UPDATE })
     }, {
       retries: 5,    // The maximum amount of times to retry the operation. Default is 10
@@ -414,10 +426,9 @@ async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, 
 
   try {
     let auditPass = publicIPPass && timePass && calStatePass && minCreditsPass && nodeVersionPass && tntBalancePass
-    let scoreAddend = auditPass ? 1 : -1
     let scoreUpdate = {
       tntAddr: tntAddr,
-      scoreAddend: scoreAddend
+      auditPass: auditPass
     }
     // send node audit score value update to accumulator to be updated as part of a node audit score update batch
     await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(JSON.stringify(scoreUpdate)), { persistent: true, type: 'update_node_audit_score' })
