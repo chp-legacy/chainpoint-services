@@ -241,7 +241,7 @@ async function postNodeV1Async (req, res, next) {
   let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toString().toLowerCase() : null
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
-    if (!validUrl.isWebUri(lowerCasedPublicUri)) {
+    if (!validUrl.isHttpUri(lowerCasedPublicUri)) {
       return next(new restify.InvalidArgumentError('invalid JSON body, invalid public_uri'))
     }
 
@@ -383,7 +383,7 @@ async function putNodeV1Async (req, res, next) {
   let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toString().toLowerCase() : null
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
-    if (!validUrl.isWebUri(lowerCasedPublicUri)) {
+    if (!validUrl.isHttpUri(lowerCasedPublicUri)) {
       return next(new restify.InvalidArgumentError('invalid JSON body, invalid public_uri'))
     }
     let parsedPublicUri = url.parse(lowerCasedPublicUri)
