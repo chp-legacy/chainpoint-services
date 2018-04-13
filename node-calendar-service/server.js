@@ -847,11 +847,8 @@ async function processRewardMessage (msg) {
     // log an error if the TNT balance is too low.
     let rewardTNTAddr // the TNT address from which rewards are sent for this Core
     try {
-      let ethWallet = JSON.parse(env.ETH_WALLET)
-      rewardTNTAddr = ethWallet.address
-      if (!rewardTNTAddr.startsWith('0x')) rewardTNTAddr = `0x${rewardTNTAddr}`
       let requiredMinimumBalance = nodeTNTGrainsRewardShare + coreTNTGrainsRewardShare
-      let currentBalance = await getTNTGrainsBalanceForAddressAsync(rewardTNTAddr)
+      let currentBalance = await getTNTGrainsBalanceForWalletAsync()
       if (currentBalance >= requiredMinimumBalance) {
         debug.reward(`consumeRewardMessageAsync : processRewardMessage : Minimum balance for ${rewardTNTAddr} OK, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
       } else {
@@ -895,7 +892,7 @@ async function processRewardMessage (msg) {
   }
 }
 
-async function getTNTGrainsBalanceForAddressAsync (tntAddress) {
+async function getTNTGrainsBalanceForWalletAsync () {
   let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
 
   let options = {
@@ -906,7 +903,7 @@ async function getTNTGrainsBalanceForAddressAsync (tntAddress) {
       }
     ],
     method: 'GET',
-    uri: `${ethTntTxUri}/balance/${tntAddress}`,
+    uri: `${ethTntTxUri}/balance/wallet`,
     json: true,
     gzip: true,
     timeout: 10000,

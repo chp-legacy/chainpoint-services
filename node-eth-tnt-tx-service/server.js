@@ -134,7 +134,15 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, async (req, res, n
     return next(new restify.InvalidArgumentError('invalid JSON body, empty tnt_addr'))
   }
 
-  if (!isEthereumAddr(req.params.tnt_addr)) {
+  // use local wallet address when /balance/wallet requested
+  let ethAddress = req.params.tnt_addr
+  if (ethAddress === 'wallet') {
+    let ethWallet = JSON.parse(env.ETH_WALLET)
+    ethAddress = ethWallet.address
+  }
+  if (!ethAddress.startsWith('0x')) ethAddress = `0x${ethAddress}`
+
+  if (!isEthereumAddr(ethAddress)) {
     return next(new restify.InvalidArgumentError('invalid JSON body, malformed tnt_addr'))
   }
 
@@ -148,20 +156,20 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, async (req, res, n
   if (!gethOnly) {
     // get grainsBalance from Infura API
     try {
-      grainsBalance = await getBalanceFromInfuraAsync(req.params.tnt_addr)
+      grainsBalance = await getBalanceFromInfuraAsync(ethAddress)
       serviceUsed = 'infura'
     } catch (error) {
-      console.error(`Could not get balance from Infura for address ${req.params.tnt_addr} : ${error}`)
+      console.error(`Could not get balance from Infura for address ${ethAddress} : ${error}`)
     }
   }
 
   // if Infura did not return a balance, retrieve from geth
   if (grainsBalance === null) {
     try {
-      grainsBalance = await getBalanceFromGethAsync(req.params.tnt_addr)
+      grainsBalance = await getBalanceFromGethAsync(ethAddress)
       serviceUsed = 'geth'
     } catch (error) {
-      console.error(`Could not get balance from geth for address ${req.params.tnt_addr} : ${error.message}`)
+      console.error(`Could not get balance from geth for address ${ethAddress} : ${error.message}`)
     }
   }
 
@@ -172,7 +180,7 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, async (req, res, n
     balance: grainsBalance
   })
 
-  console.log(`Balance requested for ${req.params.tnt_addr}: ${grainsBalance} grains (${grainsBalance / 10 ** 8} TNT) : ${serviceUsed}`)
+  console.log(`Balance requested for ${ethAddress}: ${grainsBalance} grains (${grainsBalance / 10 ** 8} TNT) : ${serviceUsed}`)
 
   return next()
 })
