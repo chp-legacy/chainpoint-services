@@ -845,17 +845,16 @@ async function processRewardMessage (msg) {
 
     // check to be sure a sufficient TNT balance exists to pay out rewards,
     // log an error if the TNT balance is too low.
-    let rewardTNTAddr // the TNT address from which rewards are sent for this Core
     try {
       let requiredMinimumBalance = nodeTNTGrainsRewardShare + coreTNTGrainsRewardShare
       let currentBalance = await getTNTGrainsBalanceForWalletAsync()
       if (currentBalance >= requiredMinimumBalance) {
-        debug.reward(`consumeRewardMessageAsync : processRewardMessage : Minimum balance for ${rewardTNTAddr} OK, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
+        debug.reward(`consumeRewardMessageAsync : processRewardMessage : Minimum balance for wallet OK, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
       } else {
-        console.error(`consumeRewardMessageAsync : processRewardMessage : Insufficient balance for ${rewardTNTAddr}, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
+        console.error(`consumeRewardMessageAsync : processRewardMessage : Insufficient balance for wallet, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
       }
     } catch (error) {
-      console.error(`consumeRewardMessageAsync : processRewardMessage : Could not verify minimum balance for ${rewardTNTAddr} : ${error.message}`)
+      console.error(`consumeRewardMessageAsync : processRewardMessage : Could not verify minimum balance for wallet : ${error.message}`)
     }
 
     debug.reward('consumeRewardMessageAsync : processRewardMessage : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
