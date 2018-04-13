@@ -444,15 +444,13 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
 }
 
 async function getTNTBalance (tntAddress, checkMethod) {
-  let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
-
   let headers = {}
   if (checkMethod === 'geth') headers = { 'geth-only': true }
 
   let options = {
     headers: headers,
     method: 'GET',
-    uri: `${ethTntTxUri}/balance/${tntAddress}`,
+    uri: `${env.ETH_TNT_TX_CONNECT_URI}/balance/${tntAddress}`,
     json: true,
     gzip: true,
     timeout: 10000,

@@ -488,8 +488,6 @@ function updateRegNodesLimit (count) {
 }
 
 let getTNTGrainsBalanceForAddressAsync = async (tntAddress) => {
-  let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
-
   let options = {
     headers: [
       {
@@ -498,7 +496,7 @@ let getTNTGrainsBalanceForAddressAsync = async (tntAddress) => {
       }
     ],
     method: 'GET',
-    uri: `${ethTntTxUri}/balance/${tntAddress}`,
+    uri: `${env.ETH_TNT_TX_CONNECT_URI}/balance/${tntAddress}`,
     json: true,
     gzip: true,
     timeout: 10000,

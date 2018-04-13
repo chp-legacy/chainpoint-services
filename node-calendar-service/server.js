@@ -78,9 +78,6 @@ let amqpChannel = null
 // This value is updated from consul events as changes are detected
 let nistLatest = null
 
-// The URI to use for requests to the eth-tnt-tx service
-const ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
-
 // pull in variables defined in shared CalendarBlock module
 const sequelize = calendarBlock.sequelize
 const CalendarBlock = calendarBlock.CalendarBlock
@@ -718,7 +715,7 @@ async function sendTNTRewardAsync (ethAddr, tntGrains) {
       }
     ],
     method: 'POST',
-    uri: `${ethTntTxUri}/transfer`,
+    uri: `${env.ETH_TNT_TX_CONNECT_URI}/transfer`,
     body: {
       to_addr: ethAddr,
       value: tntGrains
@@ -892,8 +889,6 @@ async function processRewardMessage (msg) {
 }
 
 async function getTNTGrainsBalanceForWalletAsync () {
-  let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
-
   let options = {
     headers: [
       {
@@ -902,7 +897,7 @@ async function getTNTGrainsBalanceForWalletAsync () {
       }
     ],
     method: 'GET',
-    uri: `${ethTntTxUri}/balance/wallet`,
+    uri: `${env.ETH_TNT_TX_CONNECT_URI}/balance/wallet`,
     json: true,
     gzip: true,
     timeout: 10000,
