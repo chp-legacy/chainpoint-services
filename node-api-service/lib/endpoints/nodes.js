@@ -152,14 +152,8 @@ async function getNodeByTNTAddrV1Async (req, res, next) {
  */
 async function getNodesRandomV1Async (req, res, next) {
   // get a list of random healthy Nodes
-  let regNodesTableName = RegisteredNode.getTableName()
-  let nodeAuditLogTableName = NodeAuditLog.getTableName()
-  let thirtyMinutesAgo = Date.now() - 30 * 60 * 1000
-  let sqlQuery = `SELECT rn.public_uri FROM ${regNodesTableName} rn 
-                  WHERE rn.public_uri IS NOT NULL AND rn.tnt_addr IN (
-                    SELECT DISTINCT al.tnt_addr FROM ${nodeAuditLogTableName} al 
-                    WHERE tnt_addr IS NOT NULL AND al.public_ip_pass = TRUE AND al.time_pass = TRUE AND al.cal_state_pass = TRUE AND al.min_credits_pass = true AND al.node_version_pass = true AND al.audit_at >= ${thirtyMinutesAgo}
-                  )
+  let sqlQuery = `SELECT public_uri FROM chainpoint_registered_nodes 
+                  WHERE consecutive_passes > 0  
                   ORDER BY RANDOM() LIMIT ${RANDOM_NODES_RESULT_LIMIT}`
   let rndNodes = await registeredNodeSequelize.query(sqlQuery, { type: registeredNodeSequelize.QueryTypes.SELECT })
 
