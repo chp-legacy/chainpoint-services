@@ -78,9 +78,6 @@ let amqpChannel = null
 // This value is updated from consul events as changes are detected
 let nistLatest = null
 
-// The URI to use for requests to the eth-tnt-tx service
-const ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
-
 // pull in variables defined in shared CalendarBlock module
 const sequelize = calendarBlock.sequelize
 const CalendarBlock = calendarBlock.CalendarBlock
@@ -718,7 +715,7 @@ async function sendTNTRewardAsync (ethAddr, tntGrains) {
       }
     ],
     method: 'POST',
-    uri: `${ethTntTxUri}/transfer`,
+    uri: `${env.ETH_TNT_TX_CONNECT_URI}/transfer`,
     body: {
       to_addr: ethAddr,
       value: tntGrains
@@ -845,20 +842,16 @@ async function processRewardMessage (msg) {
 
     // check to be sure a sufficient TNT balance exists to pay out rewards,
     // log an error if the TNT balance is too low.
-    let rewardTNTAddr // the TNT address from which rewards are sent for this Core
     try {
-      let ethWallet = JSON.parse(env.ETH_WALLET)
-      rewardTNTAddr = ethWallet.address
-      if (!rewardTNTAddr.startsWith('0x')) rewardTNTAddr = `0x${rewardTNTAddr}`
       let requiredMinimumBalance = nodeTNTGrainsRewardShare + coreTNTGrainsRewardShare
-      let currentBalance = await getTNTGrainsBalanceForAddressAsync(rewardTNTAddr)
+      let currentBalance = await getTNTGrainsBalanceForWalletAsync()
       if (currentBalance >= requiredMinimumBalance) {
-        debug.reward(`consumeRewardMessageAsync : processRewardMessage : Minimum balance for ${rewardTNTAddr} OK, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
+        debug.reward(`consumeRewardMessageAsync : processRewardMessage : Minimum balance for wallet OK, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
       } else {
-        console.error(`consumeRewardMessageAsync : processRewardMessage : Insufficient balance for ${rewardTNTAddr}, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
+        console.error(`consumeRewardMessageAsync : processRewardMessage : Insufficient balance for wallet, needed ${requiredMinimumBalance} of ${currentBalance} grains`)
       }
     } catch (error) {
-      console.error(`consumeRewardMessageAsync : processRewardMessage : Could not verify minimum balance for ${rewardTNTAddr} : ${error.message}`)
+      console.error(`consumeRewardMessageAsync : processRewardMessage : Could not verify minimum balance for wallet : ${error.message}`)
     }
 
     debug.reward('consumeRewardMessageAsync : processRewardMessage : nodeRewardETHAddr : %s : nodeTNTGrainsRewardShare : %s', nodeRewardETHAddr, nodeTNTGrainsRewardShare)
@@ -895,9 +888,7 @@ async function processRewardMessage (msg) {
   }
 }
 
-async function getTNTGrainsBalanceForAddressAsync (tntAddress) {
-  let ethTntTxUri = env.ETH_TNT_TX_CONNECT_URI
-
+async function getTNTGrainsBalanceForWalletAsync () {
   let options = {
     headers: [
       {
@@ -906,7 +897,7 @@ async function getTNTGrainsBalanceForAddressAsync (tntAddress) {
       }
     ],
     method: 'GET',
-    uri: `${ethTntTxUri}/balance/${tntAddress}`,
+    uri: `${env.ETH_TNT_TX_CONNECT_URI}/balance/wallet`,
     json: true,
     gzip: true,
     timeout: 10000,
