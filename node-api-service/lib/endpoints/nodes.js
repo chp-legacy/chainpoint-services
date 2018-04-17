@@ -45,7 +45,7 @@ let redis = null
 let regNodesLimit = 0
 
 // The number of results to return when responding to a random nodes query
-const RANDOM_NODES_RESULT_LIMIT = 5
+const RANDOM_NODES_RESULT_LIMIT = 25
 
 // The number of recent audit log entries to return
 const AUDIT_HISTORY_COUNT = 10 // at current rate, 5 hours worth
@@ -146,7 +146,7 @@ async function getNodeByTNTAddrV1Async (req, res, next) {
 }
 
 /**
- * GET /nodes retrieve handler
+ * GET /nodes/random retrieve handler
  *
  * Retrieve a random subset of registered and healthy Nodes
  */
