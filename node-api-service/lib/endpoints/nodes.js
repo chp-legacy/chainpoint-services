@@ -69,83 +69,6 @@ let isHMAC = (hmac) => {
 }
 
 /**
- * GET /nodes/:tnt_addr retrieve handler
- *
- * Retrieve an existing registered Node
- */
-async function getNodeByTNTAddrV1Async (req, res, next) {
-  if (!req.params.hasOwnProperty('tnt_addr')) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, missing tnt_addr'))
-  }
-
-  if (_.isEmpty(req.params.tnt_addr)) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, empty tnt_addr'))
-  }
-
-  let lowerCasedTntAddrParam
-  if (!isEthereumAddr(req.params.tnt_addr)) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, malformed tnt_addr'))
-  } else {
-    lowerCasedTntAddrParam = req.params.tnt_addr.toLowerCase()
-  }
-
-  /*
-
-  This endpoint with be publicly accessible, reserving hmac code here if we decide to restore auth
-
-  if (!req.params.hasOwnProperty('hmac')) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, missing hmac'))
-  }
-
-  if (_.isEmpty(req.params.hmac)) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, empty hmac'))
-  }
-
-  if (!isHMAC(req.params.hmac)) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, invalid hmac'))
-  }
-  */
-
-  let regNode
-  let recentAudits
-  try {
-    regNode = await RegisteredNode.findOne({ where: { tntAddr: lowerCasedTntAddrParam } })
-    if (!regNode) {
-      res.status(404)
-      res.noCache()
-      res.send({ code: 'NotFoundError', message: '' })
-      return next()
-    }
-  } catch (error) {
-    console.error(`Could not retrieve RegisteredNode: ${error.message}`)
-    return next(new restify.InternalServerError('could not retrieve RegisteredNode'))
-  }
-
-  try {
-    recentAudits = await NodeAuditLog.findAll({ where: { tntAddr: lowerCasedTntAddrParam }, attributes: ['auditAt', 'publicIPPass', 'timePass', 'calStatePass', 'minCreditsPass'], order: [['auditAt', 'DESC']], limit: AUDIT_HISTORY_COUNT })
-  } catch (error) {
-    console.error(`Could not retrieve NodeAuditLog items: ${error.message}`)
-    return next(new restify.InternalServerError('could not retrieve NodeAuditLog items'))
-  }
-
-  let result = {
-    recent_audits: recentAudits.map((audit) => {
-      return {
-        time: parseInt(audit.auditAt),
-        public_ip_test: audit.publicIPPass,
-        time_test: audit.timePass,
-        calendar_state_test: audit.calStatePass,
-        minimum_credits_test: audit.minCreditsPass
-      }
-    })
-  }
-
-  res.cache('public', { maxAge: 900 })
-  res.send(result)
-  return next()
-}
-
-/**
  * GET /nodes/random retrieve handler
  *
  * Retrieve a random subset of registered and healthy Nodes
@@ -516,7 +439,6 @@ module.exports = {
   getNodeAuditLogSequelize: () => { return nodeAuditLogSequelize },
   getNodesRandomV1Async: getNodesRandomV1Async,
   getNodesBlacklistV1Async: getNodesBlacklistV1Async,
-  getNodeByTNTAddrV1Async: getNodeByTNTAddrV1Async,
   postNodeV1Async: postNodeV1Async,
   putNodeV1Async: putNodeV1Async,
   setNodesRegisteredNode: (regNode) => { RegisteredNode = regNode },

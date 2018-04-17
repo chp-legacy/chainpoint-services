@@ -117,8 +117,6 @@ server.get({ path: '/calendar/:height', version: '1.0.0' }, calendar.getCalBlock
 server.get({ path: '/nodes/random', version: '1.0.0' }, nodes.getNodesRandomV1Async)
 // get nodes blacklist
 server.get({ path: '/nodes/blacklist', version: '1.0.0' }, nodes.getNodesBlacklistV1Async)
-// get nodes list
-// server.get({ path: '/nodes/:tnt_addr', version: '1.0.0' }, nodes.getNodeByTNTAddrV1Async)
 // register a new node
 server.post({ path: '/nodes', version: '1.0.0' }, nodes.postNodeV1Async)
 // update an existing node
