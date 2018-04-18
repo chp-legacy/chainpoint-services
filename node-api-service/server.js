@@ -139,7 +139,6 @@ async function openStorageConnectionAsync () {
       await nodes.getRegisteredNodeSequelize().sync({ logging: false })
       await calendar.getCalendarBlockSequelize().sync({ logging: false })
       await verify.getCalendarBlockSequelize().sync({ logging: false })
-      await nodes.getNodeAuditLogSequelize().sync({ logging: false })
       await config.getAuditChallengeSequelize().sync({ logging: false })
       console.log('Sequelize connection established')
       dbConnected = true
@@ -329,7 +328,6 @@ module.exports = {
   setNistLatest: (val) => { hashes.setNistLatest(val) },
   setHashesRegisteredNode: (regNode) => { hashes.setHashesRegisteredNode(regNode) },
   setNodesRegisteredNode: (regNode) => { nodes.setNodesRegisteredNode(regNode) },
-  setNodesNodeAuditLog: (nodeAuditLog) => { nodes.setNodesNodeAuditLog(nodeAuditLog) },
   server: server,
   config: config,
   setRegNodesLimit: (val) => { nodes.setLimitDirect(val) },

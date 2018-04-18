@@ -20,7 +20,6 @@ const _ = require('lodash')
 const moment = require('moment')
 var validUrl = require('valid-url')
 const registeredNode = require('../models/RegisteredNode.js')
-const nodeAuditLog = require('../models/NodeAuditLog.js')
 const url = require('url')
 const ip = require('ip')
 const utils = require('../utils.js')
@@ -32,8 +31,6 @@ const env = require('../parse-env.js')('api')
 
 let registeredNodeSequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
-let nodeAuditLogSequelize = nodeAuditLog.sequelize
-let NodeAuditLog = nodeAuditLog.NodeAuditLog
 let Op = registeredNodeSequelize.Op
 
 // The redis connection used for all redis communication
@@ -46,9 +43,6 @@ let regNodesLimit = 0
 
 // The number of results to return when responding to a random nodes query
 const RANDOM_NODES_RESULT_LIMIT = 25
-
-// The number of recent audit log entries to return
-const AUDIT_HISTORY_COUNT = 10 // at current rate, 5 hours worth
 
 // The minimium TNT grains required to operate a Node
 const minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
@@ -436,13 +430,11 @@ let getTNTGrainsBalanceForAddressAsync = async (tntAddress) => {
 
 module.exports = {
   getRegisteredNodeSequelize: () => { return registeredNodeSequelize },
-  getNodeAuditLogSequelize: () => { return nodeAuditLogSequelize },
   getNodesRandomV1Async: getNodesRandomV1Async,
   getNodesBlacklistV1Async: getNodesBlacklistV1Async,
   postNodeV1Async: postNodeV1Async,
   putNodeV1Async: putNodeV1Async,
   setNodesRegisteredNode: (regNode) => { RegisteredNode = regNode },
-  setNodesNodeAuditLog: (nodeAuditLog) => { NodeAuditLog = nodeAuditLog },
   setRegNodesLimit: (val) => { updateRegNodesLimit(val) },
   setLimitDirect: (val) => { regNodesLimit = val },
   overrideGetTNTGrainsBalanceForAddressAsync: (func) => { getTNTGrainsBalanceForAddressAsync = func },
