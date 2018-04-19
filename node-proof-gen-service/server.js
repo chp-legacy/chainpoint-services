@@ -107,11 +107,12 @@ async function consumeProofReadyMessageAsync (msg) {
         let aggIds = aggStateRows.map((item) => item.agg_id)
         let calStateRows = await cachedProofState.getCalStateObjectsByAggIdsAsync(aggIds)
         // create a lookup table for calStateRows by agg_id
-        let calStateLookup = {}
-        calStateRows.forEach((calStateRow) => { calStateLookup[calStateRow.agg_id] = calStateRow.cal_state })
+        let calStateLookup = calStateRows.reduce((result, calStateRow) => {
+          result[calStateRow.agg_id] = calStateRow.cal_state
+          return result
+        }, {})
 
-        let proofs = []
-        aggStateRows.forEach((aggStateRow) => {
+        let proofs = aggStateRows.map((aggStateRow) => {
           let proof = {}
           proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
           proof = addCalendarBranch(proof, JSON.parse(aggStateRow.agg_state), JSON.parse(calStateLookup[aggStateRow.agg_id]))
@@ -120,10 +121,10 @@ async function consumeProofReadyMessageAsync (msg) {
           let isValidSchema = chainpointProofSchema.validate(proof).valid
           if (!isValidSchema) {
             console.error(`Proof ${aggStateRow.hash_id} has an invalid JSON schema`)
-          } else {
-            proofs.push(proof)
+            return null
           }
-        })
+          return proof
+        }).filter((proof) => proof !== null)
 
         await storeProofsAsync(proofs)
 
@@ -164,17 +165,20 @@ async function consumeProofReadyMessageAsync (msg) {
         }
 
         // create a lookup table for calStateRows by agg_id
-        let calStateLookup = {}
-        calStateRows.forEach((calStateRow) => { calStateLookup[calStateRow.agg_id] = { cal_id: calStateRow.cal_id, state: calStateRow.cal_state } })
+        let calStateLookup = calStateRows.reduce((result, calStateRow) => {
+          result[calStateRow.agg_id] = calStateRow.cal_state
+          return result
+        }, {})
         // create a lookup table for anchorBTCAggStateRows by cal_id
-        let anchorBTCAggStateLookup = {}
-        anchorBTCAggStateRows.forEach((anchorBTCAggStateRow) => { anchorBTCAggStateLookup[anchorBTCAggStateRow.cal_id] = anchorBTCAggStateRow.anchor_btc_agg_state })
+        let anchorBTCAggStateLookup = anchorBTCAggStateRows.reduce((result, anchorBTCAggStateRow) => {
+          result[anchorBTCAggStateRow.agg_id] = anchorBTCAggStateRow.cal_state
+          return result
+        }, {})
 
-        let proofs = []
         let btcTxState = JSON.parse(btcTxStateRow.btctx_state)
         let btcHeadState = JSON.parse(btcHeadStateRow.btchead_state)
 
-        aggStateRows.forEach((aggStateRow) => {
+        let proofs = aggStateRows.map((aggStateRow) => {
           let proof = {}
           proof = addChainpointHeader(proof, aggStateRow.hash, aggStateRow.hash_id)
           proof = addCalendarBranch(proof, JSON.parse(aggStateRow.agg_state), JSON.parse(calStateLookup[aggStateRow.agg_id].state))
@@ -184,10 +188,10 @@ async function consumeProofReadyMessageAsync (msg) {
           let isValidSchema = chainpointProofSchema.validate(proof).valid
           if (!isValidSchema) {
             console.error(`Proof ${aggStateRow.hash_id} has an invalid JSON schema`)
-          } else {
-            proofs.push(proof)
+            return null
           }
-        })
+          return proof
+        }).filter((proof) => proof !== null)
 
         await storeProofsAsync(proofs)
 
@@ -217,9 +221,13 @@ async function storeProofsAsync (proofs) {
   // compress proofs to binary format Base64
   let proofsBase64 = proofs.map((proof) => chpBinary.objectToBase64Sync(proof))
   // save proof to proof proxy
-  proofs.forEach(async (proof, index) => {
-    await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, proofsBase64[index]])
-  })
+  for (let x = 0; x < proofs.length; x++) {
+    try {
+      await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proofs[x].hash_id_core, proofsBase64[x]])
+    } catch (error) {
+      console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
+    }
+  }
 }
 
 /**
