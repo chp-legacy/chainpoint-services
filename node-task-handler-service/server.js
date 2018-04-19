@@ -32,7 +32,7 @@ const events = require('events')
 
 // Set the max number of concurrent workers for the multiworker
 // and adjust defaultMaxListeners to allow for at least that amount
-const MAX_TASK_PROCESSORS = 250
+const MAX_TASK_PROCESSORS = 150
 events.EventEmitter.defaultMaxListeners = events.EventEmitter.defaultMaxListeners + MAX_TASK_PROCESSORS
 
 // TweetNaCl.js
