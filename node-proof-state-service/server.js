@@ -45,9 +45,9 @@ let redis = null
 let taskQueue = null
 
 const CAL_STATE_WRITE_BATCH_SIZE = 200
-const CAL_PROOF_GEN_BATCH_SIZE = 5000
+const CAL_PROOF_GEN_BATCH_SIZE = 2500
 const ANCHOR_BTC_STATE_WRITE_BATCH_SIZE = 200
-const BTC_PROOF_GEN_BATCH_SIZE = 5000
+const BTC_PROOF_GEN_BATCH_SIZE = 2500
 
 /**
 * Writes the state data to persistent storage and logs aggregation event
