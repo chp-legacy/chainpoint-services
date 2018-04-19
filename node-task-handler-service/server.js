@@ -28,6 +28,12 @@ const semver = require('semver')
 const retry = require('async-retry')
 const bluebird = require('bluebird')
 const rp = require('request-promise-native')
+const events = require('events')
+
+// Set the max number of concurrent workers for the multiworker
+// and adjust defaultMaxListeners to allow for at least that amount
+const MAX_TASK_PROCESSORS = 150
+events.EventEmitter.defaultMaxListeners = events.EventEmitter.defaultMaxListeners + MAX_TASK_PROCESSORS
 
 // TweetNaCl.js
 // see: http://ed25519.cr.yp.to
@@ -607,7 +613,7 @@ async function initResqueWorkerAsync () {
     connection: connectionDetails,
     queues: ['task-handler-queue'],
     minTaskProcessors: 10,
-    maxTaskProcessors: 250
+    maxTaskProcessors: MAX_TASK_PROCESSORS
   }
 
   await cleanUpWorkersAndRequequeJobsAsync(connectionDetails)
