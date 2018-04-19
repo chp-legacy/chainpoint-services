@@ -166,12 +166,12 @@ async function consumeProofReadyMessageAsync (msg) {
 
         // create a lookup table for calStateRows by agg_id
         let calStateLookup = calStateRows.reduce((result, calStateRow) => {
-          result[calStateRow.agg_id] = calStateRow.cal_state
+          result[calStateRow.agg_id] = { cal_id: calStateRow.cal_id, state: calStateRow.cal_state }
           return result
         }, {})
         // create a lookup table for anchorBTCAggStateRows by cal_id
         let anchorBTCAggStateLookup = anchorBTCAggStateRows.reduce((result, anchorBTCAggStateRow) => {
-          result[anchorBTCAggStateRow.agg_id] = anchorBTCAggStateRow.cal_state
+          result[anchorBTCAggStateRow.cal_id] = anchorBTCAggStateRow.anchor_btc_agg_state
           return result
         }, {})
 
