@@ -320,7 +320,7 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
   // scoreUpdatesJSON is an array of JSON strings, convert to array of objects
   let scoreUpdateItems = scoreUpdatesJSON.map((item) => { return JSON.parse(item) })
   try {
-    // This should never actiually result in an INSERT operation because the TNT address we intend to update
+    // This should never actually result in an INSERT operation because the TNT address we intend to update
     // was retrieved from the database already in order to generate that update. This should only update
     // existing records. Doing these updates in this manner allows for the efficient batching of update calls.
     // While an INSERT should never happen, the dummy hmac_key used in the operation is sha256(random()::text)
