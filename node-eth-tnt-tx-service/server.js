@@ -225,7 +225,7 @@ server.post({ path: '/transfer/', version: '1.0.0' }, (req, res, next) => {
       trx_id: result
     })
 
-    console.log(`Transfered TNT to ${req.params.to_addr}: ${grains} grains (${grains / 10 ** 8} TNT)`)
+    console.log(`Transfered TNT to ${req.params.to_addr} : ${grains} grains (${grains / 10 ** 8} TNT) : TX ID : ${result}`)
 
     return next()
   })
