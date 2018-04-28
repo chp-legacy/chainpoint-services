@@ -90,7 +90,7 @@ async function getBalanceFromInfuraAsync (tntAddr) {
     },
     json: true,
     gzip: true,
-    timeout: 2000,
+    timeout: 1250,
     resolveWithFullResponse: true
   }
 
@@ -100,7 +100,7 @@ async function getBalanceFromInfuraAsync (tntAddr) {
       let balanceResponse = await rp(options)
       balanceGrains = parseInt(balanceResponse.body.result, 16)
     }, {
-      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
+      retries: 3,    // The maximum amount of times to retry the operation. Default is 10
       factor: 1,       // The exponential factor to use. Default is 2
       minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 400,

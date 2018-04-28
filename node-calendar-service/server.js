@@ -722,6 +722,7 @@ async function sendTNTRewardAsync (ethAddr, tntGrains) {
     },
     json: true,
     gzip: true,
+    timeout: 10000,
     resolveWithFullResponse: true
   }
 
