@@ -874,15 +874,15 @@ async function processRewardMessage (msg) {
     }
 
     try {
+      if (dataId === null) throw new Error('TNT reward failed to send, nodeRewardTxId is null')
       await createRewardBlockAsync(dataId, dataVal)
 
       amqpChannel.ack(msg)
-      debug.reward('consumeRewardMessageAsync : processRewardMessage : acked message w/ address : %s', rewardMsgObj.node.address)
+      debug.reward(`consumeRewardMessageAsync : processRewardMessage : acked message w/ address : ${rewardMsgObj.node.address}`)
     } catch (error) {
       // ack consumption of original message to avoid distribution again
       amqpChannel.ack(msg)
-      console.error('consumeRewardMessageAsync : processRewardMessage : message acked with for address : %s : %s', rewardMsgObj.node.address, error.message)
-      throw new Error(`unable to create reward block : ${error.message}`)
+      throw new Error(`createRewardBlockAsync : unable to create reward block for address : ${rewardMsgObj.node.address} : ${error.message}`)
     }
   } catch (error) {
     console.error(`consumeRewardMessageAsync : processRewardMessage : ${error.message}`)
