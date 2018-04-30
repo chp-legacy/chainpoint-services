@@ -525,7 +525,7 @@ function openRedisConnection (redisURI) {
     debug.general('Redis connection established')
   })
   redis.on('error', async (err) => {
-    console.error(`A redis error has ocurred: ${err}`)
+    console.error(`A redis error has occurred: ${err}`)
     redis.quit()
     redis = null
     cachedAuditChallenge.setRedis(null)

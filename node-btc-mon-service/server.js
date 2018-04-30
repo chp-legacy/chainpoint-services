@@ -154,7 +154,7 @@ function openRedisConnection (redisURI) {
     console.log('Redis connection established')
   })
   redis.on('error', async (err) => {
-    console.error(`A redis error has ocurred: ${err}`)
+    console.error(`A redis error has occurred: ${err}`)
     redis.quit()
     redis = null
     console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
