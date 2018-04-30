@@ -294,7 +294,7 @@ services:
   #
   redis:
     restart: always
-    image: redis:4.0.2-alpine
+    image: redis:4.0.9-alpine
     container_name: redis-core
     ports:
       - "6382:6379"
