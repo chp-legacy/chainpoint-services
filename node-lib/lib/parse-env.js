@@ -76,6 +76,8 @@ let envDefinitions = {
   NIST_KEY: envalid.str({ default: 'service/nist/latest', desc: 'The consul key to write to, watch to receive updated NIST object' }),
   REG_NODES_LIMIT_KEY: envalid.str({ default: 'service/api/nodelimit', desc: 'The consul key to write to, watch to receive updated registered Nodes limit' }),
   AUDIT_CHALLENGE_RECENT_KEY: envalid.str({ default: 'service/audit/mostrecentrediskey', desc: 'Key used for acquiring most recent audit challenge redis key' }),
+  MIN_NODE_VERSION_EXISTING_KEY: envalid.str({ default: 'service/api/minnodeversionexisting', desc: 'Key used for the minimum acceptable Node version for existing registrations and to pass audits' }),
+  MIN_NODE_VERSION_NEW_KEY: envalid.str({ default: 'service/api/minnodeversionnew', desc: 'Key used for the minimum acceptable Node version for new registrations' }),
 
   // RabbitMQ related variables
   RABBITMQ_CONNECT_URI: envalid.url({ default: 'amqp://chainpoint:chainpoint@rabbitmq', desc: 'Connection string w/ credentials for RabbitMQ' }),
@@ -90,8 +92,6 @@ let envDefinitions = {
 
   // Redis related variables
   REDIS_CONNECT_URI: envalid.url({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI' }),
-  MIN_NODE_VERSION_EXISTING: envalid.str({ default: '1.3.7', desc: 'The minimum acceptable Node version for existing registrations and to pass audits' }),
-  MIN_NODE_VERSION_NEW: envalid.str({ default: '1.3.8', desc: 'The minimum acceptable Node version for new registrations' }),
 
   // Service Specific Variables
 

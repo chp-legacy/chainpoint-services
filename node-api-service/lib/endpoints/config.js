@@ -29,6 +29,9 @@ function getCorePublicKeyList () {
   }
 }
 
+// the minimum audit passing Node version for existing registered Nodes, set by consul
+let minNodeVersionExisting = null
+
 // get the first entry in the ETH_TNT_LISTEN_ADDRS CSV to publicize
 let coreEthAddress = env.ETH_TNT_LISTEN_ADDRS.split(',')[0]
 
@@ -53,7 +56,7 @@ async function getConfigInfoV1Async (req, res, next) {
         audit_challenge: mostRecentChallenge || undefined
       },
       core_eth_address: coreEthAddress,
-      node_min_version: env.MIN_NODE_VERSION_EXISTING
+      node_min_version: minNodeVersionExisting
     }
   } catch (error) {
     console.error(`Could not generate config object: ${error.message}`)
@@ -71,5 +74,6 @@ module.exports = {
   setRedis: (r) => { cachedAuditChallenge.setRedis(r) },
   setConsul: (c) => { cachedAuditChallenge.setConsul(c) },
   setMostRecentChallengeKey: (key) => { cachedAuditChallenge.setMostRecentChallengeKey(key) },
-  getAuditChallengeSequelize: () => { return cachedAuditChallenge.getAuditChallengeSequelize() }
+  getAuditChallengeSequelize: () => { return cachedAuditChallenge.getAuditChallengeSequelize() },
+  setMinNodeVersionExisting: (v) => { minNodeVersionExisting = v }
 }
