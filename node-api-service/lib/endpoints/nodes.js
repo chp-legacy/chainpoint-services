@@ -33,10 +33,6 @@ let registeredNodeSequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
 let Op = registeredNodeSequelize.Op
 
-// The redis connection used for all redis communication
-// This value is set once the connection has been established
-let redis = null
-
 // The maximum  number of registered Nodes allowed
 // This value is updated from consul events as changes are detected
 let regNodesLimit = 0
@@ -52,12 +48,6 @@ let minNodeVersionExisting = null
 
 // the minimum audit passing Node version for newly registering Nodes, set by consul
 let minNodeVersionNew = null
-
-// Redis keys for registration metrics
-const POST_NODES_METR_PREFIX = 'RegMetrics:Post:Metr'
-const POST_NODES_NOMETR_PREFIX = 'RegMetrics:Post:NoMetr'
-const NODE_REG_METR_PREFIX = 'RegMetrics:Reg:Metr'
-const NODE_REG_NOMETR_PREFIX = 'RegMetrics:Reg:NoMetr'
 
 // validate eth address is well formed
 let isEthereumAddr = (address) => {
@@ -113,16 +103,6 @@ async function getNodesBlacklistV1Async (req, res, next) {
  * Create a new registered Node
  */
 async function postNodeV1Async (req, res, next) {
-  try {
-    if (req.headers && req.headers['x-node-metr']) {
-      await redis.incrAsync(POST_NODES_METR_PREFIX)
-    } else {
-      await redis.incrAsync(POST_NODES_NOMETR_PREFIX)
-    }
-  } catch (error) {
-    console.error(`Unable to record post nodes metric: ${error.message}`)
-  }
-
   if (req.contentType() !== 'application/json') {
     return next(new restify.InvalidArgumentError('invalid content type'))
   }
@@ -239,16 +219,6 @@ async function postNodeV1Async (req, res, next) {
   } catch (error) {
     console.error(`Could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}: ${error.message}`)
     return next(new restify.InternalServerError(`could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}`))
-  }
-
-  try {
-    if (req.headers && req.headers['x-node-metr']) {
-      await redis.incrAsync(NODE_REG_METR_PREFIX)
-    } else {
-      await redis.incrAsync(NODE_REG_NOMETR_PREFIX)
-    }
-  } catch (error) {
-    console.error(`Unable to record node reg metric: ${error.message}`)
   }
 
   res.send({
@@ -444,7 +414,6 @@ module.exports = {
   setRegNodesLimit: (val) => { updateRegNodesLimit(val) },
   setLimitDirect: (val) => { regNodesLimit = val },
   overrideGetTNTGrainsBalanceForAddressAsync: (func) => { getTNTGrainsBalanceForAddressAsync = func },
-  setRedis: (redisClient) => { redis = redisClient },
   setMinNodeVersionExisting: (v) => { minNodeVersionExisting = v },
   setMinNodeVersionNew: (v) => { minNodeVersionNew = v }
 }

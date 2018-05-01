@@ -32,6 +32,7 @@ const root = require('./lib/endpoints/root.js')
 const r = require('redis')
 const bluebird = require('bluebird')
 const cnsl = require('consul')
+const { URL } = require('url')
 
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
@@ -193,19 +194,27 @@ async function openRMQConnectionAsync (connectionString) {
  */
 function openRedisConnection (redisURI) {
   redis = r.createClient(redisURI)
+
+  // If a password is provided in the redis:// URL use it
+  let parsedRedisURL = new URL(redisURI)
+  if (parsedRedisURL.password !== '') {
+    redis.auth(parsedRedisURL.password, (err) => {
+      if (err) throw err
+    })
+  }
+
   redis.on('ready', () => {
     bluebird.promisifyAll(redis)
     hashes.setRedis(redis)
-    nodes.setRedis(redis)
     config.setRedis(redis)
     console.log('Redis connection established')
   })
+
   redis.on('error', async (err) => {
     console.error(`A redis error has occurred: ${err}`)
     redis.quit()
     redis = null
     hashes.setRedis(null)
-    nodes.setRedis(null)
     config.setRedis(null)
     console.error('Cannot establish Redis connection. Retrying...')
     await utils.sleep(5000)
@@ -379,7 +388,6 @@ module.exports = {
     redis = redisClient
     proofs.setRedis(redis)
     hashes.setRedis(redis)
-    nodes.setRedis(redis)
   },
   setAMQPChannel: (chan) => {
     hashes.setAMQPChannel(chan)
