@@ -72,17 +72,40 @@ async function auditNodesAsync () {
   // get list of all Registered Nodes to audit
   let nodesReadyForAudit = []
   try {
-    nodesReadyForAudit = await RegisteredNode.findAll({ where: { publicUri: { [Op.ne]: null } }, attributes: ['tntAddr', 'publicUri', 'tntCredit'] })
+    let sqlQuery = `SELECT rn.tnt_addr, rn.public_uri, rn.tnt_credit, rn.pass_count, rn.fail_count, rn.consecutive_passes, 
+                   rn.consecutive_fails, rn.created_at, rn.updated_at, al.audit_at, al.public_ip_pass, al.public_uri AS audit_uri, 
+                   al.node_ms_delta, al.time_pass, al.cal_state_pass, al.min_credits_pass, al.node_version, 
+                   al.node_version_pass, al.tnt_balance_grains, al.tnt_balance_pass
+                   FROM chainpoint_registered_nodes rn
+                   INNER JOIN (
+                     SELECT DISTINCT ON (al2.tnt_addr) al2.tnt_addr, al2.audit_at, al2.public_ip_pass, al2.public_uri, 
+                     al2.node_ms_delta, al2.time_pass, al2.cal_state_pass, al2.min_credits_pass, al2.node_version, 
+                     al2.node_version_pass, al2.tnt_balance_grains, al2.tnt_balance_pass
+                     FROM chainpoint_node_audit_log AS al2
+                     ORDER BY al2.tnt_addr, al2.audit_at DESC
+                   ) AS al
+                   ON rn.tnt_addr = al.tnt_addr
+                   WHERE rn.public_uri IS NOT NULL`
+    nodesReadyForAudit = await regNodeSequelize.query(sqlQuery, { type: regNodeSequelize.QueryTypes.SELECT })
     console.log(`${nodesReadyForAudit.length} public Nodes ready for audit were found`)
   } catch (error) {
-    let message = `Could not retrieve public Node list : ${error.message}`
+    let message = `Could not retrieve public Node data : ${error.message}`
     throw new Error(message)
   }
+
+  // get the total active node count, needed to deliver to Nodes during audit process
+  let activeNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 } } })
 
   // iterate through each Registered Node, queue up an audit task for task handler
   for (let x = 0; x < nodesReadyForAudit.length; x++) {
     try {
-      await taskQueue.enqueue('task-handler-queue', `audit_node`, [nodesReadyForAudit[x].tntAddr, nodesReadyForAudit[x].publicUri, nodesReadyForAudit[x].tntCredit])
+      await taskQueue.enqueue(
+        'task-handler-queue',
+        `audit_node`,
+        [
+          nodesReadyForAudit[x],
+          activeNodeCount
+        ])
     } catch (error) {
       console.error(`Could not enqueue audit_node task : ${error.message}`)
     }
