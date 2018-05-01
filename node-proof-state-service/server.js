@@ -471,13 +471,23 @@ async function openStorageConnectionAsync () {
  */
 function openRedisConnection (redisURI) {
   redis = r.createClient(redisURI)
+
+  // If a password is provided in the redis:// URL use it
+  let parsedRedisURL = new URL(redisURI)
+  if (parsedRedisURL.password !== '') {
+    redis.auth(parsedRedisURL.password, (err) => {
+      if (err) throw err
+    })
+  }
+
   redis.on('ready', () => {
     bluebird.promisifyAll(redis)
     cachedProofState.setRedis(redis)
     console.log('Redis connection established')
   })
+
   redis.on('error', async (err) => {
-    console.error(`A redis error has ocurred: ${err}`)
+    console.error(`A redis error has occurred: ${err}`)
     redis.quit()
     redis = null
     cachedProofState.setRedis(null)

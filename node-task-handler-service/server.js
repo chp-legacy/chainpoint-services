@@ -29,6 +29,9 @@ const retry = require('async-retry')
 const bluebird = require('bluebird')
 const rp = require('request-promise-native')
 const events = require('events')
+const cnsl = require('consul')
+const objectHash = require('object-hash')
+const crypto = require('crypto')
 
 // Set the max number of concurrent workers for the multiworker
 // and adjust defaultMaxListeners to allow for at least that amount
@@ -40,6 +43,12 @@ events.EventEmitter.defaultMaxListeners = events.EventEmitter.defaultMaxListener
 // see: https://github.com/dchest/tweetnacl-js#signatures
 const nacl = require('tweetnacl')
 nacl.util = require('tweetnacl-util')
+
+// Pass SIGNING_SECRET_KEY as Base64 encoded bytes
+const signingSecretKeyBytes = nacl.util.decodeBase64(env.SIGNING_SECRET_KEY)
+const signingKeypair = nacl.sign.keyPair.fromSecretKey(signingSecretKeyBytes)
+
+let consul = null
 
 // The age of a running job, in miliseconds, for it to be considered stuck/timed out
 // This is neccesary to allow resque to determine what is a valid running job, and what
@@ -54,6 +63,9 @@ var debug = {
 }
 // direct debug to output over STDOUT
 debugPkg.log = console.info.bind(console)
+
+// the minimum audit passing Node version for existing registered Nodes, set by consul
+let minNodeVersionExisting = null
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
@@ -165,7 +177,11 @@ async function pruneBTCHeadStatesByIdsAsync (ids) {
 // tasks from the audit producer service
 // ******************************************************
 
-async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
+async function performAuditAsync (nodeData, activeNodeCount) {
+  let tntAddr = nodeData.tnt_addr
+  let publicUri = nodeData.public_uri
+  let currentCreditBalance = nodeData.tnt_credit
+
   let publicIPPass = false
   let nodeMSDelta = null
   let timePass = false
@@ -192,11 +208,15 @@ async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
     return `performAuditAsync : no publicUri defined for address ${tntAddr}`
   }
 
+  // build the data object containing Node data and last audit data to be sent to
+  // the Node in the process of executing an audit on that Node
+  let nodeDataPackage = buildNodeDataPackage(nodeData, activeNodeCount)
+
   let configResultsBody
   let configResultTime
   try {
     await retry(async bail => {
-      configResultsBody = await getNodeConfigObjectAsync(publicUri)
+      configResultsBody = await getNodeConfigObjectAsync(publicUri, nodeDataPackage)
       configResultTime = Date.now()
     }, {
       retries: 3,    // The maximum amount of times to retry the operation. Default is 10
@@ -276,7 +296,7 @@ async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
   // check if the Node version is acceptable, catch error if version value is invalid
   nodeVersion = configResultsBody.version
   try {
-    nodeVersionPass = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION_EXISTING}`)
+    nodeVersionPass = semver.satisfies(nodeVersion, `>=${minNodeVersionExisting}`)
   } catch (error) {
     nodeVersionPass = false
   }
@@ -320,7 +340,7 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
   // scoreUpdatesJSON is an array of JSON strings, convert to array of objects
   let scoreUpdateItems = scoreUpdatesJSON.map((item) => { return JSON.parse(item) })
   try {
-    // This should never actiually result in an INSERT operation because the TNT address we intend to update
+    // This should never actually result in an INSERT operation because the TNT address we intend to update
     // was retrieved from the database already in order to generate that update. This should only update
     // existing records. Doing these updates in this manner allows for the efficient batching of update calls.
     // While an INSERT should never happen, the dummy hmac_key used in the operation is sha256(random()::text)
@@ -384,11 +404,76 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
 // support functions for all tasks
 // ****************************************************
 
-async function getNodeConfigObjectAsync (publicUri) {
+function buildNodeDataPackage (nodeData, activeNodeCount) {
+  let auditPassed = nodeData.public_ip_pass &&
+    nodeData.time_pass &&
+    nodeData.cal_state_pass &&
+    nodeData.min_credits_pass &&
+    nodeData.node_version_pass &&
+    nodeData.tnt_balance_pass
+
+  let auditAt = isNaN(parseInt(nodeData.audit_at)) ? null : parseInt(nodeData.audit_at)
+  let nodeMSDelta = isNaN(parseInt(nodeData.node_ms_delta)) ? null : parseInt(nodeData.node_ms_delta)
+  let tntBalanceGrains = isNaN(parseInt(nodeData.tnt_balance_grains)) ? null : parseInt(nodeData.tnt_balance_grains)
+  let passCount = isNaN(parseInt(nodeData.pass_count)) ? null : parseInt(nodeData.pass_count)
+  let failCount = isNaN(parseInt(nodeData.fail_count)) ? null : parseInt(nodeData.fail_count)
+  let consecutivePassCount = isNaN(parseInt(nodeData.consecutive_passes)) ? null : parseInt(nodeData.consecutive_passes)
+  let consecutiveFailCount = isNaN(parseInt(nodeData.consecutive_fails)) ? null : parseInt(nodeData.consecutive_fails)
+  let createdAt = isNaN(Date.parse(nodeData.created_at)) ? null : Date.parse(nodeData.created_at)
+  let updatedAt = isNaN(Date.parse(nodeData.updated_at)) ? null : Date.parse(nodeData.updated_at)
+
+  let result =
+    {
+      data: {
+        audits: [{
+          audit_at: auditAt,
+          audit_passed: auditPassed,
+          public_ip_pass: nodeData.public_ip_pass,
+          public_uri: nodeData.audit_uri,
+          node_ms_delta: nodeMSDelta,
+          time_pass: nodeData.time_pass,
+          cal_state_pass: nodeData.cal_state_pass,
+          min_credits_pass: nodeData.min_credits_pass,
+          node_version: nodeData.node_version,
+          node_version_pass: nodeData.node_version_pass,
+          tnt_balance_grains: tntBalanceGrains,
+          tnt_balance_pass: nodeData.tnt_balance_pass
+        }],
+        core: {
+          total_active_nodes: activeNodeCount
+        },
+        node: {
+          tnt_addr: nodeData.tnt_addr,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          pass_count: passCount,
+          fail_count: failCount,
+          consecutive_passes: consecutivePassCount,
+          consecutive_fails: consecutiveFailCount
+        }
+      }
+    }
+
+  let dataHashHex = objectHash(result.data)
+  let signingPubKeyHashHex = crypto.createHash('sha256').update(signingKeypair.publicKey).digest('hex')
+
+  result.sig = [signingPubKeyHashHex.slice(0, 12), calcSigB64(dataHashHex)].join(':')
+
+  return result
+}
+
+// Calculate a base64 encoded signature over the provided hex string
+function calcSigB64 (hexData) {
+  return nacl.util.encodeBase64(nacl.sign.detached(nacl.util.decodeUTF8(hexData), signingKeypair.secretKey))
+}
+
+async function getNodeConfigObjectAsync (publicUri, nodeDataPackage) {
   // perform the /config checks for the Node
   let nodeResponse
+  let dataStr = JSON.stringify(nodeDataPackage)
+  let dataB64 = Buffer.from(dataStr, 'utf8').toString('base64')
   let options = {
-    headers: {},
+    headers: { 'data': dataB64 },
     method: 'GET',
     uri: `${publicUri}/config`,
     json: true,
@@ -519,13 +604,23 @@ async function openStorageConnectionAsync () {
  */
 function openRedisConnection (redisURI) {
   redis = r.createClient(redisURI)
+
+  // If a password is provided in the redis:// URL use it
+  let parsedRedisURL = new URL(redisURI)
+  if (parsedRedisURL.password !== '') {
+    redis.auth(parsedRedisURL.password, (err) => {
+      if (err) throw err
+    })
+  }
+
   redis.on('ready', async () => {
     bluebird.promisifyAll(redis)
     cachedAuditChallenge.setRedis(redis)
     debug.general('Redis connection established')
   })
+
   redis.on('error', async (err) => {
-    console.error(`A redis error has ocurred: ${err}`)
+    console.error(`A redis error has occurred: ${err}`)
     redis.quit()
     redis = null
     cachedAuditChallenge.setRedis(null)
@@ -642,9 +737,32 @@ async function initResqueWorkerAsync () {
   debug.general('Resque worker connection established')
 }
 
+// This initalizes all the consul watches
+function startWatches () {
+  console.log('starting watches')
+
+  // Continuous watch on the consul key holding the regNodesLimit count.
+  var minNodeVersionExistingWatch = consul.watch({ method: consul.kv.get, options: { key: env.MIN_NODE_VERSION_EXISTING_KEY } })
+
+  // Store the updated regNodesLimit count on change
+  minNodeVersionExistingWatch.on('change', function (data, res) {
+    // process only if a value has been returned
+    if (data && data.Value) {
+      minNodeVersionExisting = data.Value
+    }
+  })
+
+  minNodeVersionExistingWatch.on('error', function (err) {
+    console.error('minNodeVersionExistingWatch error: ', err)
+  })
+}
+
 // process all steps need to start the application
 async function start () {
   try {
+    // init consul
+    consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
+    console.log('Consul connection established')
     // init DB
     await openStorageConnectionAsync()
     // init Redis
@@ -653,6 +771,8 @@ async function start () {
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // init Resque worker
     await initResqueWorkerAsync()
+    // init watches
+    startWatches()
     debug.general('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)

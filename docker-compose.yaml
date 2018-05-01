@@ -294,7 +294,7 @@ services:
   #
   redis:
     restart: always
-    image: redis:4.0.2-alpine
+    image: redis:4.0.9-alpine
     container_name: redis-core
     ports:
       - "6382:6379"
@@ -333,7 +333,7 @@ services:
   #
   roach1:
     restart: always
-    image: cockroachdb/cockroach:v2.0.0
+    image: cockroachdb/cockroach:v2.0.1
     container_name: roach1-core
     ports:
       - "26257:26257"
@@ -474,6 +474,7 @@ services:
       - chainpoint
     environment:
       NODE_ENV: development
+      SIGNING_SECRET_KEY: ${SIGNING_SECRET_KEY}
       DEBUG: "task-handler:*"
       DEBUG_HIDE_DATE: "false"
       # DEBUG_COLORS: "true"

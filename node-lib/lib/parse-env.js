@@ -76,6 +76,8 @@ let envDefinitions = {
   NIST_KEY: envalid.str({ default: 'service/nist/latest', desc: 'The consul key to write to, watch to receive updated NIST object' }),
   REG_NODES_LIMIT_KEY: envalid.str({ default: 'service/api/nodelimit', desc: 'The consul key to write to, watch to receive updated registered Nodes limit' }),
   AUDIT_CHALLENGE_RECENT_KEY: envalid.str({ default: 'service/audit/mostrecentrediskey', desc: 'Key used for acquiring most recent audit challenge redis key' }),
+  MIN_NODE_VERSION_EXISTING_KEY: envalid.str({ default: 'service/api/minnodeversionexisting', desc: 'Key used for the minimum acceptable Node version for existing registrations and to pass audits' }),
+  MIN_NODE_VERSION_NEW_KEY: envalid.str({ default: 'service/api/minnodeversionnew', desc: 'Key used for the minimum acceptable Node version for new registrations' }),
 
   // RabbitMQ related variables
   RABBITMQ_CONNECT_URI: envalid.url({ default: 'amqp://chainpoint:chainpoint@rabbitmq', desc: 'Connection string w/ credentials for RabbitMQ' }),
@@ -90,8 +92,6 @@ let envDefinitions = {
 
   // Redis related variables
   REDIS_CONNECT_URI: envalid.url({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI' }),
-  MIN_NODE_VERSION_EXISTING: envalid.str({ default: '1.3.7', desc: 'The minimum acceptable Node version for existing registrations and to pass audits' }),
-  MIN_NODE_VERSION_NEW: envalid.str({ default: '1.3.8', desc: 'The minimum acceptable Node version for new registrations' }),
 
   // Service Specific Variables
 
@@ -195,6 +195,9 @@ module.exports = (service) => {
     case 'eth-tnt-listener':
       envDefinitions.ETH_TNT_LISTEN_ADDRS = validateETHAddressesCSV({ desc: 'The addresses used to listen for incoming TNT transfers.  If more that one, separate by commas.' })
       envDefinitions.ETH_TNT_TOKEN_ADDR = validateETHAddress({ desc: 'The address where the contract is on the blockchain.' })
+      break
+    case 'task-handler':
+      envDefinitions.SIGNING_SECRET_KEY = envalid.str({ desc: 'A Base64 encoded NaCl secret signing key' })
       break
     case 'tnt-reward':
       envDefinitions.CHAINPOINT_CORE_BASE_URI = envalid.url({ desc: 'Base URI for this Chainpoint Core stack of services' })

@@ -33,10 +33,6 @@ let registeredNodeSequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
 let Op = registeredNodeSequelize.Op
 
-// The redis connection used for all redis communication
-// This value is set once the connection has been established
-let redis = null
-
 // The maximum  number of registered Nodes allowed
 // This value is updated from consul events as changes are detected
 let regNodesLimit = 0
@@ -47,11 +43,11 @@ const RANDOM_NODES_RESULT_LIMIT = 25
 // The minimium TNT grains required to operate a Node
 const minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
 
-// Redis keys for registration metrics
-const POST_NODES_METR_PREFIX = 'RegMetrics:Post:Metr'
-const POST_NODES_NOMETR_PREFIX = 'RegMetrics:Post:NoMetr'
-const NODE_REG_METR_PREFIX = 'RegMetrics:Reg:Metr'
-const NODE_REG_NOMETR_PREFIX = 'RegMetrics:Reg:NoMetr'
+// the minimum audit passing Node version for existing registered Nodes, set by consul
+let minNodeVersionExisting = null
+
+// the minimum audit passing Node version for newly registering Nodes, set by consul
+let minNodeVersionNew = null
 
 // validate eth address is well formed
 let isEthereumAddr = (address) => {
@@ -107,16 +103,6 @@ async function getNodesBlacklistV1Async (req, res, next) {
  * Create a new registered Node
  */
 async function postNodeV1Async (req, res, next) {
-  try {
-    if (req.headers && req.headers['x-node-metr']) {
-      await redis.incrAsync(POST_NODES_METR_PREFIX)
-    } else {
-      await redis.incrAsync(POST_NODES_NOMETR_PREFIX)
-    }
-  } catch (error) {
-    console.error(`Unable to record post nodes metric: ${error.message}`)
-  }
-
   if (req.contentType() !== 'application/json') {
     return next(new restify.InvalidArgumentError('invalid content type'))
   }
@@ -125,13 +111,13 @@ async function postNodeV1Async (req, res, next) {
   if (req.headers && req.headers['x-node-version']) {
     let nodeVersion = req.headers['x-node-version']
     try {
-      minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION_NEW}`)
+      minNodeVersionOK = semver.satisfies(nodeVersion, `>=${minNodeVersionNew}`)
     } catch (error) {
-      return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION_NEW} or greater required`))
+      return next(new restify.UpgradeRequiredError(`Node version ${minNodeVersionNew} or greater required`))
     }
   }
   if (!minNodeVersionOK) {
-    return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION_NEW} or greater required`))
+    return next(new restify.UpgradeRequiredError(`Node version ${minNodeVersionNew} or greater required`))
   }
 
   if (!req.params.hasOwnProperty('tnt_addr')) {
@@ -235,16 +221,6 @@ async function postNodeV1Async (req, res, next) {
     return next(new restify.InternalServerError(`could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}`))
   }
 
-  try {
-    if (req.headers && req.headers['x-node-metr']) {
-      await redis.incrAsync(NODE_REG_METR_PREFIX)
-    } else {
-      await redis.incrAsync(NODE_REG_NOMETR_PREFIX)
-    }
-  } catch (error) {
-    console.error(`Unable to record node reg metric: ${error.message}`)
-  }
-
   res.send({
     tnt_addr: newNode.tntAddr,
     public_uri: newNode.publicUri,
@@ -267,13 +243,13 @@ async function putNodeV1Async (req, res, next) {
   if (req.headers && req.headers['x-node-version']) {
     let nodeVersion = req.headers['x-node-version']
     try {
-      minNodeVersionOK = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION_EXISTING}`)
+      minNodeVersionOK = semver.satisfies(nodeVersion, `>=${minNodeVersionExisting}`)
     } catch (error) {
-      return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION_EXISTING} or greater required`))
+      return next(new restify.UpgradeRequiredError(`Node version ${minNodeVersionExisting} or greater required`))
     }
   }
   if (!minNodeVersionOK) {
-    return next(new restify.UpgradeRequiredError(`Node version ${env.MIN_NODE_VERSION_EXISTING} or greater required`))
+    return next(new restify.UpgradeRequiredError(`Node version ${minNodeVersionExisting} or greater required`))
   }
 
   if (!req.params.hasOwnProperty('tnt_addr')) {
@@ -438,5 +414,6 @@ module.exports = {
   setRegNodesLimit: (val) => { updateRegNodesLimit(val) },
   setLimitDirect: (val) => { regNodesLimit = val },
   overrideGetTNTGrainsBalanceForAddressAsync: (func) => { getTNTGrainsBalanceForAddressAsync = func },
-  setRedis: (redisClient) => { redis = redisClient }
+  setMinNodeVersionExisting: (v) => { minNodeVersionExisting = v },
+  setMinNodeVersionNew: (v) => { minNodeVersionNew = v }
 }
