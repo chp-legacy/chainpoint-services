@@ -29,6 +29,7 @@ const retry = require('async-retry')
 const bluebird = require('bluebird')
 const rp = require('request-promise-native')
 const events = require('events')
+const cnsl = require('consul')
 
 // Set the max number of concurrent workers for the multiworker
 // and adjust defaultMaxListeners to allow for at least that amount
@@ -40,6 +41,8 @@ events.EventEmitter.defaultMaxListeners = events.EventEmitter.defaultMaxListener
 // see: https://github.com/dchest/tweetnacl-js#signatures
 const nacl = require('tweetnacl')
 nacl.util = require('tweetnacl-util')
+
+let consul = null
 
 // The age of a running job, in miliseconds, for it to be considered stuck/timed out
 // This is neccesary to allow resque to determine what is a valid running job, and what
@@ -54,6 +57,9 @@ var debug = {
 }
 // direct debug to output over STDOUT
 debugPkg.log = console.info.bind(console)
+
+// the minimum audit passing Node version for existing registered Nodes, set by consul
+let minNodeVersionExisting = null
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
@@ -276,7 +282,7 @@ async function performAuditAsync (tntAddr, publicUri, currentCreditBalance) {
   // check if the Node version is acceptable, catch error if version value is invalid
   nodeVersion = configResultsBody.version
   try {
-    nodeVersionPass = semver.satisfies(nodeVersion, `>=${env.MIN_NODE_VERSION_EXISTING}`)
+    nodeVersionPass = semver.satisfies(nodeVersion, `>=${minNodeVersionExisting}`)
   } catch (error) {
     nodeVersionPass = false
   }
@@ -642,9 +648,32 @@ async function initResqueWorkerAsync () {
   debug.general('Resque worker connection established')
 }
 
+// This initalizes all the consul watches
+function startWatches () {
+  console.log('starting watches')
+
+  // Continuous watch on the consul key holding the regNodesLimit count.
+  var minNodeVersionExistingWatch = consul.watch({ method: consul.kv.get, options: { key: env.MIN_NODE_VERSION_EXISTING_KEY } })
+
+  // Store the updated regNodesLimit count on change
+  minNodeVersionExistingWatch.on('change', function (data, res) {
+    // process only if a value has been returned
+    if (data && data.Value) {
+      minNodeVersionExisting = data.Value
+    }
+  })
+
+  minNodeVersionExistingWatch.on('error', function (err) {
+    console.error('minNodeVersionExistingWatch error: ', err)
+  })
+}
+
 // process all steps need to start the application
 async function start () {
   try {
+    // init consul
+    consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
+    console.log('Consul connection established')
     // init DB
     await openStorageConnectionAsync()
     // init Redis
@@ -653,6 +682,8 @@ async function start () {
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // init Resque worker
     await initResqueWorkerAsync()
+    // init watches
+    startWatches()
     debug.general('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)
