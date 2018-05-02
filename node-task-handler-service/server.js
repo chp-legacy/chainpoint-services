@@ -704,6 +704,11 @@ async function initResqueWorkerAsync () {
     port: redisURI.port,
     namespace: 'resque'
   }
+
+  if (redisURI.password !== '') {
+    connectionDetails.password = redisURI.password
+  }
+
   var multiWorkerConfig = {
     connection: connectionDetails,
     queues: ['task-handler-queue'],
