@@ -18,20 +18,16 @@
 const env = require('./lib/parse-env.js')('task-handler')
 
 const amqp = require('amqplib')
-const r = require('redis')
-const nodeResque = require('node-resque')
 const utils = require('./lib/utils.js')
-const exitHook = require('exit-hook')
-const { URL } = require('url')
 const debugPkg = require('debug')
 const semver = require('semver')
 const retry = require('async-retry')
-const bluebird = require('bluebird')
 const rp = require('request-promise-native')
 const events = require('events')
 const cnsl = require('consul')
 const objectHash = require('object-hash')
 const crypto = require('crypto')
+const connections = require('./lib/connections.js')
 
 // Set the max number of concurrent workers for the multiworker
 // and adjust defaultMaxListeners to allow for at least that amount
@@ -608,34 +604,18 @@ async function openStorageConnectionAsync () {
 /**
  * Opens a Redis connection
  *
- * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
 function openRedisConnection (redisURI) {
-  redis = r.createClient(redisURI)
-
-  // If a password is provided in the redis:// URL use it
-  let parsedRedisURL = new URL(redisURI)
-  if (parsedRedisURL.password !== '') {
-    redis.auth(parsedRedisURL.password, (err) => {
-      if (err) throw err
+  connections.openRedisConnection(redisURI,
+    (newRedis) => {
+      redis = newRedis
+      cachedAuditChallenge.setRedis(redis)
+    }, () => {
+      redis = null
+      cachedAuditChallenge.setRedis(null)
+      setTimeout(() => { openRedisConnection(redisURI) }, 5000)
     })
-  }
-
-  redis.on('ready', async () => {
-    bluebird.promisifyAll(redis)
-    cachedAuditChallenge.setRedis(redis)
-    debug.general('Redis connection established')
-  })
-
-  redis.on('error', async (err) => {
-    console.error(`A redis error has occurred: ${err}`)
-    redis.quit()
-    redis = null
-    cachedAuditChallenge.setRedis(null)
-    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
-    await utils.sleep(5000)
-    openRedisConnection(redisURI)
-  })
 }
 
 /**
@@ -672,82 +652,36 @@ async function openRMQConnectionAsync (connectionString) {
   }
 }
 
-async function cleanUpWorkersAndRequequeJobsAsync (connectionDetails) {
-  const queue = new nodeResque.Queue({ connection: connectionDetails })
-  await queue.connect()
-  // Delete stuck workers and move their stuck job to the failed queue
-  await queue.cleanOldWorkers(TASK_TIMEOUT_MS)
-  // Get the count of jobs in the failed queue
-  let failedCount = await queue.failedCount()
-  // Retrieve failed jobs in batches of 100
-  // First, determine the batch ranges to retrieve
-  let batchSize = 100
-  let failedBatches = []
-  for (let x = 0; x < failedCount; x += batchSize) {
-    failedBatches.push({ start: x, end: x + batchSize - 1 })
-  }
-  // Retrieve the failed jobs for each batch and collect in 'failedJobs' array
-  let failedJobs = []
-  for (let x = 0; x < failedBatches.length; x++) {
-    let failedJobSet = await queue.failed(failedBatches[x].start, failedBatches[x].end)
-    failedJobs = failedJobs.concat(failedJobSet)
-  }
-  // For each job, remove the job from the failed queue and requeue to its original queue
-  for (let x = 0; x < failedJobs.length; x++) {
-    debug.worker(`Requeuing job: ${failedJobs[x].payload.queue} : ${failedJobs[x].payload.class} : ${failedJobs[x].error}`)
-    await queue.retryAndRemoveFailed(failedJobs[x])
-  }
-}
-
-async function initResqueWorkerAsync () {
+async function initResqueWorkerAsync (redisURI) {
   let redisReady = (redis !== null)
   while (!redisReady) {
     await utils.sleep(100)
     redisReady = (redis !== null)
   }
-
-  const redisURI = new URL(env.REDIS_CONNECT_URI)
-  const connectionDetails = {
-    host: redisURI.hostname,
-    port: redisURI.port,
-    namespace: 'resque'
-  }
-
-  if (redisURI.password !== '') {
-    connectionDetails.password = redisURI.password
-  }
-
-  var multiWorkerConfig = {
-    connection: connectionDetails,
-    queues: ['task-handler-queue'],
-    minTaskProcessors: 10,
-    maxTaskProcessors: MAX_TASK_PROCESSORS
-  }
-
-  await cleanUpWorkersAndRequequeJobsAsync(connectionDetails)
-
-  const multiWorker = new nodeResque.MultiWorker(multiWorkerConfig, jobs)
-
-  multiWorker.on('start', (workerId) => { debug.worker(`worker[${workerId}] : started`) })
-  multiWorker.on('end', (workerId) => { debug.worker(`worker[${workerId}] : ended`) })
-  multiWorker.on('cleaning_worker', (workerId, worker, pid) => { debug.worker(`worker[${workerId}] : cleaning old worker : ${worker}`) })
-  // multiWorker.on('poll', (workerId, queue) => { debug.worker(`worker[${workerId}] : polling : ${queue}`) })
-  // multiWorker.on('job', (workerId, queue, job) => { debug.worker(`worker[${workerId}] : working job : ${queue} : ${JSON.stringify(job)}`) })
-  multiWorker.on('reEnqueue', (workerId, queue, job, plugin) => { debug.worker(`worker[${workerId}] : re-enqueuing job : ${queue} : ${JSON.stringify(job)}`) })
-  multiWorker.on('success', (workerId, queue, job, result) => { debug.worker(`worker[${workerId}] : success : ${queue} : ${result}`) })
-  multiWorker.on('failure', (workerId, queue, job, failure) => { console.error(`worker[${workerId}] : failure : ${queue} : ${failure}`) })
-  multiWorker.on('error', (workerId, queue, job, error) => { console.error(`worker[${workerId}] : error : ${queue} : ${error}`) })
-  // multiWorker.on('pause', (workerId) => { debug.worker(`worker[${workerId}] : paused`) })
-  multiWorker.on('internalError', (error) => { console.error(`multiWorker : intneral error : ${error}`) })
-  // multiWorker.on('multiWorkerAction', (verb, delay) => { debug.multiworker(`*** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
-
-  multiWorker.start()
-
-  exitHook(async () => {
-    await multiWorker.end()
-  })
-
-  debug.general('Resque worker connection established')
+  await connections.initResqueWorkerAsync(
+    redisURI,
+    'resque',
+    ['task-handler-queue'],
+    10,
+    MAX_TASK_PROCESSORS,
+    TASK_TIMEOUT_MS,
+    jobs,
+    (multiWorker) => {
+      multiWorker.on('start', (workerId) => { debug.worker(`worker[${workerId}] : started`) })
+      multiWorker.on('end', (workerId) => { debug.worker(`worker[${workerId}] : ended`) })
+      multiWorker.on('cleaning_worker', (workerId, worker, pid) => { debug.worker(`worker[${workerId}] : cleaning old worker : ${worker}`) })
+      // multiWorker.on('poll', (workerId, queue) => { debug.worker(`worker[${workerId}] : polling : ${queue}`) })
+      // multiWorker.on('job', (workerId, queue, job) => { debug.worker(`worker[${workerId}] : working job : ${queue} : ${JSON.stringify(job)}`) })
+      multiWorker.on('reEnqueue', (workerId, queue, job, plugin) => { debug.worker(`worker[${workerId}] : re-enqueuing job : ${queue} : ${JSON.stringify(job)}`) })
+      multiWorker.on('success', (workerId, queue, job, result) => { debug.worker(`worker[${workerId}] : success : ${queue} : ${result}`) })
+      multiWorker.on('failure', (workerId, queue, job, failure) => { console.error(`worker[${workerId}] : failure : ${queue} : ${failure}`) })
+      multiWorker.on('error', (workerId, queue, job, error) => { console.error(`worker[${workerId}] : error : ${queue} : ${error}`) })
+      // multiWorker.on('pause', (workerId) => { debug.worker(`worker[${workerId}] : paused`) })
+      multiWorker.on('internalError', (error) => { console.error(`multiWorker : intneral error : ${error}`) })
+      // multiWorker.on('multiWorkerAction', (verb, delay) => { debug.multiworker(`*** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
+    },
+    debug
+  )
 }
 
 // This initalizes all the consul watches
@@ -783,7 +717,7 @@ async function start () {
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // init Resque worker
-    await initResqueWorkerAsync()
+    await initResqueWorkerAsync(env.REDIS_CONNECT_URI)
     // init watches
     startWatches()
     debug.general('startup completed successfully')

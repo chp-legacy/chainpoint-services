@@ -22,15 +22,9 @@ const chainpointProofSchema = require('chainpoint-proof-json-schema')
 const uuidTime = require('uuid-time')
 const chpBinary = require('chainpoint-binary')
 const utils = require('./lib/utils.js')
-const bluebird = require('bluebird')
-const nodeResque = require('node-resque')
-const exitHook = require('exit-hook')
-const { URL } = require('url')
+const connections = require('./lib/connections.js')
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
-
-const r = require('redis')
-bluebird.promisifyAll(r.Multi.prototype)
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -233,34 +227,18 @@ async function storeProofsAsync (proofs) {
 /**
  * Opens a Redis connection
  *
- * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
 function openRedisConnection (redisURI) {
-  redis = r.createClient(redisURI)
-
-  // If a password is provided in the redis:// URL use it
-  let parsedRedisURL = new URL(redisURI)
-  if (parsedRedisURL.password !== '') {
-    redis.auth(parsedRedisURL.password, (err) => {
-      if (err) throw err
+  connections.openRedisConnection(redisURI,
+    (newRedis) => {
+      redis = newRedis
+      cachedProofState.setRedis(redis)
+    }, () => {
+      redis = null
+      cachedProofState.setRedis(null)
+      setTimeout(() => { openRedisConnection(redisURI) }, 5000)
     })
-  }
-
-  redis.on('ready', () => {
-    bluebird.promisifyAll(redis)
-    cachedProofState.setRedis(redis)
-    console.log('Redis connection established')
-  })
-
-  redis.on('error', async (err) => {
-    console.error(`A redis error has occurred: ${err}`)
-    redis.quit()
-    redis = null
-    cachedProofState.setRedis(null)
-    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
-    await utils.sleep(5000)
-    openRedisConnection(redisURI)
-  })
 }
 
 /**
@@ -324,34 +302,14 @@ async function openStorageConnectionAsync () {
 /**
  * Initializes the connection to the Resque queue when Redis is ready
  */
-async function initResqueQueueAsync () {
+async function initResqueQueueAsync (redisURI) {
   // wait until redis is initialized
   let redisReady = (redis !== null)
   while (!redisReady) {
     await utils.sleep(100)
     redisReady = (redis !== null)
   }
-  const redisURI = new URL(env.REDIS_CONNECT_URI)
-  var connectionDetails = {
-    host: redisURI.hostname,
-    port: redisURI.port,
-    namespace: 'resque'
-  }
-
-  if (redisURI.password !== '') {
-    connectionDetails.password = redisURI.password
-  }
-
-  const queue = new nodeResque.Queue({ connection: connectionDetails })
-  queue.on('error', function (error) { console.error(error) })
-  await queue.connect()
-  taskQueue = queue
-
-  exitHook(async () => {
-    await queue.end()
-  })
-
-  console.log('Resque queue connection established')
+  taskQueue = await connections.initResqueQueueAsync(redisURI, 'resque')
 }
 
 // process all steps need to start the application
@@ -365,7 +323,7 @@ async function start () {
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // init Resque queue
-    await initResqueQueueAsync()
+    await initResqueQueueAsync(env.REDIS_CONNECT_URI)
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)

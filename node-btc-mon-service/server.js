@@ -21,9 +21,7 @@ const MerkleTools = require('merkle-tools')
 const BlockchainAnchor = require('blockchain-anchor')
 const amqp = require('amqplib')
 const utils = require('./lib/utils.js')
-const r = require('redis')
-const bluebird = require('bluebird')
-const { URL } = require('url')
+const connections = require('./lib/connections.js')
 
 // Key for the Redis set of all Bitcoin transaction id objects needing to be monitored.
 const BTC_TX_IDS_KEY = 'BTC_Mon:BTCTxIds'
@@ -147,32 +145,16 @@ let monitorTransactionsAsync = async () => {
 /**
  * Opens a Redis connection
  *
- * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
 function openRedisConnection (redisURI) {
-  redis = r.createClient(redisURI)
-
-  // If a password is provided in the redis:// URL use it
-  let parsedRedisURL = new URL(redisURI)
-  if (parsedRedisURL.password !== '') {
-    redis.auth(parsedRedisURL.password, (err) => {
-      if (err) throw err
+  connections.openRedisConnection(redisURI,
+    (newRedis) => {
+      redis = newRedis
+    }, () => {
+      redis = null
+      setTimeout(() => { openRedisConnection(redisURI) }, 5000)
     })
-  }
-
-  redis.on('ready', () => {
-    bluebird.promisifyAll(redis)
-    console.log('Redis connection established')
-  })
-
-  redis.on('error', async (err) => {
-    console.error(`A redis error has occurred: ${err}`)
-    redis.quit()
-    redis = null
-    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
-    await utils.sleep(5000)
-    openRedisConnection(redisURI)
-  })
 }
 
 /**

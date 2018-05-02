@@ -18,13 +18,9 @@
 const env = require('./lib/parse-env.js')('task-accumulator')
 
 const amqp = require('amqplib')
-const r = require('redis')
 const utils = require('./lib/utils.js')
-const bluebird = require('bluebird')
 const debugPkg = require('debug')
-const nodeResque = require('node-resque')
-const exitHook = require('exit-hook')
-const { URL } = require('url')
+const connections = require('./lib/connections.js')
 
 var debug = {
   general: debugPkg('task-accumulator:general'),
@@ -253,34 +249,18 @@ async function drainAuditScoreUpdatePoolAsync () {
 /**
  * Opens a Redis connection
  *
- * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
 function openRedisConnection (redisURI) {
-  redis = r.createClient(redisURI)
-
-  // If a password is provided in the redis:// URL use it
-  let parsedRedisURL = new URL(redisURI)
-  if (parsedRedisURL.password !== '') {
-    redis.auth(parsedRedisURL.password, (err) => {
-      if (err) throw err
+  connections.openRedisConnection(redisURI,
+    (newRedis) => {
+      redis = newRedis
+    }, () => {
+      redis = null
+      PRUNE_AGG_STATES_POOL_DRAINING = false
+      AUDIT_LOG_WRITE_POOL_DRAINING = false
+      setTimeout(() => { openRedisConnection(redisURI) }, 5000)
     })
-  }
-
-  redis.on('ready', () => {
-    bluebird.promisifyAll(redis)
-    debug.general('Redis connection established')
-  })
-
-  redis.on('error', async (err) => {
-    console.error(`A redis error has occurred: ${err}`)
-    redis.quit()
-    redis = null
-    PRUNE_AGG_STATES_POOL_DRAINING = false
-    AUDIT_LOG_WRITE_POOL_DRAINING = false
-    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
-    await utils.sleep(5000)
-    openRedisConnection(redisURI)
-  })
 }
 
 /**
@@ -328,34 +308,14 @@ async function openRMQConnectionAsync (connectionString) {
 /**
  * Initializes the connection to the Resque queue when Redis is ready
  */
-async function initResqueQueueAsync () {
+async function initResqueQueueAsync (redisURI) {
   // wait until redis is initialized
   let redisReady = (redis !== null)
   while (!redisReady) {
     await utils.sleep(100)
     redisReady = (redis !== null)
   }
-  const redisURI = new URL(env.REDIS_CONNECT_URI)
-  var connectionDetails = {
-    host: redisURI.hostname,
-    port: redisURI.port,
-    namespace: 'resque'
-  }
-
-  if (redisURI.password !== '') {
-    connectionDetails.password = redisURI.password
-  }
-
-  const queue = new nodeResque.Queue({ connection: connectionDetails })
-  queue.on('error', function (error) { debug.general(error) })
-  await queue.connect()
-  taskQueue = queue
-
-  exitHook(async () => {
-    await queue.end()
-  })
-
-  debug.general('Resque queue connection established')
+  taskQueue = await connections.initResqueQueueAsync(redisURI, 'resque')
 }
 
 // This initalizes all the JS intervals that fire all aggregator events
@@ -376,7 +336,7 @@ async function start () {
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // init Resque queue
-    await initResqueQueueAsync()
+    await initResqueQueueAsync(env.REDIS_CONNECT_URI)
     // init interval functions
     startIntervals()
     debug.general('startup completed successfully')
