@@ -120,6 +120,12 @@ async function consumeProofReadyMessageAsync (msg) {
           return proof
         }).filter((proof) => proof !== null)
 
+        // if taskQueue is null (redis outage), wait one second for recovery,
+        // throw error to initiate nack and retry
+        if (taskQueue === null) {
+          await utils.sleep(1000)
+          throw new Error(`Unable to queue up cal storeProofs jobs, taskQueue is null`)
+        }
         await storeProofsAsync(proofs)
 
         // Proof ready message has been consumed, ack consumption of original message
@@ -187,6 +193,12 @@ async function consumeProofReadyMessageAsync (msg) {
           return proof
         }).filter((proof) => proof !== null)
 
+        // if taskQueue is null (redis outage), wait one second for recovery,
+        // throw error to initiate nack and retry
+        if (taskQueue === null) {
+          await utils.sleep(1000)
+          throw new Error(`Unable to queue up btc storeProofs jobs, taskQueue is null`)
+        }
         await storeProofsAsync(proofs)
 
         // Proof ready message has been consumed, ack consumption of original message
