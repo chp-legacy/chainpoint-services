@@ -25,16 +25,20 @@ function openRedisConnection (redisURIs, onReady, onError) {
     }
   } else {
     // this is a list if Redis Sentinel URIs
+    let password = null
     redisConfigObj = {
       sentinels: redisURIList.map((uri) => {
         let redisURL = new URL(uri)
+        // use the first password found as the password for all sentinels
+        // store this value in 'password' for use in redisConfigObj
+        if (!password) password = redisURL.password
         return {
           port: redisURL.port,          // Redis port
-          host: redisURL.hostname,   // Redis host
-          password: redisURL.password
+          host: redisURL.hostname  // Redis host
         }
       }),
-      name: 'mymaster'
+      name: 'mymaster',
+      password: password
     }
   }
 
