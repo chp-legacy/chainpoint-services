@@ -616,7 +616,7 @@ function openRedisConnection (redisURIs) {
       redis = null
       cachedAuditChallenge.setRedis(null)
       setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
-    })
+    }, debug)
 }
 
 /**

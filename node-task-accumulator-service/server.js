@@ -262,7 +262,7 @@ function openRedisConnection (redisURIs) {
       PRUNE_AGG_STATES_POOL_DRAINING = false
       AUDIT_LOG_WRITE_POOL_DRAINING = false
       setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
-    })
+    }, debug)
 }
 
 /**
@@ -311,7 +311,7 @@ async function openRMQConnectionAsync (connectionString) {
  * Initializes the connection to the Resque queue when Redis is ready
  */
 async function initResqueQueueAsync () {
-  taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
+  taskQueue = await connections.initResqueQueueAsync(redis, 'resque', debug)
 }
 
 // This initalizes all the JS intervals that fire all aggregator events

@@ -7,7 +7,7 @@ const { URL } = require('url')
  * @param {function} onReady - Function to call with commands to execute when `ready` event fires
  * @param {function} onError - Function to call with commands to execute  when `error` event fires
  */
-function openRedisConnection (redisURIs, onReady, onError) {
+function openRedisConnection (redisURIs, onReady, onError, debug) {
   const Redis = require('ioredis')
 
   let redisURIList = redisURIs.split(',')
@@ -53,14 +53,14 @@ function openRedisConnection (redisURIs, onReady, onError) {
 
   newRedis.on('ready', () => {
     onReady(newRedis)
-    console.log('Redis connection established')
+    logMessage('Redis connection established', debug, 'general')
   })
 }
 
 /**
  * Initializes the connection to the Resque queue when Redis is ready
  */
-async function initResqueQueueAsync (redisClient, namespace) {
+async function initResqueQueueAsync (redisClient, namespace, debug) {
   const nodeResque = require('node-resque')
   const exitHook = require('exit-hook')
   var connectionDetails = { redis: redisClient }
@@ -73,7 +73,7 @@ async function initResqueQueueAsync (redisClient, namespace) {
     await queue.end()
   })
 
-  console.log('Resque queue connection established')
+  logMessage('Resque queue connection established', debug, 'general')
 
   return queue
 }
@@ -105,7 +105,7 @@ async function initResqueWorkerAsync (redisClient, namespace, queues, minTasks, 
     await multiWorker.end()
   })
 
-  debug.general('Resque worker connection established')
+  logMessage('Resque worker connection established', debug, 'general')
 }
 
 async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails, taskTimeout, debug) {
@@ -130,8 +130,16 @@ async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails
   }
   // For each job, remove the job from the failed queue and requeue to its original queue
   for (let x = 0; x < failedJobs.length; x++) {
-    debug.worker(`Requeuing job: ${failedJobs[x].payload.queue} : ${failedJobs[x].payload.class} : ${failedJobs[x].error}`)
+    logMessage(`Requeuing job: ${failedJobs[x].payload.queue} : ${failedJobs[x].payload.class} : ${failedJobs[x].error}`, debug, 'worker')
     await queue.retryAndRemoveFailed(failedJobs[x])
+  }
+}
+
+function logMessage (message, debug, msgType) {
+  if (debug && debug[msgType]) {
+    debug[msgType](message)
+  } else {
+    console.log(message)
   }
 }
 
