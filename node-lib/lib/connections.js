@@ -10,7 +10,7 @@ const { URL } = require('url')
 function openRedisConnection (redisURIs, onReady, onError) {
   const Redis = require('ioredis')
 
-  let redisURIList = redisURIs.split()
+  let redisURIList = redisURIs.split(',')
 
   // If redisURIs contains just a single URI, treat it as a connection to a single Redis host
   // If it contains a CSV of URIs, treat it as multiple Sentinel URIs
@@ -20,7 +20,7 @@ function openRedisConnection (redisURIs, onReady, onError) {
     let redisURL = new URL(redisURIList[0])
     redisConfigObj = {
       port: redisURL.port,          // Redis port
-      host: redisURL.host,   // Redis host
+      host: redisURL.hostname,   // Redis host
       password: redisURL.password
     }
   } else {
@@ -30,7 +30,7 @@ function openRedisConnection (redisURIs, onReady, onError) {
         let redisURL = new URL(uri)
         return {
           port: redisURL.port,          // Redis port
-          host: redisURL.host,   // Redis host
+          host: redisURL.hostname,   // Redis host
           password: redisURL.password
         }
       }),
