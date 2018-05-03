@@ -611,6 +611,7 @@ function openRedisConnection (redisURIs) {
     (newRedis) => {
       redis = newRedis
       cachedAuditChallenge.setRedis(redis)
+      initResqueWorkerAsync()
     }, () => {
       redis = null
       cachedAuditChallenge.setRedis(null)
@@ -653,11 +654,6 @@ async function openRMQConnectionAsync (connectionString) {
 }
 
 async function initResqueWorkerAsync () {
-  let redisReady = (redis !== null)
-  while (!redisReady) {
-    await utils.sleep(100)
-    redisReady = (redis !== null)
-  }
   await connections.initResqueWorkerAsync(
     redis,
     'resque',
@@ -716,8 +712,6 @@ async function start () {
     openRedisConnection(env.REDIS_CONNECT_URIS)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    // init Resque worker
-    await initResqueWorkerAsync()
     // init watches
     startWatches()
     debug.general('startup completed successfully')

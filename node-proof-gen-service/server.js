@@ -234,9 +234,11 @@ function openRedisConnection (redisURIs) {
     (newRedis) => {
       redis = newRedis
       cachedProofState.setRedis(redis)
+      initResqueQueueAsync()
     }, () => {
       redis = null
       cachedProofState.setRedis(null)
+      taskQueue = null
       setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     })
 }
@@ -303,12 +305,6 @@ async function openStorageConnectionAsync () {
  * Initializes the connection to the Resque queue when Redis is ready
  */
 async function initResqueQueueAsync () {
-  // wait until redis is initialized
-  let redisReady = (redis !== null)
-  while (!redisReady) {
-    await utils.sleep(100)
-    redisReady = (redis !== null)
-  }
   taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
@@ -322,8 +318,6 @@ async function start () {
     openRedisConnection(env.REDIS_CONNECT_URIS)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    // init Resque queue
-    await initResqueQueueAsync()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)

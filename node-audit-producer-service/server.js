@@ -242,9 +242,11 @@ function openRedisConnection (redisURIs) {
     (newRedis) => {
       redis = newRedis
       cachedAuditChallenge.setRedis(redis)
+      initResqueQueueAsync()
     }, () => {
       redis = null
       cachedAuditChallenge.setRedis(null)
+      taskQueue = null
       setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     })
 }
@@ -291,12 +293,6 @@ async function checkForGenesisBlockAsync () {
  * Initializes the connection to the Resque queue when Redis is ready
  */
 async function initResqueQueueAsync () {
-  // wait until redis is initialized
-  let redisReady = (redis !== null)
-  while (!redisReady) {
-    await utils.sleep(100)
-    redisReady = (redis !== null)
-  }
   taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
@@ -405,8 +401,6 @@ async function start () {
     performLeaderElection()
     // ensure at least 1 calendar block exist
     await checkForGenesisBlockAsync()
-    // init Resque queue
-    await initResqueQueueAsync()
     // start main processing
     await startWatchesAndIntervalsAsync()
     console.log('startup completed successfully')
