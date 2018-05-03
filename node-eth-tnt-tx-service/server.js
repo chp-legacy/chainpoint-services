@@ -99,6 +99,10 @@ async function getBalanceFromInfuraAsync (tntAddr) {
     await retry(async bail => {
       let balanceResponse = await rp(options)
       balanceGrains = parseInt(balanceResponse.body.result, 16)
+      if (isNaN(balanceGrains)) {
+        let errorMessage = `balanceGrains is NaN`
+        throw errorMessage
+      }
     }, {
       retries: 3,    // The maximum amount of times to retry the operation. Default is 10
       factor: 1,       // The exponential factor to use. Default is 2
@@ -118,6 +122,10 @@ async function getBalanceFromGethAsync (tntAddr) {
   return new Promise((resolve, reject) => {
     ops.getBalance(tntAddr, (error, grains) => {
       if (error) return reject(error.message)
+      if (isNaN(grains)) {
+        let errorMessage = `getBalance is NaN`
+        return reject(errorMessage)
+      }
       return resolve(grains)
     })
   })

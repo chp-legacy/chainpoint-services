@@ -54,6 +54,7 @@ async function consumeBtcTxIdMessageAsync (msg) {
 
     try {
       // add the transaction id to the redis set
+      // Redis is the sole storage mechanism for this data
       await redis.saddAsync(BTC_TX_IDS_KEY, btcTxIdObjJSON)
       amqpChannel.ack(msg)
     } catch (error) {
@@ -150,7 +151,7 @@ let monitorTransactionsAsync = async () => {
  */
 function openRedisConnection (redisURI) {
   redis = r.createClient(redisURI)
-  
+
   // If a password is provided in the redis:// URL use it
   let parsedRedisURL = new URL(redisURI)
   if (parsedRedisURL.password !== '') {

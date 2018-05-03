@@ -324,6 +324,10 @@ async function initResqueQueueAsync () {
     namespace: 'resque'
   }
 
+  if (redisURI.password !== '') {
+    connectionDetails.password = redisURI.password
+  }
+
   const queue = new nodeResque.Queue({ connection: connectionDetails })
   queue.on('error', function (error) { console.log(error) })
   await queue.connect()
