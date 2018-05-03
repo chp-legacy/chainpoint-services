@@ -19,11 +19,11 @@ const env = require('./lib/parse-env.js')('eth-tnt-listener')
 
 const ethTokenTxLog = require('./lib/models/EthTokenTrxLog.js')
 const registeredNode = require('./lib/models/RegisteredNode.js')
-const utils = require('./lib/utils.js')
 const tntUnits = require('./lib/tntUnits.js')
 const loadProvider = require('./lib/eth-tnt/providerLoader.js')
 const loadToken = require('./lib/eth-tnt/tokenLoader.js')
 const TokenOps = require('./lib/eth-tnt/tokenOps.js')
+const connections = require('./lib/connections.js')
 
 // pull in variables defined in shared EthTokenTrxLog module
 let ethTokenTxSequelize = ethTokenTxLog.sequelize
@@ -193,19 +193,11 @@ function incomingTokenTransferEvent (error, params) {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync (callback) {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await ethTokenTxSequelize.sync({ logging: false })
-      await registeredNodeSequelize.sync({ logging: false })
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  let modelSqlzArray = [
+    ethTokenTxSequelize,
+    registeredNodeSequelize
+  ]
+  await connections.openStorageConnectionAsync(modelSqlzArray)
 }
 
 // process all steps need to start the application

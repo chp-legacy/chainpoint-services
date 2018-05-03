@@ -585,20 +585,12 @@ async function getTNTBalance (tntAddress, checkMethod) {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await registeredNodeSequelize.sync({ logging: false })
-      await nodeAuditSequelize.sync({ logging: false })
-      await cachedAuditChallenge.getAuditChallengeSequelize().sync({ logging: false })
-      debug.general('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  let modelSqlzArray = [
+    registeredNodeSequelize,
+    nodeAuditSequelize,
+    cachedAuditChallenge.getAuditChallengeSequelize()
+  ]
+  await connections.openStorageConnectionAsync(modelSqlzArray, debug)
 }
 
 /**

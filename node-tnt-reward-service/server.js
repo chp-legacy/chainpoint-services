@@ -26,6 +26,7 @@ const registeredNode = require('./lib/models/RegisteredNode.js')
 const csprng = require('random-number-csprng')
 const heartbeats = require('heartbeats')
 const leaderElection = require('exp-leader-election')
+const connections = require('./lib/connections.js')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -321,20 +322,12 @@ async function performLeaderElection () {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await calBlockSequelize.sync({ logging: false })
-      await registeredCoreSequelize.sync({ logging: false })
-      await registeredNodeSequelize.sync({ logging: false })
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  let modelSqlzArray = [
+    calBlockSequelize,
+    registeredCoreSequelize,
+    registeredNodeSequelize
+  ]
+  await connections.openStorageConnectionAsync(modelSqlzArray)
 }
 
 /**

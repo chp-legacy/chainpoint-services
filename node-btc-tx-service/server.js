@@ -21,6 +21,7 @@ const amqp = require('amqplib')
 const BlockchainAnchor = require('blockchain-anchor')
 const btcTxLog = require('./lib/models/BtcTxLog.js')
 const utils = require('./lib/utils.js')
+const connections = require('./lib/connections.js')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -156,18 +157,7 @@ async function processIncomingAnchorBTCJobAsync (msg) {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync (callback) {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await sequelize.sync({ logging: false })
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  await connections.openStorageConnectionAsync([sequelize])
 }
 
 /**

@@ -29,6 +29,7 @@ const rp = require('request-promise-native')
 const leaderElection = require('exp-leader-election')
 const schedule = require('node-schedule')
 const debugPkg = require('debug')
+const connections = require('./lib/connections.js')
 
 // See : https://github.com/zeit/async-retry
 const retry = require('async-retry')
@@ -923,18 +924,7 @@ async function getTNTGrainsBalanceForWalletAsync () {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  debug.general('openStorageConnectionAsync : begin')
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await sequelize.sync({ logging: false })
-      debug.general('openStorageConnectionAsync : connection established')
-      dbConnected = true
-    } catch (error) {
-      console.error('openStorageConnectionAsync : cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  await connections.openStorageConnectionAsync([sequelize], debug)
 
   // Pre-check the current Calendar block count.
   // Trigger creation of the genesis block if needed

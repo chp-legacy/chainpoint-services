@@ -1,4 +1,5 @@
 const { URL } = require('url')
+const utils = require('./utils.js')
 
 /**
  * Opens a Redis connection
@@ -108,6 +109,28 @@ async function initResqueWorkerAsync (redisClient, namespace, queues, minTasks, 
   logMessage('Resque worker connection established', debug, 'general')
 }
 
+/**
+ * Opens a storage connection
+ **/
+async function openStorageConnectionAsync (modelSqlzArray, debug) {
+  let dbConnected = false
+  while (!dbConnected) {
+    try {
+      for (let model of modelSqlzArray) {
+        await model.sync({ logging: false })
+      }
+      logMessage('Sequelize connection established', debug, 'general')
+      dbConnected = true
+    } catch (error) {
+      // catch errors when attempting to establish connection
+      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
+      await utils.sleep(5000)
+    }
+  }
+}
+
+// SUPPORT FUNCTIONS ****************
+
 async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails, taskTimeout, debug) {
   const queue = new nodeResque.Queue({ connection: connectionDetails })
   await queue.connect()
@@ -146,5 +169,6 @@ function logMessage (message, debug, msgType) {
 module.exports = {
   openRedisConnection: openRedisConnection,
   initResqueQueueAsync: initResqueQueueAsync,
-  initResqueWorkerAsync: initResqueWorkerAsync
+  initResqueWorkerAsync: initResqueWorkerAsync,
+  openStorageConnectionAsync: openStorageConnectionAsync
 }

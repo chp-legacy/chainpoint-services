@@ -30,6 +30,7 @@ const calendar = require('./lib/endpoints/calendar.js')
 const config = require('./lib/endpoints/config.js')
 const root = require('./lib/endpoints/root.js')
 const cnsl = require('consul')
+const { URL } = require('url')
 const connections = require('./lib/connections.js')
 
 // The redis connection used for all redis communication
@@ -131,22 +132,14 @@ server.get({ path: '/', version: '1.0.0' }, root.getV1)
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await hashes.getSequelize().sync({ logging: false })
-      await nodes.getRegisteredNodeSequelize().sync({ logging: false })
-      await calendar.getCalendarBlockSequelize().sync({ logging: false })
-      await verify.getCalendarBlockSequelize().sync({ logging: false })
-      await config.getAuditChallengeSequelize().sync({ logging: false })
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  let modelSqlzArray = [
+    hashes.getSequelize(),
+    nodes.getRegisteredNodeSequelize(),
+    calendar.getCalendarBlockSequelize(),
+    verify.getCalendarBlockSequelize(),
+    config.getAuditChallengeSequelize()
+  ]
+  await connections.openStorageConnectionAsync(modelSqlzArray)
 }
 
 /**

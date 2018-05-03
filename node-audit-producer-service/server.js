@@ -28,6 +28,11 @@ const MerkleTools = require('merkle-tools')
 const heartbeats = require('heartbeats')
 const leaderElection = require('exp-leader-election')
 const cnsl = require('consul')
+const bluebird = require('bluebird')
+const r = require('redis')
+const nodeResque = require('node-resque')
+const exitHook = require('exit-hook')
+const { URL } = require('url')
 const connections = require('./lib/connections.js')
 
 let consul = null
@@ -215,21 +220,13 @@ async function pruneAuditDataAsync () {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await regNodeSequelize.sync({ logging: false })
-      await calBlockSequelize.sync({ logging: false })
-      await nodeAuditSequelize.sync({ logging: false })
-      await cachedAuditChallenge.getAuditChallengeSequelize().sync({ logging: false })
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  let modelSqlzArray = [
+    nodeAuditSequelize,
+    calBlockSequelize,
+    regNodeSequelize,
+    cachedAuditChallenge.getAuditChallengeSequelize()
+  ]
+  await connections.openStorageConnectionAsync(modelSqlzArray)
 }
 
 /**

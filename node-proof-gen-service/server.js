@@ -22,6 +22,10 @@ const chainpointProofSchema = require('chainpoint-proof-json-schema')
 const uuidTime = require('uuid-time')
 const chpBinary = require('chainpoint-binary')
 const utils = require('./lib/utils.js')
+const bluebird = require('bluebird')
+const nodeResque = require('node-resque')
+const exitHook = require('exit-hook')
+const { URL } = require('url')
 const connections = require('./lib/connections.js')
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
@@ -299,18 +303,7 @@ async function openRMQConnectionAsync (connectionString) {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await cachedProofState.openConnectionAsync()
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  await connections.openStorageConnectionAsync([cachedProofState.sequelize])
 }
 
 /**

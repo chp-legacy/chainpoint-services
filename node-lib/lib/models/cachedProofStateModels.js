@@ -192,16 +192,6 @@ let BtcHeadStates = sequelize.define('chainpoint_proof_btchead_states', {
   underscored: true
 })
 
-async function openConnectionAsync () {
-  // test to see if the service is ready by making a authenticate request to it
-  await sequelize.authenticate()
-  await assertDBTablesAsync()
-}
-
-async function assertDBTablesAsync () {
-  await sequelize.sync()
-}
-
 async function getHashIdsByAggIdAsync (aggId) {
   let results = await AggStates.findAll({
     attributes: ['hash_id'],
@@ -649,7 +639,6 @@ async function getExpiredPKValuesForModel (modelName) {
 }
 
 module.exports = {
-  openConnectionAsync: openConnectionAsync,
   getHashIdsByAggIdAsync: getHashIdsByAggIdAsync,
   getHashIdsByAggIdsAsync: getHashIdsByAggIdsAsync,
   getHashIdsByBtcTxIdAsync: getHashIdsByBtcTxIdAsync,
