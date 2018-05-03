@@ -237,15 +237,15 @@ async function openStorageConnectionAsync () {
  *
  * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
-function openRedisConnection (redisURI) {
-  connections.openRedisConnection(redisURI,
+function openRedisConnection (redisURIs) {
+  connections.openRedisConnection(redisURIs,
     (newRedis) => {
       redis = newRedis
       cachedAuditChallenge.setRedis(redis)
     }, () => {
       redis = null
       cachedAuditChallenge.setRedis(null)
-      setTimeout(() => { openRedisConnection(redisURI) }, 5000)
+      setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     })
 }
 
@@ -290,14 +290,14 @@ async function checkForGenesisBlockAsync () {
 /**
  * Initializes the connection to the Resque queue when Redis is ready
  */
-async function initResqueQueueAsync (redisURI) {
+async function initResqueQueueAsync () {
   // wait until redis is initialized
   let redisReady = (redis !== null)
   while (!redisReady) {
     await utils.sleep(100)
     redisReady = (redis !== null)
   }
-  taskQueue = await connections.initResqueQueueAsync(redisURI, 'resque')
+  taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
 function setGenerateNewChallengeInterval () {
@@ -400,13 +400,13 @@ async function start () {
     // init DB
     await openStorageConnectionAsync()
     // init Redis
-    openRedisConnection(env.REDIS_CONNECT_URI)
+    openRedisConnection(env.REDIS_CONNECT_URIS)
     // init consul and perform leader election
     performLeaderElection()
     // ensure at least 1 calendar block exist
     await checkForGenesisBlockAsync()
     // init Resque queue
-    await initResqueQueueAsync(env.REDIS_CONNECT_URI)
+    await initResqueQueueAsync()
     // start main processing
     await startWatchesAndIntervalsAsync()
     console.log('startup completed successfully')

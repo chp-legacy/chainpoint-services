@@ -36,7 +36,7 @@ let consul = null
 let AuditChallenge = auditChallenge.AuditChallenge
 
 async function getMostRecentChallengeDataAsync () {
-  let mostRecentChallengeText = (redis && MostRecentChallengeKey) ? await redis.getAsync(MostRecentChallengeKey) : null
+  let mostRecentChallengeText = (redis && MostRecentChallengeKey) ? await redis.get(MostRecentChallengeKey) : null
   // if nothing was found, it is not cached, retrieve from the database and add to cache for future reqeusts
   if (mostRecentChallengeText === null) {
     // get the most recent challenge record
@@ -47,7 +47,7 @@ async function getMostRecentChallengeDataAsync () {
     // build the most recent challenge key
     let mostRecentChallengeKey = `${AUDIT_CHALLENGE_KEY_PREFIX}:${mostRecentChallenge.time}`
     // write this most recent challenge to redis
-    if (redis) await redis.setAsync(mostRecentChallengeKey, mostRecentChallengeText, 'EX', CHALLENGE_CACHE_EXPIRE_MINUTES * 60)
+    if (redis) await redis.set(mostRecentChallengeKey, mostRecentChallengeText, 'EX', CHALLENGE_CACHE_EXPIRE_MINUTES * 60)
     // this value should automatically be set from consul, but in case it has not ben set yet, set it here
     MostRecentChallengeKey = mostRecentChallengeKey
   }
@@ -63,7 +63,7 @@ async function getMostRecentChallengeDataSolutionRemovedAsync () {
 
 async function getChallengeDataByTimeAsync (challengeTime) {
   let challengeKey = `${AUDIT_CHALLENGE_KEY_PREFIX}:${challengeTime}`
-  let challengeText = (redis) ? await redis.getAsync(challengeKey) : null
+  let challengeText = (redis) ? await redis.get(challengeKey) : null
   // if nothing was found, it is not cached, retrieve from the database and add to cache for future reqeusts
   if (challengeText === null) {
     // get the challenge record by time
@@ -72,7 +72,7 @@ async function getChallengeDataByTimeAsync (challengeTime) {
     // build the challenge string
     challengeText = `${challengeByTime.time}:${challengeByTime.minBlock}:${challengeByTime.maxBlock}:${challengeByTime.nonce}:${challengeByTime.solution}`
     // write this challenge to redis
-    if (redis) await redis.setAsync(challengeKey, challengeText, 'EX', CHALLENGE_CACHE_EXPIRE_MINUTES * 60)
+    if (redis) await redis.set(challengeKey, challengeText, 'EX', CHALLENGE_CACHE_EXPIRE_MINUTES * 60)
   }
 
   return challengeText
@@ -92,7 +92,7 @@ async function setNewAuditChallengeAsync (challengeTime, challengeMinBlockHeight
   // build the new challenge redis key
   let newChallengeKey = `${AUDIT_CHALLENGE_KEY_PREFIX}:${newChallenge.time}`
   // write this new challenge to redis
-  if (redis) await redis.setAsync(newChallengeKey, auditChallengeText, 'EX', CHALLENGE_CACHE_EXPIRE_MINUTES * 60)
+  if (redis) await redis.set(newChallengeKey, auditChallengeText, 'EX', CHALLENGE_CACHE_EXPIRE_MINUTES * 60)
   // update the most recent key in consul with the new challenge key value
   return new Promise((resolve, reject) => {
     consul.kv.set(env.AUDIT_CHALLENGE_RECENT_KEY, newChallengeKey, function (err, result) {

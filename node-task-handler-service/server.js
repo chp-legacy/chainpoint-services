@@ -606,15 +606,15 @@ async function openStorageConnectionAsync () {
  *
  * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
-function openRedisConnection (redisURI) {
-  connections.openRedisConnection(redisURI,
+function openRedisConnection (redisURIs) {
+  connections.openRedisConnection(redisURIs,
     (newRedis) => {
       redis = newRedis
       cachedAuditChallenge.setRedis(redis)
     }, () => {
       redis = null
       cachedAuditChallenge.setRedis(null)
-      setTimeout(() => { openRedisConnection(redisURI) }, 5000)
+      setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     })
 }
 
@@ -652,14 +652,14 @@ async function openRMQConnectionAsync (connectionString) {
   }
 }
 
-async function initResqueWorkerAsync (redisURI) {
+async function initResqueWorkerAsync () {
   let redisReady = (redis !== null)
   while (!redisReady) {
     await utils.sleep(100)
     redisReady = (redis !== null)
   }
   await connections.initResqueWorkerAsync(
-    redisURI,
+    redis,
     'resque',
     ['task-handler-queue'],
     10,
@@ -713,11 +713,11 @@ async function start () {
     // init DB
     await openStorageConnectionAsync()
     // init Redis
-    openRedisConnection(env.REDIS_CONNECT_URI)
+    openRedisConnection(env.REDIS_CONNECT_URIS)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // init Resque worker
-    await initResqueWorkerAsync(env.REDIS_CONNECT_URI)
+    await initResqueWorkerAsync()
     // init watches
     startWatches()
     debug.general('startup completed successfully')

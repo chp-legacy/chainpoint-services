@@ -7,20 +7,38 @@ const { URL } = require('url')
  * @param {function} onReady - Function to call with commands to execute when `ready` event fires
  * @param {function} onError - Function to call with commands to execute  when `error` event fires
  */
-function openRedisConnection (redisURI, onReady, onError) {
-  const r = require('redis')
-  const bluebird = require('bluebird')
-  bluebird.promisifyAll(r.Multi.prototype)
+function openRedisConnection (redisURIs, onReady, onError) {
+  const Redis = require('ioredis')
 
-  let newRedis = r.createClient(redisURI)
+  let redisURIList = redisURIs.split()
 
-  // If a password is provided in the redis:// URL use it
-  let parsedRedisURL = new URL(redisURI)
-  if (parsedRedisURL.password !== '') {
-    newRedis.auth(parsedRedisURL.password, (err) => {
-      if (err) throw err
-    })
+  // If redisURIs contains just a single URI, treat it as a connection to a single Redis host
+  // If it contains a CSV of URIs, treat it as multiple Sentinel URIs
+  let redisConfigObj = null
+  if (redisURIList.length === 1) {
+    // this is a single Redis host URI
+    let redisURL = new URL(redisURIList[0])
+    redisConfigObj = {
+      port: redisURL.port,          // Redis port
+      host: redisURL.host,   // Redis host
+      password: redisURL.password
+    }
+  } else {
+    // this is a list if Redis Sentinel URIs
+    redisConfigObj = {
+      sentinels: redisURIList.map((uri) => {
+        let redisURL = new URL(uri)
+        return {
+          port: redisURL.port,          // Redis port
+          host: redisURL.host,   // Redis host
+          password: redisURL.password
+        }
+      }),
+      name: 'mymaster'
+    }
   }
+
+  var newRedis = new Redis(redisConfigObj)
 
   newRedis.on('error', (err) => {
     console.error(`A redis error has occurred: ${err}`)
@@ -30,7 +48,6 @@ function openRedisConnection (redisURI, onReady, onError) {
   })
 
   newRedis.on('ready', () => {
-    bluebird.promisifyAll(newRedis)
     onReady(newRedis)
     console.log('Redis connection established')
   })
@@ -39,16 +56,10 @@ function openRedisConnection (redisURI, onReady, onError) {
 /**
  * Initializes the connection to the Resque queue when Redis is ready
  */
-async function initResqueQueueAsync (redisURI, namespace) {
+async function initResqueQueueAsync (redisClient, namespace) {
   const nodeResque = require('node-resque')
   const exitHook = require('exit-hook')
-
-  const redisURL = new URL(redisURI)
-  var connectionDetails = {
-    host: redisURL.hostname,
-    port: redisURL.port,
-    namespace: namespace
-  }
+  var connectionDetails = { redis: redisClient }
 
   const queue = new nodeResque.Queue({ connection: connectionDetails })
   queue.on('error', function (error) { console.error(error.message) })
@@ -66,20 +77,10 @@ async function initResqueQueueAsync (redisURI, namespace) {
 /**
  * Initializes and configures the connection to the Resque worker when Redis is ready
  */
-async function initResqueWorkerAsync (redisURI, namespace, queues, minTasks, maxTasks, taskTimeout, jobs, setMWHandlers, debug) {
+async function initResqueWorkerAsync (redisClient, namespace, queues, minTasks, maxTasks, taskTimeout, jobs, setMWHandlers, debug) {
   const nodeResque = require('node-resque')
   const exitHook = require('exit-hook')
-
-  const redisURL = new URL(redisURI)
-  const connectionDetails = {
-    host: redisURL.hostname,
-    port: redisURL.port,
-    namespace: namespace
-  }
-
-  if (redisURI.password !== '') {
-    connectionDetails.password = redisURI.password
-  }
+  var connectionDetails = { redis: redisClient }
 
   var multiWorkerConfig = {
     connection: connectionDetails,

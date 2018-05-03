@@ -190,8 +190,8 @@ async function openRMQConnectionAsync (connectionString) {
  *
  * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
-function openRedisConnection (redisURI) {
-  connections.openRedisConnection(redisURI,
+function openRedisConnection (redisURIs) {
+  connections.openRedisConnection(redisURIs,
     (newRedis) => {
       redis = newRedis
       hashes.setRedis(redis)
@@ -200,7 +200,7 @@ function openRedisConnection (redisURI) {
       redis = null
       hashes.setRedis(null)
       config.setRedis(null)
-      setTimeout(() => { openRedisConnection(redisURI) }, 5000)
+      setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     })
 }
 
@@ -345,7 +345,7 @@ async function start () {
     config.setConsul(consul)
     console.log('Consul connection established')
     // init Redis
-    openRedisConnection(env.REDIS_CONNECT_URI)
+    openRedisConnection(env.REDIS_CONNECT_URIS)
     // init DB
     await openStorageConnectionAsync()
     // init RabbitMQ

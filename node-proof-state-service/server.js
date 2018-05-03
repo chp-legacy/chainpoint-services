@@ -463,15 +463,15 @@ async function openStorageConnectionAsync () {
  *
  * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
-function openRedisConnection (redisURI) {
-  connections.openRedisConnection(redisURI,
+function openRedisConnection (redisURIs) {
+  connections.openRedisConnection(redisURIs,
     (newRedis) => {
       redis = newRedis
       cachedProofState.setRedis(redis)
     }, () => {
       redis = null
       cachedProofState.setRedis(null)
-      setTimeout(() => { openRedisConnection(redisURI) }, 5000)
+      setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     })
 }
 
@@ -519,14 +519,14 @@ async function openRMQConnectionAsync (connectionString) {
 /**
  * Initializes the connection to the Resque queue when Redis is ready
  */
-async function initResqueQueueAsync (redisURI) {
+async function initResqueQueueAsync () {
   // wait until redis is initialized
   let redisReady = (redis !== null)
   while (!redisReady) {
     await utils.sleep(100)
     redisReady = (redis !== null)
   }
-  taskQueue = await connections.initResqueQueueAsync(redisURI, 'resque')
+  taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
 function startIntervals () {
@@ -546,11 +546,11 @@ async function start () {
     // init DB
     await openStorageConnectionAsync()
     // init Redis
-    openRedisConnection(env.REDIS_CONNECT_URI)
+    openRedisConnection(env.REDIS_CONNECT_URIS)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // init Resque queue
-    await initResqueQueueAsync(env.REDIS_CONNECT_URI)
+    await initResqueQueueAsync()
     // Init intervals
     startIntervals()
     console.log('startup completed successfully')
