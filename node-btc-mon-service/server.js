@@ -180,7 +180,13 @@ async function openRMQConnectionAsync (connectURI) {
 }
 
 function startIntervals () {
-  setInterval(() => { if (!CHECKS_IN_PROGRESS) monitorTransactionsAsync() }, env.MONITOR_INTERVAL_SECONDS * 1000)
+  let intervals = [{
+    function: () => {
+      if (!CHECKS_IN_PROGRESS) monitorTransactionsAsync()
+    },
+    ms: env.MONITOR_INTERVAL_SECONDS * 1000
+  }]
+  connections.startIntervals(intervals)
 }
 
 // process all steps need to start the application

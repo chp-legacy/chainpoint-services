@@ -246,6 +246,14 @@ function startConsulWatches (consul, watches, defaults, debug) {
   }
 }
 
+function startIntervals (intervals, debug) {
+  logMessage('starting intervals', debug, 'general')
+
+  intervals.forEach((interval) => {
+    setInterval(interval.function, interval.ms)
+  })
+}
+
 // SUPPORT FUNCTIONS ****************
 
 async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails, taskTimeout, debug) {
@@ -292,5 +300,6 @@ module.exports = {
   initConsul: initConsul,
   listenRestifyAsync: listenRestifyAsync,
   performLeaderElection: performLeaderElection,
-  startConsulWatches: startConsulWatches
+  startConsulWatches: startConsulWatches,
+  startIntervals: startIntervals
 }

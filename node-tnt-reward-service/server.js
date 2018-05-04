@@ -329,15 +329,6 @@ async function registerCoreAsync () {
   }
 }
 
-// This initalizes all the JS intervals that fire all aggregator events
-function startIntervals () {
-  console.log('starting intervals')
-
-  // PERIODIC TIMERS
-
-  setTNTRewardInterval()
-}
-
 // Set the TNT Reward interval
 function setTNTRewardInterval () {
   let currentMinute = new Date().getUTCMinutes()
@@ -380,7 +371,7 @@ async function start () {
     // Check Core registration
     await registerCoreAsync()
     // init interval functions
-    startIntervals()
+    setTNTRewardInterval()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)

@@ -300,12 +300,12 @@ async function initResqueQueueAsync () {
 
 // This initalizes all the JS intervals that fire all aggregator events
 function startIntervals () {
-  debug.general('starting intervals')
-
-  // PERIODIC TIMERS
-  setInterval(() => drainPruneAggStatesPoolAsync(), 1000)
-  setInterval(() => drainAuditLogWritePoolAsync(), 1000)
-  setInterval(() => drainAuditScoreUpdatePoolAsync(), 1000)
+  let intervals = [
+    { function: drainPruneAggStatesPoolAsync, ms: 1000 },
+    { function: drainAuditLogWritePoolAsync, ms: 1000 },
+    { function: drainAuditScoreUpdatePoolAsync, ms: 1000 }
+  ]
+  connections.startIntervals(intervals, debug)
 }
 
 // process all steps need to start the application

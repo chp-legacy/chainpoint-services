@@ -482,11 +482,15 @@ async function initResqueQueueAsync () {
 }
 
 function startIntervals () {
-  setInterval(async () => {
-    if (IS_LEADER) {
-      await PruneStateDataAsync()
-    }
-  }, env.PRUNE_FREQUENCY_MINUTES * 60 * 1000)
+  let intervals = [{
+    function: () => {
+      if (IS_LEADER) {
+        PruneStateDataAsync()
+      }
+    },
+    ms: env.PRUNE_FREQUENCY_MINUTES * 60 * 1000
+  }]
+  connections.startIntervals(intervals)
 }
 
 // process all steps need to start the application

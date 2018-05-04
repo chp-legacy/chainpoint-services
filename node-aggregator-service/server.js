@@ -155,11 +155,8 @@ let aggregateAsync = async () => {
 
 // This initalizes all the JS intervals that fire all aggregator events
 function startIntervals () {
-  console.log('starting intervals')
-
-  // PERIODIC TIMERS
-
-  setInterval(() => aggregateAsync(), env.AGGREGATION_INTERVAL)
+  let intervals = [{ function: aggregateAsync, ms: env.AGGREGATION_INTERVAL }]
+  connections.startIntervals(intervals)
 }
 
 /**

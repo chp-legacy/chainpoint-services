@@ -56,13 +56,17 @@ let getNistLatest = () => {
 }
 
 function startIntervals () {
-  setInterval(() => {
-    try {
-      getNistLatest()
-    } catch (error) {
-      console.error('getNistLatest: caught err: ', error.message)
-    }
-  }, env.NIST_INTERVAL_MS)
+  let intervals = [{
+    function: () => {
+      try {
+        getNistLatest()
+      } catch (error) {
+        console.error(`getNistLatest : caught err : ${error.message}`)
+      }
+    },
+    ms: env.NIST_INTERVAL_MS
+  }]
+  connections.startIntervals(intervals)
 }
 
 async function start () {
