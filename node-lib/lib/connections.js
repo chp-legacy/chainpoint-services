@@ -166,6 +166,12 @@ async function openStandardRMQConnectionAsync (amqpClient, connectURI, queues, p
   }
 }
 
+function initConsul (consulClient, host, port, debug) {
+  let consul = consulClient({ host: host, port: port })
+  logMessage('Consul connection established', debug, 'general')
+  return consul
+}
+
 // SUPPORT FUNCTIONS ****************
 
 async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails, taskTimeout, debug) {
@@ -208,5 +214,6 @@ module.exports = {
   initResqueQueueAsync: initResqueQueueAsync,
   initResqueWorkerAsync: initResqueWorkerAsync,
   openStorageConnectionAsync: openStorageConnectionAsync,
-  openStandardRMQConnectionAsync: openStandardRMQConnectionAsync
+  openStandardRMQConnectionAsync: openStandardRMQConnectionAsync,
+  initConsul: initConsul
 }

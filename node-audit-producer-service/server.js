@@ -387,9 +387,8 @@ async function start () {
   if (env.NODE_ENV === 'test') return
   try {
     // init consul
-    consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
+    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT)
     cachedAuditChallenge.setConsul(consul)
-    console.log('Consul connection established')
     // init DB
     await openStorageConnectionAsync()
     // init Redis

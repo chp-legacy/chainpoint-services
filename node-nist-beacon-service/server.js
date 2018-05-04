@@ -19,6 +19,7 @@ const env = require('./lib/parse-env.js')('nist')
 
 const BEACON = require('nist-randomness-beacon')
 const cnsl = require('consul')
+const connections = require('./lib/connections.js')
 
 let consul = null
 
@@ -68,8 +69,7 @@ async function start () {
   if (env.NODE_ENV === 'test') return
   try {
     // init consul
-    consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
-    console.log('Consul connection established')
+    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT)
     // get initial value for service start
     getNistLatest()
     // init interval functions

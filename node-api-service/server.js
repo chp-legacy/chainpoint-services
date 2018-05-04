@@ -317,9 +317,8 @@ async function start () {
   if (env.NODE_ENV === 'test') return
   try {
     // init consul
-    consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
+    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT)
     config.setConsul(consul)
-    console.log('Consul connection established')
     // init Redis
     openRedisConnection(env.REDIS_CONNECT_URIS)
     // init DB

@@ -682,8 +682,7 @@ function startWatches () {
 async function start () {
   try {
     // init consul
-    consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
-    console.log('Consul connection established')
+    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT, debug)
     // init DB
     await openStorageConnectionAsync()
     // init Redis

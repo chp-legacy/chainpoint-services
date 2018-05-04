@@ -84,8 +84,7 @@ const sequelize = calendarBlock.sequelize
 const CalendarBlock = calendarBlock.CalendarBlock
 const pgClientPool = calendarBlock.pgClientPool
 
-const consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
-debug.general('consul connection established')
+let consul = null
 
 // Calculate the hash of the signing public key bytes
 // to allow lookup of which pubkey was used to sign
@@ -1085,9 +1084,12 @@ async function start () {
   }
 
   try {
+    // init consul
+    debug.general('start : init consul')
+    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT, debug)
     debug.general('start : init Sequelize connection')
     await openStorageConnectionAsync()
-    debug.general('start : init consul and perform leader election')
+    debug.general('start : perform leader election')
     performLeaderElection()
     debug.general('start : init RabbitMQ connection')
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
