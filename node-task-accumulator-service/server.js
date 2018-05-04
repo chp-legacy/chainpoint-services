@@ -20,6 +20,9 @@ const env = require('./lib/parse-env.js')('task-accumulator')
 const amqp = require('amqplib')
 const utils = require('./lib/utils.js')
 const debugPkg = require('debug')
+const nodeResque = require('node-resque')
+const exitHook = require('exit-hook')
+const { URL } = require('url')
 const connections = require('./lib/connections.js')
 
 var debug = {
@@ -269,42 +272,23 @@ function openRedisConnection (redisURIs) {
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
  *
- * @param {string} connectionString - The connection string for the RabbitMQ instance, an AMQP URI
+ * @param {string} connectURI - The connection URI for the RabbitMQ instance
  */
-async function openRMQConnectionAsync (connectionString) {
-  let rmqConnected = false
-  while (!rmqConnected) {
-    try {
-      // connect to rabbitmq server
-      let conn = await amqp.connect(connectionString)
-      // create communication channel
-      let chan = await conn.createConfirmChannel()
-      // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_IN_TASK_ACC_QUEUE, { durable: true })
-      chan.prefetch(env.RMQ_PREFETCH_COUNT_TASK_ACC)
-      amqpChannel = chan
-      // Continuously load the agg_ids to be accumulated and pruned in batches
-      chan.consume(env.RMQ_WORK_IN_TASK_ACC_QUEUE, (msg) => {
-        processMessage(msg)
-      })
-      // if the channel closes for any reason, attempt to reconnect
-      conn.on('close', async () => {
-        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
-        amqpChannel = null
-        // un-acked messaged will be requeued, so clear all work in progress
-        PRUNE_AGG_STATES_POOL = []
-        AUDIT_LOG_WRITE_POOL = []
-        await utils.sleep(5000)
-        await openRMQConnectionAsync(connectionString)
-      })
-      debug.general('RabbitMQ connection established')
-      rmqConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+async function openRMQConnectionAsync (connectURI) {
+  await connections.openStandardRMQConnectionAsync(amqp, connectURI,
+    [env.RMQ_WORK_IN_TASK_ACC_QUEUE],
+    env.RMQ_PREFETCH_COUNT_TASK_ACC,
+    { queue: env.RMQ_WORK_IN_TASK_ACC_QUEUE, method: (msg) => { processMessage(msg) } },
+    (chan) => { amqpChannel = chan },
+    () => {
+      amqpChannel = null
+      // un-acked messaged will be requeued, so clear all work in progress
+      PRUNE_AGG_STATES_POOL = []
+      AUDIT_LOG_WRITE_POOL = []
+      setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
+    },
+    debug
+  )
 }
 
 /**

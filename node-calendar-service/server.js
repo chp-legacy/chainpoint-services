@@ -947,46 +947,22 @@ async function openStorageConnectionAsync () {
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
  *
- * @param {string} connectionString - The connection string for the RabbitMQ instance, an AMQP URI
+ * @param {string} connectURI - The connection URI for the RabbitMQ instance
  */
-async function openRMQConnectionAsync (connectionString) {
-  debug.general('openRMQConnectionAsync : begin')
-  let rmqConnected = false
-  while (!rmqConnected) {
-    try {
-      // connect to rabbitmq server
-      let conn = await amqp.connect(connectionString)
-      // create communication channel
-      let chan = await conn.createConfirmChannel()
-      // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_IN_CAL_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_STATE_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_BTCTX_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_BTCMON_QUEUE, { durable: true })
-      chan.prefetch(env.RMQ_PREFETCH_COUNT_CAL)
-      // set 'amqpChannel' so that publishers have access to the channel
-      amqpChannel = chan
-      chan.consume(env.RMQ_WORK_IN_CAL_QUEUE, (msg) => {
-        processMessage(msg)
-      })
-      // if the channel closes for any reason, attempt to reconnect
-      conn.on('close', async () => {
-        console.error('openRMQConnectionAsync : connection to RMQ closed.  Reconnecting in 5 seconds...')
-        amqpChannel = null
-        // un-acked messaged will be requeued, so clear all work in progress
-        AGGREGATION_ROOTS = []
-        await utils.sleep(5000)
-        await openRMQConnectionAsync(connectionString)
-      })
-      debug.general('openRMQConnectionAsync : connection established')
-      rmqConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('openRMQConnectionAsync : cannot establish RabbitMQ connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
-  debug.general('openRMQConnectionAsync : end')
+async function openRMQConnectionAsync (connectURI) {
+  await connections.openStandardRMQConnectionAsync(amqp, connectURI,
+    [env.RMQ_WORK_IN_CAL_QUEUE, env.RMQ_WORK_OUT_STATE_QUEUE, env.RMQ_WORK_OUT_BTCTX_QUEUE, env.RMQ_WORK_OUT_BTCMON_QUEUE],
+    env.RMQ_PREFETCH_COUNT_CAL,
+    { queue: env.RMQ_WORK_IN_CAL_QUEUE, method: (msg) => { processMessage(msg) } },
+    (chan) => { amqpChannel = chan },
+    () => {
+      amqpChannel = null
+      // un-acked messaged will be requeued, so clear all work in progress
+      AGGREGATION_ROOTS = []
+      setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
+    },
+    debug
+  )
 }
 
 async function performLeaderElection () {

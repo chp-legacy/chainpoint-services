@@ -129,6 +129,43 @@ async function openStorageConnectionAsync (modelSqlzArray, debug) {
   }
 }
 
+/**
+ * Opens an AMPQ connection and channel
+ * Retry logic is included to handle losses of connection
+ *
+ * @param {string} connectionString - The connection URI for the RabbitMQ instance
+ */
+async function openStandardRMQConnectionAsync (amqpClient, connectURI, queues, prefetchCount, consumeObj, onInit, onClose, debug) {
+  let rmqConnected = false
+  while (!rmqConnected) {
+    try {
+      // connect to rabbitmq server
+      let conn = await amqpClient.connect(connectURI)
+      // create communication channel
+      let chan = await conn.createConfirmChannel()
+      // assert all queues supplied
+      queues.forEach(queue => { chan.assertQueue(queue, { durable: true }) })
+      // optionally set prefetch count
+      if (prefetchCount !== null) chan.prefetch(prefetchCount)
+      // optionally confifgure message consumption
+      if (consumeObj !== null) chan.consume(consumeObj.queue, consumeObj.method)
+      // initialize variables using new communication channel
+      onInit(chan)
+      // if the channel closes for any reason, attempt to reconnect
+      conn.on('close', async () => {
+        onClose()
+        console.error('Connection to RabbitMQ closed.  Reconnecting in 5 seconds...')
+      })
+      logMessage('RabbitMQ connection established', debug, 'general')
+      rmqConnected = true
+    } catch (error) {
+      // catch errors when attempting to establish connection
+      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
+      await utils.sleep(5000)
+    }
+  }
+}
+
 // SUPPORT FUNCTIONS ****************
 
 async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails, taskTimeout, debug) {
@@ -170,5 +207,6 @@ module.exports = {
   openRedisConnection: openRedisConnection,
   initResqueQueueAsync: initResqueQueueAsync,
   initResqueWorkerAsync: initResqueWorkerAsync,
-  openStorageConnectionAsync: openStorageConnectionAsync
+  openStorageConnectionAsync: openStorageConnectionAsync,
+  openStandardRMQConnectionAsync: openStandardRMQConnectionAsync
 }
