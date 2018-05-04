@@ -659,23 +659,18 @@ async function initResqueWorkerAsync () {
 }
 
 // This initalizes all the consul watches
-function startWatches () {
-  console.log('starting watches')
-
-  // Continuous watch on the consul key holding the regNodesLimit count.
-  var minNodeVersionExistingWatch = consul.watch({ method: consul.kv.get, options: { key: env.MIN_NODE_VERSION_EXISTING_KEY } })
-
-  // Store the updated regNodesLimit count on change
-  minNodeVersionExistingWatch.on('change', function (data, res) {
-    // process only if a value has been returned
-    if (data && data.Value) {
-      minNodeVersionExisting = data.Value
-    }
-  })
-
-  minNodeVersionExistingWatch.on('error', function (err) {
-    console.error('minNodeVersionExistingWatch error: ', err)
-  })
+function startConsulWatches () {
+  let watches = [{
+    key: env.MIN_NODE_VERSION_EXISTING_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) {
+        minNodeVersionExisting = data.Value
+      }
+    },
+    onError: null
+  }]
+  connections.startConsulWatches(consul, watches, null, debug)
 }
 
 // process all steps need to start the application
@@ -689,8 +684,10 @@ async function start () {
     openRedisConnection(env.REDIS_CONNECT_URIS)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    // init watches
-    startWatches()
+    // init Resque worker
+    await initResqueWorkerAsync()
+    // init consul watches
+    startConsulWatches()
     debug.general('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)

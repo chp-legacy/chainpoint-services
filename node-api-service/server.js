@@ -180,124 +180,59 @@ function openRedisConnection (redisURIs) {
 }
 
 // This initalizes all the consul watches
-function startWatches () {
-  console.log('starting watches')
-
-  // Continuous watch on the consul key holding the NIST object.
-  var nistWatch = consul.watch({ method: consul.kv.get, options: { key: env.NIST_KEY } })
-
-  // Store the updated NIST data on change
-  nistWatch.on('change', function (data, res) {
-    // process only if a value has been returned and it is different than what is already stored
-    if (data && data.Value && hashes.getNistLatest() !== data.Value) {
-      hashes.setNistLatest(data.Value)
-    }
-  })
-
-  nistWatch.on('error', function (err) {
-    console.error('nistWatch error: ', err)
-  })
-
-  // Continuous watch on the consul key holding the regNodesLimit count.
-  var regNodesLimitWatch = consul.watch({ method: consul.kv.get, options: { key: env.REG_NODES_LIMIT_KEY } })
-
-  // Store the updated regNodesLimit count on change
-  regNodesLimitWatch.on('change', function (data, res) {
-    // process only if a value has been returned
-    if (data && data.Value) {
-      nodes.setRegNodesLimit(data.Value)
-    }
-  })
-
-  regNodesLimitWatch.on('error', function (err) {
-    console.error('regNodesLimitWatch error: ', err)
-  })
-
-  // Continuous watch on the consul key holding the regNodesLimit count.
-  var minNodeVersionExistingWatch = consul.watch({ method: consul.kv.get, options: { key: env.MIN_NODE_VERSION_EXISTING_KEY } })
-
-  // Store the updated regNodesLimit count on change
-  minNodeVersionExistingWatch.on('change', function (data, res) {
-    // process only if a value has been returned
-    if (data && data.Value) {
-      config.setMinNodeVersionExisting(data.Value)
-      nodes.setMinNodeVersionExisting(data.Value)
-    }
-  })
-
-  minNodeVersionExistingWatch.on('error', function (err) {
-    console.error('minNodeVersionExistingWatch error: ', err)
-  })
-
-  // Continuous watch on the consul key holding the regNodesLimit count.
-  var minNodeVersionNewWatch = consul.watch({ method: consul.kv.get, options: { key: env.MIN_NODE_VERSION_NEW_KEY } })
-
-  // Store the updated regNodesLimit count on change
-  minNodeVersionNewWatch.on('change', function (data, res) {
-    // process only if a value has been returned
-    if (data && data.Value) {
-      nodes.setMinNodeVersionNew(data.Value)
-    }
-  })
-
-  minNodeVersionNewWatch.on('error', function (err) {
-    console.error('minNodeVersionNewWatch error: ', err)
-  })
-
-  // Continuous watch on the consul key holding the moat recent audit challenge key.
-  var recentChallengeKeyWatch = consul.watch({ method: consul.kv.get, options: { key: env.AUDIT_CHALLENGE_RECENT_KEY } })
-
-  // Store the updated regNodesLimit count on change
-  recentChallengeKeyWatch.on('change', function (data, res) {
-    // process only if a value has been returned
-    if (data && data.Value) config.setMostRecentChallengeKey(data.Value)
-  })
-
-  recentChallengeKeyWatch.on('error', function (err) {
-    console.error('recentChallengeKeyWatch error: ', err)
-  })
-
-  consul.kv.get(env.REG_NODES_LIMIT_KEY, function (err, result) {
-    if (err) {
-      console.error(err)
-    } else {
-      // Only create key if it doesn't exist or has no value, default value of 0
-      if (!result) {
-        consul.kv.set(env.REG_NODES_LIMIT_KEY, '0', function (err, result) {
-          if (err) throw err
-          console.log(`Created ${env.REG_NODES_LIMIT_KEY} key`)
-        })
+function startConsulWatches () {
+  let watches = [{
+    key: env.NIST_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned and it is different than what is already stored
+      if (data && data.Value && hashes.getNistLatest() !== data.Value) {
+        hashes.setNistLatest(data.Value)
       }
-    }
-  })
-
-  consul.kv.get(env.MIN_NODE_VERSION_EXISTING_KEY, function (err, result) {
-    if (err) {
-      console.error(err)
-    } else {
-      // Only create key if it doesn't exist or has no value, default value of 0
-      if (!result) {
-        consul.kv.set(env.MIN_NODE_VERSION_EXISTING_KEY, '0.0.1', function (err, result) {
-          if (err) throw err
-          console.log(`Created ${env.MIN_NODE_VERSION_EXISTING_KEY} key`)
-        })
+    },
+    onError: null
+  }, {
+    key: env.REG_NODES_LIMIT_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) {
+        nodes.setRegNodesLimit(data.Value)
       }
-    }
-  })
-
-  consul.kv.get(env.MIN_NODE_VERSION_NEW_KEY, function (err, result) {
-    if (err) {
-      console.error(err)
-    } else {
-      // Only create key if it doesn't exist or has no value, default value of 0
-      if (!result) {
-        consul.kv.set(env.MIN_NODE_VERSION_NEW_KEY, '0.0.1', function (err, result) {
-          if (err) throw err
-          console.log(`Created ${env.MIN_NODE_VERSION_NEW_KEY} key`)
-        })
+    },
+    onError: null
+  }, {
+    key: env.MIN_NODE_VERSION_EXISTING_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) {
+        config.setMinNodeVersionExisting(data.Value)
+        nodes.setMinNodeVersionExisting(data.Value)
       }
-    }
-  })
+    },
+    onError: null
+  }, {
+    key: env.MIN_NODE_VERSION_NEW_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) {
+        nodes.setMinNodeVersionNew(data.Value)
+      }
+    },
+    onError: null
+  }, {
+    key: env.AUDIT_CHALLENGE_RECENT_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) config.setMostRecentChallengeKey(data.Value)
+    },
+    onError: null
+  }]
+
+  let defaults = [
+    { key: env.REG_NODES_LIMIT_KEY, value: '0' },
+    { key: env.MIN_NODE_VERSION_EXISTING_KEY, value: '0.0.1' },
+    { key: env.MIN_NODE_VERSION_NEW_KEY, value: '0.0.1' }
+  ]
+  connections.startConsulWatches(consul, watches, defaults)
 }
 
 // process all steps need to start the application
@@ -313,8 +248,8 @@ async function start () {
     await openStorageConnectionAsync()
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    // init watches
-    startWatches()
+    // init consul watches
+    startConsulWatches()
     // Init Restify
     await connections.listenRestifyAsync(server, 8080)
     console.log('startup completed successfully')

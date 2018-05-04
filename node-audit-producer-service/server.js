@@ -353,7 +353,7 @@ function setPerformCreditTopoffInterval () {
   })
 }
 
-async function startWatchesAndIntervalsAsync () {
+async function startIntervalsAsync () {
   // attempt to generate a new audit challenge on startup
   if (IS_LEADER) {
     try {
@@ -384,7 +384,7 @@ async function start () {
     // ensure at least 1 calendar block exist
     await checkForGenesisBlockAsync()
     // start main processing
-    await startWatchesAndIntervalsAsync()
+    await startIntervalsAsync()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)
