@@ -966,25 +966,11 @@ async function openRMQConnectionAsync (connectURI) {
 
 async function performLeaderElection () {
   IS_LEADER = false
-  let leaderElectionConfig = {
-    key: env.CALENDAR_LEADER_KEY,
-    consul: {
-      host: env.CONSUL_HOST,
-      port: env.CONSUL_PORT,
-      ttl: 15,
-      lockDelay: 1
-    }
-  }
-
-  leaderElection(leaderElectionConfig)
-    .on('gainedLeadership', function () {
-      debug.general(`leaderElection : elected : ${env.CHAINPOINT_CORE_BASE_URI}`)
-      IS_LEADER = true
-    })
-    .on('error', function (err) {
-      console.error(`leaderElection : error : lock session invalidated : ${err}`)
-      IS_LEADER = false
-    })
+  connections.performLeaderElection(leaderElection,
+    env.CALENDAR_LEADER_KEY, env.CONSUL_HOST, env.CONSUL_PORT, env.CHAINPOINT_CORE_BASE_URI,
+    () => { IS_LEADER = true },
+    () => { IS_LEADER = false },
+    debug)
 }
 
 // Initalizes all the consul watches

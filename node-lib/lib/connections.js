@@ -166,6 +166,7 @@ async function openStandardRMQConnectionAsync (amqpClient, connectURI, queues, p
   }
 }
 
+// Initializes and returns a consul client object
 function initConsul (consulClient, host, port, debug) {
   let consul = consulClient({ host: host, port: port })
   logMessage('Consul connection established', debug, 'general')
@@ -181,6 +182,29 @@ async function listenRestifyAsync (server, port, debug) {
       return resolve()
     })
   })
+}
+
+// Performs a leader election across all instances using the given leader key
+function performLeaderElection (electorClient, leaderKey, host, port, id, onElect, onError, debug) {
+  let leaderElectionConfig = {
+    key: leaderKey,
+    consul: {
+      host: host,
+      port: port,
+      ttl: 15,
+      lockDelay: 1
+    }
+  }
+
+  electorClient(leaderElectionConfig)
+    .on('gainedLeadership', () => {
+      logMessage(`leaderElection : elected : ${id || 'no id supplied'}`, debug, 'general')
+      onElect()
+    })
+    .on('error', (err) => {
+      console.error(`leaderElection : error : lock session invalidated : ${err}`)
+      onError()
+    })
 }
 
 // SUPPORT FUNCTIONS ****************
@@ -227,5 +251,6 @@ module.exports = {
   openStorageConnectionAsync: openStorageConnectionAsync,
   openStandardRMQConnectionAsync: openStandardRMQConnectionAsync,
   initConsul: initConsul,
-  listenRestifyAsync: listenRestifyAsync
+  listenRestifyAsync: listenRestifyAsync,
+  performLeaderElection: performLeaderElection
 }
