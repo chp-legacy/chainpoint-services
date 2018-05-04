@@ -144,9 +144,13 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, async (req, res, n
 
   // use local wallet address when /balance/wallet requested
   let ethAddress = req.params.tnt_addr
-  if (ethAddress === 'wallet') {
-    let ethWallet = JSON.parse(env.ETH_WALLET)
-    ethAddress = ethWallet.address
+  try {
+    if (ethAddress === 'wallet') {
+      let ethWallet = JSON.parse(env.ETH_WALLET)
+      ethAddress = ethWallet.address
+    }
+  } catch (error) {
+    return next(new restify.InvalidArgumentError('invalid JSON body, malformed eth_wallet value'))
   }
   if (!ethAddress.startsWith('0x')) ethAddress = `0x${ethAddress}`
 
