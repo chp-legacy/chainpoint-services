@@ -172,6 +172,17 @@ function initConsul (consulClient, host, port, debug) {
   return consul
 }
 
+// Instruct REST server to begin listening for request
+async function listenRestifyAsync (server, port, debug) {
+  return new Promise((resolve, reject) => {
+    server.listen(port, (err) => {
+      if (err) return reject(err)
+      logMessage(`${server.name} listening at ${server.url}`, debug, 'general')
+      return resolve()
+    })
+  })
+}
+
 // SUPPORT FUNCTIONS ****************
 
 async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails, taskTimeout, debug) {
@@ -215,5 +226,6 @@ module.exports = {
   initResqueWorkerAsync: initResqueWorkerAsync,
   openStorageConnectionAsync: openStorageConnectionAsync,
   openStandardRMQConnectionAsync: openStandardRMQConnectionAsync,
-  initConsul: initConsul
+  initConsul: initConsul,
+  listenRestifyAsync: listenRestifyAsync
 }

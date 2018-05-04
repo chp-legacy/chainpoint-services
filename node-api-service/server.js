@@ -17,7 +17,6 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('api')
 
-const { promisify } = require('util')
 const utils = require('./lib/utils.js')
 const amqp = require('amqplib')
 const restify = require('restify')
@@ -301,17 +300,6 @@ function startWatches () {
   })
 }
 
-// Instruct REST server to begin listening for request
-function listenRestify (callback) {
-  server.listen(8080, (err) => {
-    if (err) return callback(err)
-    console.log(`${server.name} listening at ${server.url}`)
-    return callback(null)
-  })
-}
-// make awaitable async version for startListening function
-let listenRestifyAsync = promisify(listenRestify)
-
 // process all steps need to start the application
 async function start () {
   if (env.NODE_ENV === 'test') return
@@ -328,7 +316,7 @@ async function start () {
     // init watches
     startWatches()
     // Init Restify
-    await listenRestifyAsync()
+    await connections.listenRestifyAsync(server, 8080)
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)
