@@ -77,7 +77,7 @@ async function auditNodesAsync () {
                    al.node_ms_delta, al.time_pass, al.cal_state_pass, al.min_credits_pass, al.node_version, 
                    al.node_version_pass, al.tnt_balance_grains, al.tnt_balance_pass
                    FROM chainpoint_registered_nodes rn
-                   INNER JOIN (
+                   LEFT JOIN (
                      SELECT DISTINCT ON (al2.tnt_addr) al2.tnt_addr, al2.audit_at, al2.public_ip_pass, al2.public_uri, 
                      al2.node_ms_delta, al2.time_pass, al2.cal_state_pass, al2.min_credits_pass, al2.node_version, 
                      al2.node_version_pass, al2.tnt_balance_grains, al2.tnt_balance_pass
