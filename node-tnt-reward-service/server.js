@@ -329,8 +329,8 @@ async function registerCoreAsync () {
   }
 }
 
-// Set the TNT Reward interval
-function setTNTRewardInterval () {
+// Set the TNT Reward Trigger
+function setTNTRewardTrigger () {
   let currentMinute = new Date().getUTCMinutes()
 
   // determine the minutes of the hour to run process based on REWARDS_PER_HOUR
@@ -358,6 +358,10 @@ function setTNTRewardInterval () {
   })
 }
 
+async function setTimedTriggeredEventsAsync () {
+  setTNTRewardTrigger()
+}
+
 // process all steps need to start the application
 async function start () {
   if (env.NODE_ENV === 'test') return
@@ -371,7 +375,7 @@ async function start () {
     // Check Core registration
     await registerCoreAsync()
     // init interval functions
-    setTNTRewardInterval()
+    await setTimedTriggeredEventsAsync()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)

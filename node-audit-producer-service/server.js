@@ -279,7 +279,7 @@ async function initResqueQueueAsync () {
   taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
-function setGenerateNewChallengeInterval () {
+function setGenerateNewChallengeTrigger () {
   let currentMinute = new Date().getUTCMinutes()
 
   // determine the minutes of the hour to run process based on NEW_AUDIT_CHALLENGES_PER_HOUR
@@ -307,7 +307,7 @@ function setGenerateNewChallengeInterval () {
   })
 }
 
-function setPerformNodeAuditInterval () {
+function setPerformNodeAuditTrigger () {
   let currentMinute = new Date().getUTCMinutes()
 
   // determine the minutes of the hour to run process based on NODE_AUDIT_ROUNDS_PER_HOUR
@@ -339,7 +339,7 @@ function setPerformNodeAuditInterval () {
   })
 }
 
-function setPerformCreditTopoffInterval () {
+function setPerformCreditTopoffTrigger () {
   let currentDay = new Date().getUTCDate()
 
   heart.createEvent(5, async function (count, last) {
@@ -353,7 +353,7 @@ function setPerformCreditTopoffInterval () {
   })
 }
 
-async function startIntervalsAsync () {
+async function setTimedTriggeredEventsAsync () {
   // attempt to generate a new audit challenge on startup
   if (IS_LEADER) {
     try {
@@ -363,9 +363,9 @@ async function startIntervalsAsync () {
     }
   }
 
-  setGenerateNewChallengeInterval()
-  setPerformNodeAuditInterval()
-  setPerformCreditTopoffInterval()
+  setGenerateNewChallengeTrigger()
+  setPerformNodeAuditTrigger()
+  setPerformCreditTopoffTrigger()
 }
 
 // process all steps need to start the application
@@ -384,7 +384,7 @@ async function start () {
     // ensure at least 1 calendar block exist
     await checkForGenesisBlockAsync()
     // start main processing
-    await startIntervalsAsync()
+    await setTimedTriggeredEventsAsync()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)
