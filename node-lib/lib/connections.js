@@ -272,14 +272,14 @@ async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails
   }
   // Retrieve the failed jobs for each batch and collect in 'failedJobs' array
   let failedJobs = []
-  for (let x = 0; x < failedBatches.length; x++) {
-    let failedJobSet = await queue.failed(failedBatches[x].start, failedBatches[x].end)
+  for (let failedBatch of failedBatches) {
+    let failedJobSet = await queue.failed(failedBatch.start, failedBatch.end)
     failedJobs = failedJobs.concat(failedJobSet)
   }
   // For each job, remove the job from the failed queue and requeue to its original queue
-  for (let x = 0; x < failedJobs.length; x++) {
-    logMessage(`Requeuing job: ${failedJobs[x].payload.queue} : ${failedJobs[x].payload.class} : ${failedJobs[x].error} `, debug, 'worker')
-    await queue.retryAndRemoveFailed(failedJobs[x])
+  for (let failedJob of failedJobs) {
+    logMessage(`Requeuing job: ${failedJob.payload.queue} : ${failedJob.payload.class} : ${failedJob.error} `, debug, 'worker')
+    await queue.retryAndRemoveFailed(failedJob)
   }
 }
 

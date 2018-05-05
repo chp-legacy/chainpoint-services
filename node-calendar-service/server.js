@@ -403,18 +403,17 @@ async function consumeRewardMessageAsync (msg) {
  * @returns {ops object array}
  */
 function formatAsChainpointV3Ops (proof, op) {
-  proof = proof.map((item) => {
+  let ChainpointV3Ops = proof.map((item) => {
     if (item.left) {
       return { l: item.left }
     } else {
       return { r: item.right }
     }
-  })
-  let ChainpointV3Ops = []
-  for (let x = 0; x < proof.length; x++) {
-    ChainpointV3Ops.push(proof[x])
-    ChainpointV3Ops.push({ op: op })
-  }
+  }).reduce((result, item) => {
+    result.push(item, { op: op })
+    return result
+  }, [])
+
   return ChainpointV3Ops
 }
 
@@ -441,17 +440,15 @@ function generateCalendarTree (rootsForTree) {
     treeDataObj = {}
     treeDataObj.cal_root = merkleTools.getMerkleRoot()
 
-    let treeSize = merkleTools.getLeafCount()
-    let proofData = []
-    for (let x = 0; x < treeSize; x++) {
+    let proofData = rootsForTree.map((rootItem, index) => {
       // push the agg_id and corresponding proof onto the array
       let proofDataItem = {}
-      proofDataItem.agg_id = rootsForTree[x].agg_id
-      proofDataItem.agg_msg = rootsForTree[x].msg
-      let proof = merkleTools.getProof(x)
+      proofDataItem.agg_id = rootItem.agg_id
+      proofDataItem.agg_msg = rootItem.msg
+      let proof = merkleTools.getProof(index)
       proofDataItem.proof = formatAsChainpointV3Ops(proof, 'sha-256')
-      proofData.push(proofDataItem)
-    }
+      return proofDataItem
+    })
     treeDataObj.proofData = proofData
     debug.general(`generateCalendarTree : rootsForTree length : ${rootsForTree.length}`)
   }
@@ -532,23 +529,19 @@ async function aggregateAndAnchorBTCAsync (lastBtcAnchorBlockId) {
     merkleTools.addLeaves(leaves)
     merkleTools.makeTree()
 
-    // get the total count of leaves in this aggregation
-    let treeSize = merkleTools.getLeafCount()
-
     treeData.anchor_btc_agg_id = uuidv1()
     treeData.anchor_btc_agg_root = merkleTools.getMerkleRoot().toString('hex')
 
-    let proofData = []
-    for (let x = 0; x < treeSize; x++) {
+    let proofData = blocks.reduce((result, block, index) => {
       // for calendar type blocks only, push the cal_id and corresponding proof onto the array
-      if (blocks[x].type === 'cal') {
+      if (block.type === 'cal') {
         let proofDataItem = {}
-        proofDataItem.cal_id = blocks[x].id
-        let proof = merkleTools.getProof(x)
+        proofDataItem.cal_id = block.id
+        let proof = merkleTools.getProof(index)
         proofDataItem.proof = formatAsChainpointV3Ops(proof, 'sha-256')
-        proofData.push(proofDataItem)
+        result.push(proofDataItem)
       }
-    }
+    }, [])
     treeData.proofData = proofData
 
     debug.btcAnchor(`aggregateAndAnchorBTCAsync : blocks.length : ${blocks.length}`)
@@ -590,8 +583,7 @@ async function queueCalStateDataMessageAsync (treeDataObj, block) {
   calStateData.cal_id = block.id
   // Build the anchors uris using the locations configured in CHAINPOINT_CORE_BASE_URI
   let BASE_URIS = [env.CHAINPOINT_CORE_BASE_URI]
-  let uris = []
-  for (let x = 0; x < BASE_URIS.length; x++) uris.push(`${BASE_URIS[x]}/calendar/${block.id}/hash`)
+  let uris = BASE_URIS.map((uri) => `${uri}/calendar/${block.id}/hash`)
   calStateData.anchor = {
     anchor_id: block.id,
     uris: uris
@@ -685,8 +677,7 @@ async function queueBtcCStateDataAsync (msg, block) {
 
   // Build the anchors uris using the locations configured in CHAINPOINT_CORE_BASE_URI
   let BASE_URIS = [env.CHAINPOINT_CORE_BASE_URI]
-  let uris = []
-  for (let x = 0; x < BASE_URIS.length; x++) uris.push(`${BASE_URIS[x]}/calendar/${block.id}/data`)
+  let uris = BASE_URIS.map((uri) => `${uri}/calendar/${block.id}/data`)
   stateObj.btchead_state.anchor = {
     anchor_id: btcheadHeight.toString(),
     uris: uris

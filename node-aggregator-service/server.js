@@ -54,18 +54,17 @@ function consumeHashMessage (msg) {
  * @returns {ops object array}
  */
 function formatAsChainpointV3Ops (proof, op) {
-  proof = proof.map((item) => {
+  let ChainpointV3Ops = proof.map((item) => {
     if (item.left) {
       return { l: item.left }
     } else {
       return { r: item.right }
     }
-  })
-  let ChainpointV3Ops = []
-  for (let x = 0; x < proof.length; x++) {
-    ChainpointV3Ops.push(proof[x])
-    ChainpointV3Ops.push({ op: op })
-  }
+  }).reduce((result, item) => {
+    result.push(item, { op: op })
+    return result
+  }, [])
+
   return ChainpointV3Ops
 }
 
@@ -104,24 +103,21 @@ let aggregateAsync = async () => {
       merkleTools.addLeaves(leaves)
       merkleTools.makeTree()
 
-      let treeSize = merkleTools.getLeafCount()
-
       aggregationData.agg_id = uuidv1()
       aggregationData.agg_root = merkleTools.getMerkleRoot().toString('hex')
 
-      let proofData = []
-      for (let x = 0; x < treeSize; x++) {
+      let proofData = hashesForTree.map((hashItem, index) => {
         // push the hash_id and corresponding proof onto the array, inserting the UUID concat/hash step at the beginning
         let proofDataItem = {}
-        proofDataItem.hash_id = hashesForTree[x].hash_id
-        proofDataItem.hash = hashesForTree[x].hash
-        let proof = merkleTools.getProof(x)
+        proofDataItem.hash_id = hashItem.hash_id
+        proofDataItem.hash = hashItem.hash
+        let proof = merkleTools.getProof(index)
         // only add the NIST item to the proof path if it was available and used in the tree calculation
-        if (hashesForTree[x].nist) proof.unshift({ left: `nist:${hashesForTree[x].nist}` })
-        proof.unshift({ left: `core_id:${hashesForTree[x].hash_id}` })
+        if (hashItem.nist) proof.unshift({ left: `nist:${hashItem.nist}` })
+        proof.unshift({ left: `core_id:${hashItem.hash_id}` })
         proofDataItem.proof = formatAsChainpointV3Ops(proof, 'sha-256')
-        proofData.push(proofDataItem)
-      }
+        return proofDataItem
+      })
       aggregationData.proofData = proofData
 
       // queue state message containing state data for all hashes for this aggregation interval

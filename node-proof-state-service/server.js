@@ -54,16 +54,15 @@ const BTC_PROOF_GEN_BATCH_SIZE = 2500
 async function ConsumeAggregationMessageAsync (msg) {
   let messageObj = JSON.parse(msg.content.toString())
 
-  let stateObjects = []
-  for (let x = 0; x < messageObj.proofData.length; x++) {
+  let stateObjects = messageObj.proofData.map((proofDataItem) => {
     let stateObj = {}
-    stateObj.hash_id = messageObj.proofData[x].hash_id
-    stateObj.hash = messageObj.proofData[x].hash
+    stateObj.hash_id = proofDataItem.hash_id
+    stateObj.hash = proofDataItem.hash
     stateObj.agg_id = messageObj.agg_id
     stateObj.agg_state = {}
-    stateObj.agg_state.ops = messageObj.proofData[x].proof
-    stateObjects.push(stateObj)
-  }
+    stateObj.agg_state.ops = proofDataItem.proof
+    return stateObj
+  })
 
   try {
     // Store this state information
@@ -108,8 +107,7 @@ async function ConsumeCalendarMessageAsync (msg) {
 
     await cachedProofState.writeCalStateObjectAsync(stateObj)
 
-    for (let x = 0; x < rows.length; x++) {
-      let hashIdRow = rows[x]
+    for (let hashIdRow of rows) {
       // construct a calendar 'proof ready' message for a given hash
       let dataOutObj = {}
       dataOutObj.hash_id = hashIdRow.hash_id
@@ -351,9 +349,9 @@ async function queueProofStatePruningTasks (modelName) {
   }
 
   // create and issue individual delete tasks for each batch
-  for (let x = 0; x < pruneBatchTasks.length; x++) {
+  for (let pruneBatchTask of pruneBatchTasks) {
     try {
-      await taskQueue.enqueue('task-handler-queue', `prune_${modelName}_ids`, [pruneBatchTasks[x]])
+      await taskQueue.enqueue('task-handler-queue', `prune_${modelName}_ids`, [pruneBatchTask])
     } catch (error) {
       console.error(`Could not enqueue prune task : ${error.message}`)
     }

@@ -77,8 +77,7 @@ let monitorTransactionsAsync = async () => {
   let btcTxObjJSONArray = await redis.smembers(BTC_TX_IDS_KEY)
   console.log(`Btc Tx monitoring check starting for ${btcTxObjJSONArray.length} transaction(s)`)
 
-  for (let x = 0; x < btcTxObjJSONArray.length; x++) {
-    let btcTxObjJSON = btcTxObjJSONArray[x]
+  for (let btcTxObjJSON of btcTxObjJSONArray) {
     let btcTxIdObj = JSON.parse(btcTxObjJSON)
     try {
       // Get BTC Transaction Stats
@@ -103,9 +102,7 @@ let monitorTransactionsAsync = async () => {
       let txIndex = blockStats.txIds.indexOf(txStats.id)
       if (txIndex === -1) throw new Error(`transaction ${txStats.id} not found in block ${txStats.blockHeight}`)
       // adjusting for endieness, reverse txids for further processing
-      for (let x = 0; x < blockStats.txIds.length; x++) {
-        blockStats.txIds[x] = blockStats.txIds[x].match(/.{2}/g).reverse().join('')
-      }
+      blockStats.txIds = blockStats.txIds.map((txId) => txId.match(/.{2}/g).reverse().join(''))
 
       if (blockStats.txIds.length === 0) throw new Error(`No transactions found in block ${txStats.blockHeight}`)
 

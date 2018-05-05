@@ -316,18 +316,16 @@ async function putNodeV1Async (req, res, next) {
     // HMAC-SHA256(hmac-key, TNT_ADDRESS|IP|YYYYMMDDHHmm)
     // Forces Nodes to be within +/- 1 min of Core to generate a valid HMAC
     let formattedDateInt = parseInt(moment().utc().format('YYYYMMDDHHmm'))
-    let acceptableHMACs = []
     // build an array af acceptable hmac values with -1 minute, current minute, +1 minute
-    for (let x = -1; x <= 1; x++) {
-      // use req.params.tnt_addr below instead of lowerCasedTntAddrParam to preserve
+    let acceptableHMACs = [-1, 0, 1].map((addend) => {
+      // use req.params.tnt_addr below instead of lowerCasedTntAddrParam and
+      // to req.params.public_uri below instead of lowerCasedPublicUri preserve
       // formatting submitted from Node and used in that Node's calculation
-      // use req.params.public_uri below instead of lowerCasedPublicUri to preserve
-      // formatting submitted from Node and used in that Node's calculation
-      let formattedTimeString = (formattedDateInt + x).toString()
+      let formattedTimeString = (formattedDateInt + addend).toString()
       let hmacTxt = [req.params.tnt_addr, req.params.public_uri, formattedTimeString].join('')
       let calculatedHMAC = crypto.createHmac('sha256', regNode.hmacKey).update(hmacTxt).digest('hex')
-      acceptableHMACs.push(calculatedHMAC)
-    }
+      return calculatedHMAC
+    })
     if (!_.includes(acceptableHMACs, req.params.hmac)) {
       return next(new restify.InvalidArgumentError('Invalid authentication HMAC provided - Try NTP sync'))
     }

@@ -98,13 +98,13 @@ async function auditNodesAsync () {
   let activeNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 } } })
 
   // iterate through each Registered Node, queue up an audit task for task handler
-  for (let x = 0; x < nodesReadyForAudit.length; x++) {
+  for (let nodeReadyForAudit of nodesReadyForAudit) {
     try {
       await taskQueue.enqueue(
         'task-handler-queue',
         `audit_node`,
         [
-          nodesReadyForAudit[x],
+          nodeReadyForAudit,
           activeNodeCount
         ])
     } catch (error) {
@@ -207,9 +207,9 @@ async function pruneAuditDataAsync () {
   }
 
   // create and issue individual delete tasks for each batch
-  for (let x = 0; x < pruneBatchTasks.length; x++) {
+  for (let pruneBatchTask of pruneBatchTasks) {
     try {
-      await taskQueue.enqueue('task-handler-queue', `prune_audit_log_ids`, [pruneBatchTasks[x]])
+      await taskQueue.enqueue('task-handler-queue', `prune_audit_log_ids`, [pruneBatchTask])
     } catch (error) {
       console.error(`Could not enqueue prune task : ${error.message}`)
     }

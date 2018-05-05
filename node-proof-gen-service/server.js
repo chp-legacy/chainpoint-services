@@ -228,12 +228,10 @@ async function consumeProofReadyMessageAsync (msg) {
 }
 
 async function storeProofsAsync (proofs) {
-  // compress proofs to binary format Base64
-  let proofsBase64 = proofs.map((proof) => chpBinary.objectToBase64Sync(proof))
   // save proof to proof proxy
-  for (let x = 0; x < proofs.length; x++) {
+  for (let proof of proofs) {
     try {
-      await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proofs[x].hash_id_core, proofsBase64[x]])
+      await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
     } catch (error) {
       console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
     }
