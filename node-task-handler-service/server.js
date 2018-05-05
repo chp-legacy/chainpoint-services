@@ -210,6 +210,7 @@ async function performAuditAsync (nodeData, activeNodeCount) {
 
   // build the data object containing Node data and last audit data to be sent to
   // the Node in the process of executing an audit on that Node
+  // this will be set to NULL if there is no audit history to deliver
   let nodeDataPackage = buildNodeDataPackage(nodeData, activeNodeCount)
 
   let configResultsBody
@@ -405,6 +406,9 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
 // ****************************************************
 
 function buildNodeDataPackage (nodeData, activeNodeCount) {
+  // if there is no audit history, return NULL
+  if (nodeData.audit_at === null) return null
+
   let auditPassed = nodeData.public_ip_pass &&
     nodeData.time_pass &&
     nodeData.cal_state_pass &&
@@ -470,16 +474,20 @@ function calcSigB64 (hexData) {
 async function getNodeConfigObjectAsync (publicUri, nodeDataPackage) {
   // perform the /config checks for the Node
   let nodeResponse
-  let dataStr = JSON.stringify(nodeDataPackage)
-  let dataB64 = Buffer.from(dataStr, 'utf8').toString('base64')
   let options = {
-    headers: { 'data': dataB64 },
     method: 'GET',
     uri: `${publicUri}/config`,
     json: true,
     gzip: true,
     timeout: 2500,
     resolveWithFullResponse: true
+  }
+
+  // Include audit history data package if one is provided
+  if (nodeDataPackage !== null) {
+    let dataStr = JSON.stringify(nodeDataPackage)
+    let dataB64 = Buffer.from(dataStr, 'utf8').toString('base64')
+    options.headers = { 'data': dataB64 }
   }
 
   nodeResponse = await rp(options)
