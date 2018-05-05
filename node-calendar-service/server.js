@@ -541,6 +541,7 @@ async function aggregateAndAnchorBTCAsync (lastBtcAnchorBlockId) {
         proofDataItem.proof = formatAsChainpointV3Ops(proof, 'sha-256')
         result.push(proofDataItem)
       }
+      return result
     }, [])
     treeData.proofData = proofData
 
