@@ -93,15 +93,6 @@ builds:
     labels:
       - 'org.chainpoint.git.commitid={fcommitid}'
 
-  testrpc:
-    context: testrpc
-    dockerfile: Dockerfile
-    pushes:
-      - 'on_branch:master=quay.io/chainpoint/testrpc:latest'
-      - 'always=quay.io/chainpoint/testrpc:{fcommitid}'
-    labels:
-      - 'org.chainpoint.git.commitid={fcommitid}'
-
   node-eth-contracts:
     context: node-eth-contracts
     dockerfile: Dockerfile

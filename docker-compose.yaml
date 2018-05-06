@@ -348,27 +348,21 @@ services:
     environment:
       COCKROACH_TRACE_SQL: "1000ms"
 
-  # Testing Ethereum blockchain service
+  # Command-line version of Ganache, a fast Ethereum RPC client for testing and development.
   #
-  testrpc:
-    image: quay.io/chainpoint/testrpc:${DOCKER_TAG}
-    build:
-      context: ./testrpc
-    container_name: testrpc-core
-    restart: unless-stopped
+  ganache:
+    image: trufflesuite/ganache-cli:latest
     ports:
       - "8545:8545" # RPC
     networks:
       - chainpoint
-    logging:
-      driver: none
 
   # Ethereum Contracts
-  # Builds and deploys the contracts to the testrpc node
+  # Builds and deploys the contracts to the ganache node
   # The built contracts are stored in a mounted local dir
   # which is also mounted RO in the other Ethereum services.
   # This allows them to be able to discover the address of the
-  # migrated TNT contract in testrpc.
+  # migrated TNT contract in ganache.
   #
   eth-contracts:
     image: quay.io/chainpoint/node-eth-contracts:${DOCKER_TAG}
@@ -376,7 +370,7 @@ services:
       context: ./node-eth-contracts
     container_name: eth-contracts-core
     depends_on:
-      - testrpc
+      - ganache
     networks:
       - chainpoint
     environment:
@@ -384,7 +378,7 @@ services:
       ETH_TNT_TOKEN_ADDR: ${ETH_TNT_TOKEN_ADDR}
     volumes:
       - ./data/contracts:/home/node/app/build/contracts
-    command: yarn migrate -- --network testrpc
+    command: yarn migrate --network ganache
 
   # Ethereum TNT Transaction Service
   # Accepts requests from other services related to the TNT token.
@@ -396,7 +390,7 @@ services:
       context: ./node-eth-tnt-tx-service
     container_name: eth-tnt-tx-core
     depends_on:
-      - testrpc
+      - ganache
       - eth-contracts
     networks:
       - chainpoint
@@ -404,7 +398,6 @@ services:
       NODE_ENV: development
       LISTEN_TX_PORT: 8085
       ETH_TNT_TOKEN_ADDR: ${ETH_TNT_TOKEN_ADDR}
-      INFURA_API_KEY: ${INFURA_API_KEY}
       # Standard Ethereum Keystore encrypted private key file
       ETH_WALLET: ${ETH_WALLET}
       ETH_WALLET_PASSWORD: ${ETH_WALLET_PASSWORD}
@@ -417,24 +410,24 @@ services:
   # Ethereum TNT Listener
   # Listens for incoming TNT transfers from the nodes
   #
-  eth-tnt-listener-service:
-    image: quay.io/chainpoint/node-eth-tnt-listener-service:${DOCKER_TAG}
-    build:
-      context: ./node-eth-tnt-listener-service
-    container_name: eth-tnt-listener-core
-    depends_on:
-      - testrpc
-      - roach1
-      - eth-contracts
-    networks:
-      - chainpoint
-    environment:
-      NODE_ENV: development
-      ETH_TNT_LISTEN_ADDRS: ${ETH_TNT_LISTEN_ADDRS}      
-      ETH_TNT_TOKEN_ADDR: ${ETH_TNT_TOKEN_ADDR}
-    command: yarn start
-    volumes:
-      - ./data/contracts:/home/node/app/contracts:ro
+  #eth-tnt-listener-service:
+  #  image: quay.io/chainpoint/node-eth-tnt-listener-service:${DOCKER_TAG}
+  #  build:
+  #    context: ./node-eth-tnt-listener-service
+  #  container_name: eth-tnt-listener-core
+  #  depends_on:
+  #    - ganache
+  #    - roach1
+  #    - eth-contracts
+  #  networks:
+  #    - chainpoint
+  #  environment:
+  #    NODE_ENV: development
+  #    ETH_TNT_LISTEN_ADDRS: ${ETH_TNT_LISTEN_ADDRS}      
+  #    ETH_TNT_TOKEN_ADDR: ${ETH_TNT_TOKEN_ADDR}
+  #  command: yarn start
+  #  volumes:
+  #    - ./data/contracts:/home/node/app/contracts:ro
 
   # TNT Reward
   # Responsible for rewarding TNT to random Nodes passing

@@ -19,16 +19,16 @@ const Wallet = require('ethereumjs-wallet')
 const Web3 = require('web3')
 const ProviderEngine = require('web3-provider-engine')
 const WalletSubprovider = require('web3-provider-engine/subproviders/wallet.js')
-const Web3Subprovider = require('web3-provider-engine/subproviders/web3.js')
+const ProviderSubprovider = require('web3-provider-engine/subproviders/provider.js')
 
-module.exports = (nodeUri) => {
+module.exports = (providerUri) => {
   // Load the env var to figure out which node to connect to
-  if (!nodeUri) {
+  if (!providerUri) {
     console.error('ETH_PROVIDER_URI environment variable not set - Exiting...')
     process.exit(-1)
   }
 
-  console.log('nodeUri: ', nodeUri)
+  console.log('providerUri: ', providerUri)
 
   // Check to see if a wallet is being used
   if (env.ETH_WALLET && env.ETH_WALLET !== '') {
@@ -46,15 +46,15 @@ module.exports = (nodeUri) => {
 
     let wallet = Wallet.fromV3(JSON.parse(env.ETH_WALLET), env.ETH_WALLET_PASSWORD)
 
-    console.log('Using wallet with provider: ' + nodeUri)
+    console.log('Using wallet with provider: ' + providerUri)
 
     var engine = new ProviderEngine()
     engine.addProvider(new WalletSubprovider(wallet, {}))
-    engine.addProvider(new Web3Subprovider(new Web3.providers.HttpProvider(nodeUri)))
+    engine.addProvider(new ProviderSubprovider(new Web3.providers.HttpProvider(providerUri)))
     engine.start() // Required by the provider engine.
     return engine
   }
 
-  console.log('Using wallet without provider: ' + nodeUri)
-  return new Web3.providers.HttpProvider(nodeUri)
+  console.log('Using wallet without provider: ' + providerUri)
+  return new Web3.providers.HttpProvider(providerUri)
 }

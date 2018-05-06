@@ -78,7 +78,7 @@ async function getBalanceFromInfuraAsync (tntAddr) {
       }
     ],
     method: 'POST',
-    uri: `https://mainnet.infura.io/${env.INFURA_API_KEY}`,
+    uri: env.ETH_PROVIDER_URI,
     body: {
       jsonrpc: '2.0',
       id: 1,

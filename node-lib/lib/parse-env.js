@@ -144,7 +144,7 @@ let envDefinitions = {
   PROOF_STATE_LEADER_KEY: envalid.str({ default: 'service/proofstate/leader/lock', desc: 'Key used for acquiring proof state process leadership locks' }),
 
   // ETH TNT Listener / TNT TX services specific variables
-  ETH_PROVIDER_URI: envalid.url({ default: 'http://testrpc:8545', desc: 'URI to the ETH node provider.' }),
+  ETH_PROVIDER_URI: envalid.url({ default: 'http://ganache:8545', desc: 'URI to the ETH node provider.' }),
   LISTEN_TX_PORT: envalid.num({ default: 8085, desc: 'Port of the ETH provider.' }),
   TNT_TO_CREDIT_RATE: envalid.num({ default: 200, desc: 'Exchange rate for TNT tokens to Credits. Default is give 200 credits for each TNT token.' }),
   ETH_TNT_TX_CONNECT_URI: envalid.url({ default: 'http://eth-tnt-tx-service:8085', desc: 'The eth-tnt-tx-service REST connection URI' }),
@@ -187,7 +187,6 @@ module.exports = (service) => {
       break
     case 'eth-tnt-tx':
       envDefinitions.ETH_TNT_TOKEN_ADDR = validateETHAddress({ desc: 'The address where the contract is on the blockchain.' })
-      envDefinitions.INFURA_API_KEY = envalid.str({ desc: 'The Infura API key used for all Infura API calls.' })
       break
     case 'eth-contracts':
       envDefinitions.ETH_TNT_TOKEN_ADDR = validateETHAddress({ desc: 'The address where the contract is on the blockchain.' })
