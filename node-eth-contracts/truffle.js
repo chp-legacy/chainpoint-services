@@ -21,8 +21,8 @@ module.exports = {
       port: 8545,
       network_id: '*' // Match any network id
     },
-    testrpc: {
-      host: 'testrpc',
+    ganache: {
+      host: 'ganache',
       port: 8545,
       network_id: '*' // Match any network id
     }
