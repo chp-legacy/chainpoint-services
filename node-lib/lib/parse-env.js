@@ -91,7 +91,7 @@ let envDefinitions = {
   RMQ_WORK_OUT_TASK_ACC_QUEUE: envalid.str({ default: 'work.taskacc', desc: 'The queue name for outgoing message to the task accumulator service' }),
 
   // Redis related variables
-  REDIS_CONNECT_URIS: envalid.url({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI, or a comma seperated list of Sentinel URIs' }),
+  REDIS_CONNECT_URIS: envalid.str({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI, or a comma seperated list of Sentinel URIs' }),
 
   // Service Specific Variables
 
