@@ -210,7 +210,7 @@ async function postHashV1Async (req, res, next) {
   try {
     // Try to retrieve from Redis cache first
     try {
-      regNode = await redis.hgetallAsync(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`)
+      regNode = await redis.hgetall(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`)
     } catch (error) {
       console.error(error.message)
     }
@@ -224,7 +224,7 @@ async function postHashV1Async (req, res, next) {
 
       // Set the found Node in cache, expiring in 24 hours, for next time
       try {
-        await redis.hmsetAsync(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, {tntAddr: regNode.tntAddr, hmacKey: regNode.hmacKey, tntCredit: regNode.tntCredit})
+        await redis.hmset(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, {tntAddr: regNode.tntAddr, hmacKey: regNode.hmacKey, tntCredit: regNode.tntCredit})
         await redis.expire(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, 60 * 60 * 24)
       } catch (error) {
         console.error(error.message)

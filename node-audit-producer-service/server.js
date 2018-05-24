@@ -28,11 +28,7 @@ const MerkleTools = require('merkle-tools')
 const heartbeats = require('heartbeats')
 const leaderElection = require('exp-leader-election')
 const cnsl = require('consul')
-const bluebird = require('bluebird')
-const r = require('redis')
-const nodeResque = require('node-resque')
-const exitHook = require('exit-hook')
-const { URL } = require('url')
+const connections = require('./lib/connections.js')
 
 let consul = null
 
@@ -239,34 +235,20 @@ async function openStorageConnectionAsync () {
 /**
  * Opens a Redis connection
  *
- * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
-function openRedisConnection (redisURI) {
-  redis = r.createClient(redisURI)
-
-  // If a password is provided in the redis:// URL use it
-  let parsedRedisURL = new URL(redisURI)
-  if (parsedRedisURL.password !== '') {
-    redis.auth(parsedRedisURL.password, (err) => {
-      if (err) throw err
+function openRedisConnection (redisURIs) {
+  connections.openRedisConnection(redisURIs,
+    (newRedis) => {
+      redis = newRedis
+      cachedAuditChallenge.setRedis(redis)
+      initResqueQueueAsync()
+    }, () => {
+      redis = null
+      cachedAuditChallenge.setRedis(null)
+      taskQueue = null
+      setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     })
-  }
-
-  redis.on('ready', () => {
-    bluebird.promisifyAll(redis)
-    cachedAuditChallenge.setRedis(redis)
-    console.log('Redis connection established')
-  })
-
-  redis.on('error', async (err) => {
-    console.error(`A redis error has occurred: ${err}`)
-    redis.quit()
-    redis = null
-    cachedAuditChallenge.setRedis(null)
-    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
-    await utils.sleep(5000)
-    openRedisConnection(redisURI)
-  })
 }
 
 async function performLeaderElection () {
@@ -311,33 +293,7 @@ async function checkForGenesisBlockAsync () {
  * Initializes the connection to the Resque queue when Redis is ready
  */
 async function initResqueQueueAsync () {
-  // wait until redis is initialized
-  let redisReady = (redis !== null)
-  while (!redisReady) {
-    await utils.sleep(100)
-    redisReady = (redis !== null)
-  }
-  const redisURI = new URL(env.REDIS_CONNECT_URI)
-  var connectionDetails = {
-    host: redisURI.hostname,
-    port: redisURI.port,
-    namespace: 'resque'
-  }
-
-  if (redisURI.password !== '') {
-    connectionDetails.password = redisURI.password
-  }
-
-  const queue = new nodeResque.Queue({ connection: connectionDetails })
-  queue.on('error', function (error) { console.log(error) })
-  await queue.connect()
-  taskQueue = queue
-
-  exitHook(async () => {
-    await queue.end()
-  })
-
-  console.log('Resque queue connection established')
+  taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
 function setGenerateNewChallengeInterval () {
@@ -440,13 +396,11 @@ async function start () {
     // init DB
     await openStorageConnectionAsync()
     // init Redis
-    openRedisConnection(env.REDIS_CONNECT_URI)
+    openRedisConnection(env.REDIS_CONNECT_URIS)
     // init consul and perform leader election
     performLeaderElection()
     // ensure at least 1 calendar block exist
     await checkForGenesisBlockAsync()
-    // init Resque queue
-    await initResqueQueueAsync()
     // start main processing
     await startWatchesAndIntervalsAsync()
     console.log('startup completed successfully')

@@ -21,9 +21,7 @@ const MerkleTools = require('merkle-tools')
 const BlockchainAnchor = require('blockchain-anchor')
 const amqp = require('amqplib')
 const utils = require('./lib/utils.js')
-const r = require('redis')
-const bluebird = require('bluebird')
-const { URL } = require('url')
+const connections = require('./lib/connections.js')
 
 // Key for the Redis set of all Bitcoin transaction id objects needing to be monitored.
 const BTC_TX_IDS_KEY = 'BTC_Mon:BTCTxIds'
@@ -55,7 +53,7 @@ async function consumeBtcTxIdMessageAsync (msg) {
     try {
       // add the transaction id to the redis set
       // Redis is the sole storage mechanism for this data
-      await redis.saddAsync(BTC_TX_IDS_KEY, btcTxIdObjJSON)
+      await redis.sadd(BTC_TX_IDS_KEY, btcTxIdObjJSON)
       amqpChannel.ack(msg)
     } catch (error) {
       amqpChannel.nack(msg)
@@ -73,7 +71,7 @@ let monitorTransactionsAsync = async () => {
   if (amqpChannel === null || redis === null) return
 
   CHECKS_IN_PROGRESS = true
-  let btcTxObjJSONArray = await redis.smembersAsync(BTC_TX_IDS_KEY)
+  let btcTxObjJSONArray = await redis.smembers(BTC_TX_IDS_KEY)
   console.log(`Btc Tx monitoring check starting for ${btcTxObjJSONArray.length} transaction(s)`)
 
   for (let x = 0; x < btcTxObjJSONArray.length; x++) {
@@ -132,7 +130,7 @@ let monitorTransactionsAsync = async () => {
         throw new Error(error.message)
       }
 
-      await redis.sremAsync(BTC_TX_IDS_KEY, btcTxObjJSON)
+      await redis.srem(BTC_TX_IDS_KEY, btcTxObjJSON)
 
       console.log(`${btcTxIdObj.tx_id} ready with ${txStats.confirmations} confirmations`)
     } catch (error) {
@@ -147,32 +145,16 @@ let monitorTransactionsAsync = async () => {
 /**
  * Opens a Redis connection
  *
- * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
-function openRedisConnection (redisURI) {
-  redis = r.createClient(redisURI)
-
-  // If a password is provided in the redis:// URL use it
-  let parsedRedisURL = new URL(redisURI)
-  if (parsedRedisURL.password !== '') {
-    redis.auth(parsedRedisURL.password, (err) => {
-      if (err) throw err
+function openRedisConnection (redisURIs) {
+  connections.openRedisConnection(redisURIs,
+    (newRedis) => {
+      redis = newRedis
+    }, () => {
+      redis = null
+      setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     })
-  }
-
-  redis.on('ready', () => {
-    bluebird.promisifyAll(redis)
-    console.log('Redis connection established')
-  })
-
-  redis.on('error', async (err) => {
-    console.error(`A redis error has occurred: ${err}`)
-    redis.quit()
-    redis = null
-    console.error('Cannot establish Redis connection. Attempting in 5 seconds...')
-    await utils.sleep(5000)
-    openRedisConnection(redisURI)
-  })
 }
 
 /**
@@ -224,7 +206,7 @@ async function start () {
   if (env.NODE_ENV === 'test') return
   try {
     // init Redis
-    openRedisConnection(env.REDIS_CONNECT_URI)
+    openRedisConnection(env.REDIS_CONNECT_URIS)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
     // init interval functions
