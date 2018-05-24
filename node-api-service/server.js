@@ -29,10 +29,8 @@ const verify = require('./lib/endpoints/verify.js')
 const calendar = require('./lib/endpoints/calendar.js')
 const config = require('./lib/endpoints/config.js')
 const root = require('./lib/endpoints/root.js')
-const r = require('redis')
-const bluebird = require('bluebird')
 const cnsl = require('consul')
-const { URL } = require('url')
+const connections = require('./lib/connections.js')
 
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
@@ -190,36 +188,20 @@ async function openRMQConnectionAsync (connectionString) {
 /**
  * Opens a Redis connection
  *
- * @param {string} connectionString - The connection string for the Redis instance, an Redis URI
+ * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
  */
-function openRedisConnection (redisURI) {
-  redis = r.createClient(redisURI)
-
-  // If a password is provided in the redis:// URL use it
-  let parsedRedisURL = new URL(redisURI)
-  if (parsedRedisURL.password !== '') {
-    redis.auth(parsedRedisURL.password, (err) => {
-      if (err) throw err
+function openRedisConnection (redisURIs) {
+  connections.openRedisConnection(redisURIs,
+    (newRedis) => {
+      redis = newRedis
+      hashes.setRedis(redis)
+      config.setRedis(redis)
+    }, () => {
+      redis = null
+      hashes.setRedis(null)
+      config.setRedis(null)
+      setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     })
-  }
-
-  redis.on('ready', () => {
-    bluebird.promisifyAll(redis)
-    hashes.setRedis(redis)
-    config.setRedis(redis)
-    console.log('Redis connection established')
-  })
-
-  redis.on('error', async (err) => {
-    console.error(`A redis error has occurred: ${err}`)
-    redis.quit()
-    redis = null
-    hashes.setRedis(null)
-    config.setRedis(null)
-    console.error('Cannot establish Redis connection. Retrying...')
-    await utils.sleep(5000)
-    openRedisConnection(redisURI)
-  })
 }
 
 // This initalizes all the consul watches
@@ -363,7 +345,7 @@ async function start () {
     config.setConsul(consul)
     console.log('Consul connection established')
     // init Redis
-    openRedisConnection(env.REDIS_CONNECT_URI)
+    openRedisConnection(env.REDIS_CONNECT_URIS)
     // init DB
     await openStorageConnectionAsync()
     // init RabbitMQ
