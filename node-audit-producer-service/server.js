@@ -246,7 +246,7 @@ function openRedisConnection (redisURIs) {
 async function performLeaderElection () {
   IS_LEADER = false
   connections.performLeaderElection(leaderElection,
-    env.AUDIT_PRODUCER_LEADER_KEY, env.CONSUL_HOST, env.CONSUL_PORT, null,
+    env.AUDIT_PRODUCER_LEADER_KEY, env.CONSUL_HOST, env.CONSUL_PORT, env.CHAINPOINT_CORE_BASE_URI,
     () => { IS_LEADER = true },
     () => { IS_LEADER = false }
   )
