@@ -18,11 +18,11 @@
 const env = require('./lib/parse-env.js')('agg')
 
 const _ = require('lodash')
-const utils = require('./lib/utils')
 const amqp = require('amqplib')
 const MerkleTools = require('merkle-tools')
 const crypto = require('crypto')
 const uuidv1 = require('uuid/v1')
+const connections = require('./lib/connections.js')
 
 // An array of all hashes needing to be processed.
 // Will be filled as new hashes arrive on the queue.
@@ -54,18 +54,17 @@ function consumeHashMessage (msg) {
  * @returns {ops object array}
  */
 function formatAsChainpointV3Ops (proof, op) {
-  proof = proof.map((item) => {
+  let ChainpointV3Ops = proof.map((item) => {
     if (item.left) {
       return { l: item.left }
     } else {
       return { r: item.right }
     }
-  })
-  let ChainpointV3Ops = []
-  for (let x = 0; x < proof.length; x++) {
-    ChainpointV3Ops.push(proof[x])
-    ChainpointV3Ops.push({ op: op })
-  }
+  }).reduce((result, item) => {
+    result.push(item, { op: op })
+    return result
+  }, [])
+
   return ChainpointV3Ops
 }
 
@@ -104,24 +103,21 @@ let aggregateAsync = async () => {
       merkleTools.addLeaves(leaves)
       merkleTools.makeTree()
 
-      let treeSize = merkleTools.getLeafCount()
-
       aggregationData.agg_id = uuidv1()
       aggregationData.agg_root = merkleTools.getMerkleRoot().toString('hex')
 
-      let proofData = []
-      for (let x = 0; x < treeSize; x++) {
+      let proofData = hashesForTree.map((hashItem, index) => {
         // push the hash_id and corresponding proof onto the array, inserting the UUID concat/hash step at the beginning
         let proofDataItem = {}
-        proofDataItem.hash_id = hashesForTree[x].hash_id
-        proofDataItem.hash = hashesForTree[x].hash
-        let proof = merkleTools.getProof(x)
+        proofDataItem.hash_id = hashItem.hash_id
+        proofDataItem.hash = hashItem.hash
+        let proof = merkleTools.getProof(index)
         // only add the NIST item to the proof path if it was available and used in the tree calculation
-        if (hashesForTree[x].nist) proof.unshift({ left: `nist:${hashesForTree[x].nist}` })
-        proof.unshift({ left: `core_id:${hashesForTree[x].hash_id}` })
+        if (hashItem.nist) proof.unshift({ left: `nist:${hashItem.nist}` })
+        proof.unshift({ left: `core_id:${hashItem.hash_id}` })
         proofDataItem.proof = formatAsChainpointV3Ops(proof, 'sha-256')
-        proofData.push(proofDataItem)
-      }
+        return proofDataItem
+      })
       aggregationData.proofData = proofData
 
       // queue state message containing state data for all hashes for this aggregation interval
@@ -155,54 +151,29 @@ let aggregateAsync = async () => {
 
 // This initalizes all the JS intervals that fire all aggregator events
 function startIntervals () {
-  console.log('starting intervals')
-
-  // PERIODIC TIMERS
-
-  setInterval(() => aggregateAsync(), env.AGGREGATION_INTERVAL)
+  let intervals = [{ function: aggregateAsync, ms: env.AGGREGATION_INTERVAL }]
+  connections.startIntervals(intervals)
 }
 
 /**
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
  *
- * @param {string} connectionString - The connection URI for the RabbitMQ instance
+ * @param {string} connectURI - The connection URI for the RabbitMQ instance
  */
-async function openRMQConnectionAsync (connectionString) {
-  let rmqConnected = false
-  while (!rmqConnected) {
-    try {
-      // connect to rabbitmq server
-      let conn = await amqp.connect(connectionString)
-      // create communication channel
-      let chan = await conn.createConfirmChannel()
-      // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_IN_AGG_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_STATE_QUEUE, { durable: true })
-      chan.prefetch(env.RMQ_PREFETCH_COUNT_AGG)
-      // set 'amqpChannel' so that publishers have access to the channel
-      amqpChannel = chan
-      // Continuously load the HASHES from RMQ with hash objects to process)
-      chan.consume(env.RMQ_WORK_IN_AGG_QUEUE, (msg) => {
-        consumeHashMessage(msg)
-      })
-      // if the channel closes for any reason, attempt to reconnect
-      conn.on('close', async () => {
-        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
-        amqpChannel = null
-        // un-acked messaged will be requeued, so clear all work in progress
-        HASHES = []
-        await utils.sleep(5000)
-        await openRMQConnectionAsync(connectionString)
-      })
-      console.log('RabbitMQ connection established')
-      rmqConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
+async function openRMQConnectionAsync (connectURI) {
+  await connections.openStandardRMQConnectionAsync(amqp, connectURI,
+    [env.RMQ_WORK_IN_AGG_QUEUE, env.RMQ_WORK_OUT_STATE_QUEUE],
+    env.RMQ_PREFETCH_COUNT_AGG,
+    { queue: env.RMQ_WORK_IN_AGG_QUEUE, method: (msg) => { consumeHashMessage(msg) } },
+    (chan) => { amqpChannel = chan },
+    () => {
+      amqpChannel = null
+      // un-acked messaged will be requeued, so clear all work in progress
+      HASHES = []
+      setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
     }
-  }
+  )
 }
 
 // process all steps need to start the application

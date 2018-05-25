@@ -17,7 +17,6 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('eth-tnt-tx')
 
-const { promisify } = require('util')
 const restify = require('restify')
 const loadProvider = require('./lib/eth-tnt/providerLoader.js')
 const loadToken = require('./lib/eth-tnt/tokenLoader.js')
@@ -27,6 +26,7 @@ var Web3 = require('web3')
 const retry = require('async-retry')
 const rp = require('request-promise-native')
 const keccak256 = require('js-sha3').keccak256
+const connections = require('./lib/connections.js')
 
 // The provider, token contract, and create the TokenOps class
 let web3Provider = null
@@ -144,9 +144,13 @@ server.get({ path: '/balance/:tnt_addr/', version: '1.0.0' }, async (req, res, n
 
   // use local wallet address when /balance/wallet requested
   let ethAddress = req.params.tnt_addr
-  if (ethAddress === 'wallet') {
-    let ethWallet = JSON.parse(env.ETH_WALLET)
-    ethAddress = ethWallet.address
+  try {
+    if (ethAddress === 'wallet') {
+      let ethWallet = JSON.parse(env.ETH_WALLET)
+      ethAddress = ethWallet.address
+    }
+  } catch (error) {
+    return next(new restify.InvalidArgumentError('invalid JSON body, malformed eth_wallet value'))
   }
   if (!ethAddress.startsWith('0x')) ethAddress = `0x${ethAddress}`
 
@@ -239,17 +243,6 @@ server.post({ path: '/transfer/', version: '1.0.0' }, (req, res, next) => {
   })
 })
 
-// Instruct REST server to begin listening for request
-function listenRestify (callback) {
-  server.listen(env.LISTEN_TX_PORT, (err) => {
-    if (err) return callback(err)
-    console.log(`${server.name} listening at ${server.url}`)
-    return callback(null)
-  })
-}
-// make awaitable async version for startListening function
-let listenRestifyAsync = promisify(listenRestify)
-
 // process all steps need to start the application
 async function start () {
   if (env.NODE_ENV === 'test') return
@@ -270,7 +263,7 @@ async function start () {
     ops = new TokenOps(tokenContract)
 
     // Init Restify
-    await listenRestifyAsync()
+    await connections.listenRestifyAsync(server, env.LISTEN_TX_PORT)
 
     console.log('startup completed successfully')
   } catch (error) {

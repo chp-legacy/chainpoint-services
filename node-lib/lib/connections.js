@@ -1,4 +1,5 @@
 const { URL } = require('url')
+const utils = require('./utils.js')
 
 /**
  * Opens a Redis connection
@@ -108,6 +109,153 @@ async function initResqueWorkerAsync (redisClient, namespace, queues, minTasks, 
   logMessage('Resque worker connection established', debug, 'general')
 }
 
+/**
+ * Opens a storage connection
+ **/
+async function openStorageConnectionAsync (modelSqlzArray, debug) {
+  let dbConnected = false
+  while (!dbConnected) {
+    try {
+      for (let model of modelSqlzArray) {
+        await model.sync({ logging: false })
+      }
+      logMessage('Sequelize connection established', debug, 'general')
+      dbConnected = true
+    } catch (error) {
+      // catch errors when attempting to establish connection
+      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
+      await utils.sleep(5000)
+    }
+  }
+}
+
+/**
+ * Opens an AMPQ connection and channel
+ * Retry logic is included to handle losses of connection
+ *
+ * @param {string} connectionString - The connection URI for the RabbitMQ instance
+ */
+async function openStandardRMQConnectionAsync (amqpClient, connectURI, queues, prefetchCount, consumeObj, onInit, onClose, debug) {
+  let rmqConnected = false
+  while (!rmqConnected) {
+    try {
+      // connect to rabbitmq server
+      let conn = await amqpClient.connect(connectURI)
+      // create communication channel
+      let chan = await conn.createConfirmChannel()
+      // assert all queues supplied
+      queues.forEach(queue => { chan.assertQueue(queue, { durable: true }) })
+      // optionally set prefetch count
+      if (prefetchCount !== null) chan.prefetch(prefetchCount)
+      // optionally confifgure message consumption
+      if (consumeObj !== null) chan.consume(consumeObj.queue, consumeObj.method)
+      // initialize variables using new communication channel
+      onInit(chan)
+      // if the channel closes for any reason, attempt to reconnect
+      conn.on('close', async () => {
+        onClose()
+        console.error('Connection to RabbitMQ closed.  Reconnecting in 5 seconds...')
+      })
+      logMessage('RabbitMQ connection established', debug, 'general')
+      rmqConnected = true
+    } catch (error) {
+      // catch errors when attempting to establish connection
+      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
+      await utils.sleep(5000)
+    }
+  }
+}
+
+// Initializes and returns a consul client object
+function initConsul (consulClient, host, port, debug) {
+  let consul = consulClient({ host: host, port: port })
+  logMessage('Consul connection established', debug, 'general')
+  return consul
+}
+
+// Instruct REST server to begin listening for request
+async function listenRestifyAsync (server, port, debug) {
+  return new Promise((resolve, reject) => {
+    server.listen(port, (err) => {
+      if (err) return reject(err)
+      logMessage(`${server.name} listening at ${server.url}`, debug, 'general')
+      return resolve()
+    })
+  })
+}
+
+// Performs a leader election across all instances using the given leader key
+function performLeaderElection (electorClient, leaderKey, host, port, id, onElect, onError, debug) {
+  let leaderElectionConfig = {
+    key: leaderKey,
+    consul: {
+      host: host,
+      port: port,
+      ttl: 15,
+      lockDelay: 1
+    }
+  }
+
+  electorClient(leaderElectionConfig)
+    .on('gainedLeadership', () => {
+      logMessage(`leaderElection : elected : ${id || 'no id supplied'}`, debug, 'general')
+      onElect()
+    })
+    .on('error', (err) => {
+      console.error(`leaderElection : error : lock session invalidated : ${err}`)
+      onError()
+    })
+}
+
+// This initalizes all the consul watches
+function startConsulWatches (consul, watches, defaults, debug) {
+  logMessage('starting watches', debug, 'general')
+
+  // Process any new watches to be initialized
+  if (watches !== null) {
+    watches.forEach((watchItem) => {
+      // Continuous watch on the consul key
+      let watch = consul.watch({ method: consul.kv.get, options: { key: watchItem.key } })
+      // When the value changes, handle appropriately
+      watch.on('change', (data, res) => { watchItem.onChange(data, res) })
+      // Handle and log any error events
+      watch.on('error', (err) => {
+        if (watchItem.onError !== null) watchItem.onError(err)
+        console.error(`consul watch error for key ${watchItem.key} : ${err.message}`)
+      })
+    })
+  }
+
+  // Process any new default values to be set
+  if (defaults) {
+    defaults.forEach((defaultItem) => {
+      consul.kv.get(defaultItem.key, function (err, result) {
+        if (err) {
+          console.error(err)
+        } else {
+          // Only create key if it doesn't exist or has no value
+          if (!result) {
+            consul.kv.set(defaultItem.key, defaultItem.value, function (err, result) {
+              if (err) throw err
+              logMessage(`created ${defaultItem.key} key with default value of ${defaultItem.value} `, debug, 'general')
+            })
+          }
+        }
+      })
+    })
+  }
+}
+
+function startIntervals (intervals, debug) {
+  logMessage('starting intervals', debug, 'general')
+
+  intervals.forEach((interval) => {
+    setInterval(interval.function, interval.ms)
+  })
+}
+
+// SUPPORT FUNCTIONS ****************
+
 async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails, taskTimeout, debug) {
   const queue = new nodeResque.Queue({ connection: connectionDetails })
   await queue.connect()
@@ -124,14 +272,14 @@ async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails
   }
   // Retrieve the failed jobs for each batch and collect in 'failedJobs' array
   let failedJobs = []
-  for (let x = 0; x < failedBatches.length; x++) {
-    let failedJobSet = await queue.failed(failedBatches[x].start, failedBatches[x].end)
+  for (let failedBatch of failedBatches) {
+    let failedJobSet = await queue.failed(failedBatch.start, failedBatch.end)
     failedJobs = failedJobs.concat(failedJobSet)
   }
   // For each job, remove the job from the failed queue and requeue to its original queue
-  for (let x = 0; x < failedJobs.length; x++) {
-    logMessage(`Requeuing job: ${failedJobs[x].payload.queue} : ${failedJobs[x].payload.class} : ${failedJobs[x].error}`, debug, 'worker')
-    await queue.retryAndRemoveFailed(failedJobs[x])
+  for (let failedJob of failedJobs) {
+    logMessage(`Requeuing job: ${failedJob.payload.queue} : ${failedJob.payload.class} : ${failedJob.error} `, debug, 'worker')
+    await queue.retryAndRemoveFailed(failedJob)
   }
 }
 
@@ -146,5 +294,12 @@ function logMessage (message, debug, msgType) {
 module.exports = {
   openRedisConnection: openRedisConnection,
   initResqueQueueAsync: initResqueQueueAsync,
-  initResqueWorkerAsync: initResqueWorkerAsync
+  initResqueWorkerAsync: initResqueWorkerAsync,
+  openStorageConnectionAsync: openStorageConnectionAsync,
+  openStandardRMQConnectionAsync: openStandardRMQConnectionAsync,
+  initConsul: initConsul,
+  listenRestifyAsync: listenRestifyAsync,
+  performLeaderElection: performLeaderElection,
+  startConsulWatches: startConsulWatches,
+  startIntervals: startIntervals
 }

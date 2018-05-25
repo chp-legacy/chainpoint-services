@@ -49,7 +49,7 @@ async function getCalBlockByHeightV1Async (req, res, next) {
   if (!block) {
     res.status(404)
     res.noCache()
-    res.send({code: 'NotFoundError', message: ''})
+    res.send({ code: 'NotFoundError', message: '' })
     return next()
   }
 
@@ -58,7 +58,7 @@ async function getCalBlockByHeightV1Async (req, res, next) {
   block.id = parseInt(block.id, 10)
   block.time = parseInt(block.time, 10)
   block.version = parseInt(block.version, 10)
-  res.cache('public', {maxAge: 2592000})
+  res.cache('public', { maxAge: 2592000 })
   res.send(block)
   return next()
 }
@@ -92,30 +92,30 @@ async function getCalBlockRangeV2Async (req, res, next) {
   if (blockRangeIndex > maxBlockRangeReady) {
     res.status(404)
     // cache the 404 for a short time to allow edge cache to remember that for a short while
-    res.cache('public', {maxAge: 30})
-    res.send({code: 'NotFoundError', message: 'block is not complete yet, check back soon'})
+    res.cache('public', { maxAge: 30 })
+    res.send({ code: 'NotFoundError', message: 'block is not complete yet, check back soon' })
     return next()
   }
 
   let blocks
   try {
-    blocks = await CalendarBlock.findAll({ where: { id: { [Op.between]: [fromHeight, toHeight] } }, order: [['id', 'ASC']] })
+    blocks = await CalendarBlock.findAll({ where: { id: { [Op.between]: [fromHeight, toHeight] } }, order: [['id', 'ASC']], raw: true })
   } catch (error) {
     return next(new restify.InternalError(error.message))
   }
   if (!blocks || blocks.length === 0) blocks = []
-  for (let x = 0; x < blocks.length; x++) {
-    blocks[x] = blocks[x].get({ plain: true })
-  }
+
   // convert requisite fields to integers
-  for (let x = 0; x < blocks.length; x++) {
-    blocks[x].id = parseInt(blocks[x].id, 10)
-    blocks[x].time = parseInt(blocks[x].time, 10)
-    blocks[x].version = parseInt(blocks[x].version, 10)
-  }
+  blocks = blocks.map((block) => {
+    block.id = parseInt(block.id, 10)
+    block.time = parseInt(block.time, 10)
+    block.version = parseInt(block.version, 10)
+    return block
+  })
+
   let results = {}
   results.blocks = blocks
-  res.cache('public', {maxAge: 2592000})
+  res.cache('public', { maxAge: 2592000 })
   res.send(results)
   return next()
 }
@@ -144,14 +144,14 @@ async function getCalBlockDataByHeightV1Async (req, res, next) {
   if (!block) {
     res.status(404)
     // cache the 404 for a short time to allow edge cache to remember that for a short while
-    res.cache('public', {maxAge: 30})
-    res.send({code: 'NotFoundError', message: 'block not found'})
+    res.cache('public', { maxAge: 30 })
+    res.send({ code: 'NotFoundError', message: 'block not found' })
     return next()
   }
 
   block = block.get({ plain: true })
   res.contentType = 'text/plain'
-  res.cache('public', {maxAge: 2592000})
+  res.cache('public', { maxAge: 2592000 })
   res.send(block.dataVal)
   return next()
 }
@@ -180,14 +180,14 @@ async function getCalBlockHashByHeightV1Async (req, res, next) {
   if (!block) {
     res.status(404)
     // cache the 404 for a short time to allow edge cache to remember that for a short while
-    res.cache('public', {maxAge: 30})
-    res.send({code: 'NotFoundError', message: 'block not found'})
+    res.cache('public', { maxAge: 30 })
+    res.send({ code: 'NotFoundError', message: 'block not found' })
     return next()
   }
 
   block = block.get({ plain: true })
   res.contentType = 'text/plain'
-  res.cache('public', {maxAge: 2592000})
+  res.cache('public', { maxAge: 2592000 })
   res.send(block.hash)
   return next()
 }

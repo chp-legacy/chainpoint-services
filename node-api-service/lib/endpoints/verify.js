@@ -27,8 +27,7 @@ let CalendarBlock = calendarBlock.CalendarBlock
 async function ProcessVerifyTasksAsync (verifyTasks) {
   let processedTasks = []
 
-  for (let x = 0; x < verifyTasks.length; x++) {
-    let verifyTask = verifyTasks[x]
+  for (let verifyTask of verifyTasks) {
     let status = verifyTask.status
 
     if (status === 'malformed') {
@@ -43,8 +42,7 @@ async function ProcessVerifyTasksAsync (verifyTasks) {
 
       let anchorResults = []
 
-      for (let x = 0; x < verifyTask.anchors.length; x++) {
-        let anchor = verifyTask.anchors[x]
+      for (let anchor of verifyTask.anchors) {
         let confirmResult = await confirmExpectedValueAsync(anchor.anchor)
         let anchorResult = {
           branch: anchor.branch || undefined,
@@ -135,18 +133,18 @@ async function confirmExpectedValueAsync (anchorInfo) {
 
 function flattenExpectedValues (branchArray) {
   let results = []
-  for (let b = 0; b < branchArray.length; b++) {
-    let anchors = branchArray[b].anchors
+  for (let branch of branchArray) {
+    let anchors = branch.anchors
     if (anchors.length > 0) {
-      for (let a = 0; a < anchors.length; a++) {
+      for (let anchor of anchors) {
         results.push({
-          branch: branchArray[b].label || undefined,
-          anchor: anchors[a]
+          branch: branch.label || undefined,
+          anchor: anchor
         })
       }
     }
-    if (branchArray[b].branches) {
-      results = results.concat(flattenExpectedValues(branchArray[b].branches))
+    if (branch.branches) {
+      results = results.concat(flattenExpectedValues(branch.branches))
     }
     return results
   }

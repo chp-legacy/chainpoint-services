@@ -20,7 +20,6 @@ const env = require('./lib/parse-env.js')('btc-mon')
 const MerkleTools = require('merkle-tools')
 const BlockchainAnchor = require('blockchain-anchor')
 const amqp = require('amqplib')
-const utils = require('./lib/utils.js')
 const connections = require('./lib/connections.js')
 
 // Key for the Redis set of all Bitcoin transaction id objects needing to be monitored.
@@ -74,8 +73,7 @@ let monitorTransactionsAsync = async () => {
   let btcTxObjJSONArray = await redis.smembers(BTC_TX_IDS_KEY)
   console.log(`Btc Tx monitoring check starting for ${btcTxObjJSONArray.length} transaction(s)`)
 
-  for (let x = 0; x < btcTxObjJSONArray.length; x++) {
-    let btcTxObjJSON = btcTxObjJSONArray[x]
+  for (let btcTxObjJSON of btcTxObjJSONArray) {
     let btcTxIdObj = JSON.parse(btcTxObjJSON)
     try {
       // Get BTC Transaction Stats
@@ -100,9 +98,7 @@ let monitorTransactionsAsync = async () => {
       let txIndex = blockStats.txIds.indexOf(txStats.id)
       if (txIndex === -1) throw new Error(`transaction ${txStats.id} not found in block ${txStats.blockHeight}`)
       // adjusting for endieness, reverse txids for further processing
-      for (let x = 0; x < blockStats.txIds.length; x++) {
-        blockStats.txIds[x] = blockStats.txIds[x].match(/.{2}/g).reverse().join('')
-      }
+      blockStats.txIds = blockStats.txIds.map((txId) => txId.match(/.{2}/g).reverse().join(''))
 
       if (blockStats.txIds.length === 0) throw new Error(`No transactions found in block ${txStats.blockHeight}`)
 
@@ -161,44 +157,29 @@ function openRedisConnection (redisURIs) {
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
  *
- * @param {string} connectionString - The connection string for the RabbitMQ instance, an AMQP URI
+ * @param {string} connectURI - The connection URI for the RabbitMQ instance
  */
-async function openRMQConnectionAsync (connectionString) {
-  let rmqConnected = false
-  while (!rmqConnected) {
-    try {
-      // connect to rabbitmq server
-      let conn = await amqp.connect(connectionString)
-      // create communication channel
-      let chan = await conn.createConfirmChannel()
-      // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_IN_BTCMON_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_CAL_QUEUE, { durable: true })
-      chan.prefetch(env.RMQ_PREFETCH_COUNT_BTCMON)
-      amqpChannel = chan
-      // Continuously load the HASHES from RMQ with hash objects to process)
-      chan.consume(env.RMQ_WORK_IN_BTCMON_QUEUE, (msg) => {
-        consumeBtcTxIdMessageAsync(msg)
-      })
-      // if the channel closes for any reason, attempt to reconnect
-      conn.on('close', async () => {
-        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
-        amqpChannel = null
-        await utils.sleep(5000)
-        await openRMQConnectionAsync(connectionString)
-      })
-      console.log('RabbitMQ connection established')
-      rmqConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
+async function openRMQConnectionAsync (connectURI) {
+  await connections.openStandardRMQConnectionAsync(amqp, connectURI,
+    [env.RMQ_WORK_IN_BTCMON_QUEUE, env.RMQ_WORK_OUT_CAL_QUEUE],
+    env.RMQ_PREFETCH_COUNT_BTCMON,
+    { queue: env.RMQ_WORK_IN_BTCMON_QUEUE, method: (msg) => { consumeBtcTxIdMessageAsync(msg) } },
+    (chan) => { amqpChannel = chan },
+    () => {
+      amqpChannel = null
+      setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
     }
-  }
+  )
 }
 
 function startIntervals () {
-  setInterval(() => { if (!CHECKS_IN_PROGRESS) monitorTransactionsAsync() }, env.MONITOR_INTERVAL_SECONDS * 1000)
+  let intervals = [{
+    function: () => {
+      if (!CHECKS_IN_PROGRESS) monitorTransactionsAsync()
+    },
+    ms: env.MONITOR_INTERVAL_SECONDS * 1000
+  }]
+  connections.startIntervals(intervals)
 }
 
 // process all steps need to start the application
