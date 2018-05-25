@@ -17,7 +17,6 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('api')
 
-const utils = require('./lib/utils.js')
 const amqp = require('amqplib')
 const restify = require('restify')
 const corsMiddleware = require('restify-cors-middleware')
@@ -29,7 +28,6 @@ const calendar = require('./lib/endpoints/calendar.js')
 const config = require('./lib/endpoints/config.js')
 const root = require('./lib/endpoints/root.js')
 const cnsl = require('consul')
-const { URL } = require('url')
 const connections = require('./lib/connections.js')
 
 // The redis connection used for all redis communication

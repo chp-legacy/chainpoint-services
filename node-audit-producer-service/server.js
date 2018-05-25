@@ -28,11 +28,6 @@ const MerkleTools = require('merkle-tools')
 const heartbeats = require('heartbeats')
 const leaderElection = require('exp-leader-election')
 const cnsl = require('consul')
-const bluebird = require('bluebird')
-const r = require('redis')
-const nodeResque = require('node-resque')
-const exitHook = require('exit-hook')
-const { URL } = require('url')
 const connections = require('./lib/connections.js')
 
 let consul = null

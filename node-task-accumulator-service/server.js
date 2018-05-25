@@ -18,11 +18,7 @@
 const env = require('./lib/parse-env.js')('task-accumulator')
 
 const amqp = require('amqplib')
-const utils = require('./lib/utils.js')
 const debugPkg = require('debug')
-const nodeResque = require('node-resque')
-const exitHook = require('exit-hook')
-const { URL } = require('url')
 const connections = require('./lib/connections.js')
 
 var debug = {

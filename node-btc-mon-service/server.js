@@ -20,10 +20,6 @@ const env = require('./lib/parse-env.js')('btc-mon')
 const MerkleTools = require('merkle-tools')
 const BlockchainAnchor = require('blockchain-anchor')
 const amqp = require('amqplib')
-const utils = require('./lib/utils.js')
-const r = require('redis')
-const bluebird = require('bluebird')
-const { URL } = require('url')
 const connections = require('./lib/connections.js')
 
 // Key for the Redis set of all Bitcoin transaction id objects needing to be monitored.

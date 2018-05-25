@@ -18,11 +18,7 @@
 const env = require('./lib/parse-env.js')('state')
 
 const amqp = require('amqplib')
-const utils = require('./lib/utils.js')
 const leaderElection = require('exp-leader-election')
-const nodeResque = require('node-resque')
-const exitHook = require('exit-hook')
-const { URL } = require('url')
 const connections = require('./lib/connections.js')
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')

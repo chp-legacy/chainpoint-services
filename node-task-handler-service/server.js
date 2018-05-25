@@ -18,7 +18,6 @@
 const env = require('./lib/parse-env.js')('task-handler')
 
 const amqp = require('amqplib')
-const utils = require('./lib/utils.js')
 const debugPkg = require('debug')
 const semver = require('semver')
 const retry = require('async-retry')
