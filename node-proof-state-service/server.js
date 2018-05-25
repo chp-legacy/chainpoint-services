@@ -18,7 +18,6 @@
 const env = require('./lib/parse-env.js')('state')
 
 const amqp = require('amqplib')
-const utils = require('./lib/utils.js')
 const leaderElection = require('exp-leader-election')
 const connections = require('./lib/connections.js')
 
@@ -51,16 +50,15 @@ const BTC_PROOF_GEN_BATCH_SIZE = 2500
 async function ConsumeAggregationMessageAsync (msg) {
   let messageObj = JSON.parse(msg.content.toString())
 
-  let stateObjects = []
-  for (let x = 0; x < messageObj.proofData.length; x++) {
+  let stateObjects = messageObj.proofData.map((proofDataItem) => {
     let stateObj = {}
-    stateObj.hash_id = messageObj.proofData[x].hash_id
-    stateObj.hash = messageObj.proofData[x].hash
+    stateObj.hash_id = proofDataItem.hash_id
+    stateObj.hash = proofDataItem.hash
     stateObj.agg_id = messageObj.agg_id
     stateObj.agg_state = {}
-    stateObj.agg_state.ops = messageObj.proofData[x].proof
-    stateObjects.push(stateObj)
-  }
+    stateObj.agg_state.ops = proofDataItem.proof
+    return stateObj
+  })
 
   try {
     // Store this state information
@@ -105,8 +103,7 @@ async function ConsumeCalendarMessageAsync (msg) {
 
     await cachedProofState.writeCalStateObjectAsync(stateObj)
 
-    for (let x = 0; x < rows.length; x++) {
-      let hashIdRow = rows[x]
+    for (let hashIdRow of rows) {
       // construct a calendar 'proof ready' message for a given hash
       let dataOutObj = {}
       dataOutObj.hash_id = hashIdRow.hash_id
@@ -348,9 +345,9 @@ async function queueProofStatePruningTasks (modelName) {
   }
 
   // create and issue individual delete tasks for each batch
-  for (let x = 0; x < pruneBatchTasks.length; x++) {
+  for (let pruneBatchTask of pruneBatchTasks) {
     try {
-      await taskQueue.enqueue('task-handler-queue', `prune_${modelName}_ids`, [pruneBatchTasks[x]])
+      await taskQueue.enqueue('task-handler-queue', `prune_${modelName}_ids`, [pruneBatchTask])
     } catch (error) {
       console.error(`Could not enqueue prune task : ${error.message}`)
     }
@@ -419,43 +416,18 @@ function processMessage (msg) {
 
 async function performLeaderElection () {
   IS_LEADER = false
-  let leaderElectionConfig = {
-    key: env.PROOF_STATE_LEADER_KEY,
-    consul: {
-      host: env.CONSUL_HOST,
-      port: env.CONSUL_PORT,
-      ttl: 15,
-      lockDelay: 1
-    }
-  }
-
-  leaderElection(leaderElectionConfig)
-    .on('gainedLeadership', function () {
-      console.log(`leaderElection : elected `)
-      IS_LEADER = true
-    })
-    .on('error', function (err) {
-      console.error(`leaderElection : error : lock session invalidated : ${err}`)
-      IS_LEADER = false
-    })
+  connections.performLeaderElection(leaderElection,
+    env.PROOF_STATE_LEADER_KEY, env.CONSUL_HOST, env.CONSUL_PORT, null,
+    () => { IS_LEADER = true },
+    () => { IS_LEADER = false }
+  )
 }
 
 /**
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await cachedProofState.openConnectionAsync()
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  await connections.openStorageConnectionAsync([cachedProofState.sequelize])
 }
 
 /**
@@ -481,41 +453,19 @@ function openRedisConnection (redisURIs) {
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
  *
- * @param {string} connectionString - The connection string for the RabbitMQ instance, an AMQP URI
+ * @param {string} connectURI - The connection URI for the RabbitMQ instance
  */
-async function openRMQConnectionAsync (connectionString) {
-  let rmqConnected = false
-  while (!rmqConnected) {
-    try {
-      // connect to rabbitmq server
-      let conn = await amqp.connect(connectionString)
-      // create communication channel
-      let chan = await conn.createConfirmChannel()
-      // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_IN_STATE_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_GEN_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_CAL_QUEUE, { durable: true })
-      chan.prefetch(env.RMQ_PREFETCH_COUNT_STATE)
-      amqpChannel = chan
-      // Continuously load the HASHES from RMQ with hash objects to process
-      chan.consume(env.RMQ_WORK_IN_STATE_QUEUE, (msg) => {
-        processMessage(msg)
-      })
-      // if the channel closes for any reason, attempt to reconnect
-      conn.on('close', async () => {
-        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
-        amqpChannel = null
-        await utils.sleep(5000)
-        await openRMQConnectionAsync(connectionString)
-      })
-      console.log('RabbitMQ connection established')
-      rmqConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
+async function openRMQConnectionAsync (connectURI) {
+  await connections.openStandardRMQConnectionAsync(amqp, connectURI,
+    [env.RMQ_WORK_IN_STATE_QUEUE, env.RMQ_WORK_OUT_GEN_QUEUE, env.RMQ_WORK_OUT_CAL_QUEUE],
+    env.RMQ_PREFETCH_COUNT_STATE,
+    { queue: env.RMQ_WORK_IN_STATE_QUEUE, method: (msg) => { processMessage(msg) } },
+    (chan) => { amqpChannel = chan },
+    () => {
+      amqpChannel = null
+      setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
     }
-  }
+  )
 }
 
 /**
@@ -526,11 +476,15 @@ async function initResqueQueueAsync () {
 }
 
 function startIntervals () {
-  setInterval(async () => {
-    if (IS_LEADER) {
-      await PruneStateDataAsync()
-    }
-  }, env.PRUNE_FREQUENCY_MINUTES * 60 * 1000)
+  let intervals = [{
+    function: () => {
+      if (IS_LEADER) {
+        PruneStateDataAsync()
+      }
+    },
+    ms: env.PRUNE_FREQUENCY_MINUTES * 60 * 1000
+  }]
+  connections.startIntervals(intervals)
 }
 
 // process all steps need to start the application

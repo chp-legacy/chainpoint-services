@@ -8,7 +8,6 @@ The following is a description of methods that must be defined in a storage adap
 
 | Name           | Description  | Returns  |
 | :------------- |:-------------|:-------------|
-| openConnectionAsync()       | opens the connection to the underlying storage provider | boolean indicating success |
 | getHashIdsByAggIdAsync(aggId)     | gets all hash ids associated with an aggregation event | result array containing hash id objects |
 | getHashIdsByBtcTxIdAsync(btcTxId)     | gets all hash ids associated with a btcTxId | result array containing hash id objects |
 | getAggStateObjectByHashIdAsync(hashId)     | gets the agg state object for a given hash id | an agg state object |

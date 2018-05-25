@@ -17,7 +17,6 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('tnt-reward')
 
-const utils = require('./lib/utils')
 const tntUnits = require('./lib/tntUnits.js')
 const amqp = require('amqplib')
 const calendarBlock = require('./lib/models/CalendarBlock.js')
@@ -26,6 +25,7 @@ const registeredNode = require('./lib/models/RegisteredNode.js')
 const csprng = require('random-number-csprng')
 const heartbeats = require('heartbeats')
 const leaderElection = require('exp-leader-election')
+const connections = require('./lib/connections.js')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -263,78 +263,40 @@ async function calculateCurrentRewardShares () {
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
  *
- * @param {string} connectionString - The connection URI for the RabbitMQ instance
+ * @param {string} connectURI - The connection URI for the RabbitMQ instance
  */
-async function openRMQConnectionAsync (connectionString) {
-  let rmqConnected = false
-  while (!rmqConnected) {
-    try {
-      // connect to rabbitmq server
-      let conn = await amqp.connect(connectionString)
-      // create communication channel
-      let chan = await conn.createConfirmChannel()
-      // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_OUT_CAL_QUEUE, { durable: true })
-      // set 'amqpChannel' so that publishers have access to the channel
-      amqpChannel = chan
-      // if the channel closes for any reason, attempt to reconnect
-      conn.on('close', async () => {
-        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
-        amqpChannel = null
-        await utils.sleep(5000)
-        await openRMQConnectionAsync(connectionString)
-      })
-      console.log('RabbitMQ connection established')
-      rmqConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
+async function openRMQConnectionAsync (connectURI) {
+  await connections.openStandardRMQConnectionAsync(amqp, connectURI,
+    [env.RMQ_WORK_OUT_CAL_QUEUE],
+    null,
+    null,
+    (chan) => { amqpChannel = chan },
+    () => {
+      amqpChannel = null
+      setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
     }
-  }
+  )
 }
 
 async function performLeaderElection () {
   IS_LEADER = false
-  let leaderElectionConfig = {
-    key: env.REWARDS_LEADER_KEY,
-    consul: {
-      host: env.CONSUL_HOST,
-      port: env.CONSUL_PORT,
-      ttl: 15,
-      lockDelay: 1
-    }
-  }
-
-  leaderElection(leaderElectionConfig)
-    .on('gainedLeadership', function () {
-      console.log(`leaderElection : elected `)
-      IS_LEADER = true
-    })
-    .on('error', function (err) {
-      console.error(`leaderElection : error : lock session invalidated : ${err}`)
-      IS_LEADER = false
-    })
+  connections.performLeaderElection(leaderElection,
+    env.REWARDS_LEADER_KEY, env.CONSUL_HOST, env.CONSUL_PORT, null,
+    () => { IS_LEADER = true },
+    () => { IS_LEADER = false }
+  )
 }
 
 /**
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await calBlockSequelize.sync({ logging: false })
-      await registeredCoreSequelize.sync({ logging: false })
-      await registeredNodeSequelize.sync({ logging: false })
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  let modelSqlzArray = [
+    calBlockSequelize,
+    registeredCoreSequelize,
+    registeredNodeSequelize
+  ]
+  await connections.openStorageConnectionAsync(modelSqlzArray)
 }
 
 /**
@@ -367,17 +329,8 @@ async function registerCoreAsync () {
   }
 }
 
-// This initalizes all the JS intervals that fire all aggregator events
-function startIntervals () {
-  console.log('starting intervals')
-
-  // PERIODIC TIMERS
-
-  setTNTRewardInterval()
-}
-
-// Set the TNT Reward interval
-function setTNTRewardInterval () {
+// Set the TNT Reward Trigger
+function setTNTRewardTrigger () {
   let currentMinute = new Date().getUTCMinutes()
 
   // determine the minutes of the hour to run process based on REWARDS_PER_HOUR
@@ -405,6 +358,10 @@ function setTNTRewardInterval () {
   })
 }
 
+async function setTimedTriggeredEventsAsync () {
+  setTNTRewardTrigger()
+}
+
 // process all steps need to start the application
 async function start () {
   if (env.NODE_ENV === 'test') return
@@ -418,7 +375,7 @@ async function start () {
     // Check Core registration
     await registerCoreAsync()
     // init interval functions
-    startIntervals()
+    await setTimedTriggeredEventsAsync()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)

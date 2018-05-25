@@ -17,8 +17,6 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('api')
 
-const { promisify } = require('util')
-const utils = require('./lib/utils.js')
 const amqp = require('amqplib')
 const restify = require('restify')
 const corsMiddleware = require('restify-cors-middleware')
@@ -131,58 +129,33 @@ server.get({ path: '/', version: '1.0.0' }, root.getV1)
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await hashes.getSequelize().sync({ logging: false })
-      await nodes.getRegisteredNodeSequelize().sync({ logging: false })
-      await calendar.getCalendarBlockSequelize().sync({ logging: false })
-      await verify.getCalendarBlockSequelize().sync({ logging: false })
-      await config.getAuditChallengeSequelize().sync({ logging: false })
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  let modelSqlzArray = [
+    hashes.getSequelize(),
+    nodes.getRegisteredNodeSequelize(),
+    calendar.getCalendarBlockSequelize(),
+    verify.getCalendarBlockSequelize(),
+    config.getAuditChallengeSequelize()
+  ]
+  await connections.openStorageConnectionAsync(modelSqlzArray)
 }
 
 /**
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
  *
- * @param {string} connectionString - The connection string for the RabbitMQ instance, an AMQP URI
+ * @param {string} connectURI - The connection URI for the RabbitMQ instance
  */
-async function openRMQConnectionAsync (connectionString) {
-  let rmqConnected = false
-  while (!rmqConnected) {
-    try {
-      // connect to rabbitmq server
-      let conn = await amqp.connect(connectionString)
-      // create communication channel
-      let chan = await conn.createConfirmChannel()
-      // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_OUT_AGG_QUEUE, { durable: true })
-      chan.prefetch(env.RMQ_PREFETCH_COUNT_API)
-      // set 'amqpChannel' so that publishers have access to the channel
-      hashes.setAMQPChannel(chan)
-      // if the channel closes for any reason, attempt to reconnect
-      conn.on('close', async () => {
-        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
-        hashes.setAMQPChannel(null)
-        await utils.sleep(5000)
-        await openRMQConnectionAsync(connectionString)
-      })
-      console.log('RabbitMQ connection established')
-      rmqConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
+async function openRMQConnectionAsync (connectURI) {
+  await connections.openStandardRMQConnectionAsync(amqp, connectURI,
+    [env.RMQ_WORK_OUT_AGG_QUEUE],
+    null,
+    null,
+    (chan) => { hashes.setAMQPChannel(chan) },
+    () => {
+      hashes.setAMQPChannel(null)
+      setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
     }
-  }
+  )
 }
 
 /**
@@ -205,155 +178,78 @@ function openRedisConnection (redisURIs) {
 }
 
 // This initalizes all the consul watches
-function startWatches () {
-  console.log('starting watches')
-
-  // Continuous watch on the consul key holding the NIST object.
-  var nistWatch = consul.watch({ method: consul.kv.get, options: { key: env.NIST_KEY } })
-
-  // Store the updated NIST data on change
-  nistWatch.on('change', function (data, res) {
-    // process only if a value has been returned and it is different than what is already stored
-    if (data && data.Value && hashes.getNistLatest() !== data.Value) {
-      hashes.setNistLatest(data.Value)
-    }
-  })
-
-  nistWatch.on('error', function (err) {
-    console.error('nistWatch error: ', err)
-  })
-
-  // Continuous watch on the consul key holding the regNodesLimit count.
-  var regNodesLimitWatch = consul.watch({ method: consul.kv.get, options: { key: env.REG_NODES_LIMIT_KEY } })
-
-  // Store the updated regNodesLimit count on change
-  regNodesLimitWatch.on('change', function (data, res) {
-    // process only if a value has been returned
-    if (data && data.Value) {
-      nodes.setRegNodesLimit(data.Value)
-    }
-  })
-
-  regNodesLimitWatch.on('error', function (err) {
-    console.error('regNodesLimitWatch error: ', err)
-  })
-
-  // Continuous watch on the consul key holding the regNodesLimit count.
-  var minNodeVersionExistingWatch = consul.watch({ method: consul.kv.get, options: { key: env.MIN_NODE_VERSION_EXISTING_KEY } })
-
-  // Store the updated regNodesLimit count on change
-  minNodeVersionExistingWatch.on('change', function (data, res) {
-    // process only if a value has been returned
-    if (data && data.Value) {
-      config.setMinNodeVersionExisting(data.Value)
-      nodes.setMinNodeVersionExisting(data.Value)
-    }
-  })
-
-  minNodeVersionExistingWatch.on('error', function (err) {
-    console.error('minNodeVersionExistingWatch error: ', err)
-  })
-
-  // Continuous watch on the consul key holding the regNodesLimit count.
-  var minNodeVersionNewWatch = consul.watch({ method: consul.kv.get, options: { key: env.MIN_NODE_VERSION_NEW_KEY } })
-
-  // Store the updated regNodesLimit count on change
-  minNodeVersionNewWatch.on('change', function (data, res) {
-    // process only if a value has been returned
-    if (data && data.Value) {
-      nodes.setMinNodeVersionNew(data.Value)
-    }
-  })
-
-  minNodeVersionNewWatch.on('error', function (err) {
-    console.error('minNodeVersionNewWatch error: ', err)
-  })
-
-  // Continuous watch on the consul key holding the moat recent audit challenge key.
-  var recentChallengeKeyWatch = consul.watch({ method: consul.kv.get, options: { key: env.AUDIT_CHALLENGE_RECENT_KEY } })
-
-  // Store the updated regNodesLimit count on change
-  recentChallengeKeyWatch.on('change', function (data, res) {
-    // process only if a value has been returned
-    if (data && data.Value) config.setMostRecentChallengeKey(data.Value)
-  })
-
-  recentChallengeKeyWatch.on('error', function (err) {
-    console.error('recentChallengeKeyWatch error: ', err)
-  })
-
-  consul.kv.get(env.REG_NODES_LIMIT_KEY, function (err, result) {
-    if (err) {
-      console.error(err)
-    } else {
-      // Only create key if it doesn't exist or has no value, default value of 0
-      if (!result) {
-        consul.kv.set(env.REG_NODES_LIMIT_KEY, '0', function (err, result) {
-          if (err) throw err
-          console.log(`Created ${env.REG_NODES_LIMIT_KEY} key`)
-        })
+function startConsulWatches () {
+  let watches = [{
+    key: env.NIST_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned and it is different than what is already stored
+      if (data && data.Value && hashes.getNistLatest() !== data.Value) {
+        hashes.setNistLatest(data.Value)
       }
-    }
-  })
-
-  consul.kv.get(env.MIN_NODE_VERSION_EXISTING_KEY, function (err, result) {
-    if (err) {
-      console.error(err)
-    } else {
-      // Only create key if it doesn't exist or has no value, default value of 0
-      if (!result) {
-        consul.kv.set(env.MIN_NODE_VERSION_EXISTING_KEY, '0.0.1', function (err, result) {
-          if (err) throw err
-          console.log(`Created ${env.MIN_NODE_VERSION_EXISTING_KEY} key`)
-        })
+    },
+    onError: null
+  }, {
+    key: env.REG_NODES_LIMIT_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) {
+        nodes.setRegNodesLimit(data.Value)
       }
-    }
-  })
-
-  consul.kv.get(env.MIN_NODE_VERSION_NEW_KEY, function (err, result) {
-    if (err) {
-      console.error(err)
-    } else {
-      // Only create key if it doesn't exist or has no value, default value of 0
-      if (!result) {
-        consul.kv.set(env.MIN_NODE_VERSION_NEW_KEY, '0.0.1', function (err, result) {
-          if (err) throw err
-          console.log(`Created ${env.MIN_NODE_VERSION_NEW_KEY} key`)
-        })
+    },
+    onError: null
+  }, {
+    key: env.MIN_NODE_VERSION_EXISTING_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) {
+        config.setMinNodeVersionExisting(data.Value)
+        nodes.setMinNodeVersionExisting(data.Value)
       }
-    }
-  })
+    },
+    onError: null
+  }, {
+    key: env.MIN_NODE_VERSION_NEW_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) {
+        nodes.setMinNodeVersionNew(data.Value)
+      }
+    },
+    onError: null
+  }, {
+    key: env.AUDIT_CHALLENGE_RECENT_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) config.setMostRecentChallengeKey(data.Value)
+    },
+    onError: null
+  }]
+
+  let defaults = [
+    { key: env.REG_NODES_LIMIT_KEY, value: '0' },
+    { key: env.MIN_NODE_VERSION_EXISTING_KEY, value: '0.0.1' },
+    { key: env.MIN_NODE_VERSION_NEW_KEY, value: '0.0.1' }
+  ]
+  connections.startConsulWatches(consul, watches, defaults)
 }
-
-// Instruct REST server to begin listening for request
-function listenRestify (callback) {
-  server.listen(8080, (err) => {
-    if (err) return callback(err)
-    console.log(`${server.name} listening at ${server.url}`)
-    return callback(null)
-  })
-}
-// make awaitable async version for startListening function
-let listenRestifyAsync = promisify(listenRestify)
 
 // process all steps need to start the application
 async function start () {
   if (env.NODE_ENV === 'test') return
   try {
     // init consul
-    consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
+    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT)
     config.setConsul(consul)
-    console.log('Consul connection established')
     // init Redis
     openRedisConnection(env.REDIS_CONNECT_URIS)
     // init DB
     await openStorageConnectionAsync()
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    // init watches
-    startWatches()
+    // init consul watches
+    startConsulWatches()
     // Init Restify
-    await listenRestifyAsync()
+    await connections.listenRestifyAsync(server, 8080)
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)

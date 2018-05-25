@@ -93,13 +93,13 @@ async function auditNodesAsync () {
   let activeNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 } } })
 
   // iterate through each Registered Node, queue up an audit task for task handler
-  for (let x = 0; x < nodesReadyForAudit.length; x++) {
+  for (let nodeReadyForAudit of nodesReadyForAudit) {
     try {
       await taskQueue.enqueue(
         'task-handler-queue',
         `audit_node`,
         [
-          nodesReadyForAudit[x],
+          nodeReadyForAudit,
           activeNodeCount
         ])
     } catch (error) {
@@ -202,9 +202,9 @@ async function pruneAuditDataAsync () {
   }
 
   // create and issue individual delete tasks for each batch
-  for (let x = 0; x < pruneBatchTasks.length; x++) {
+  for (let pruneBatchTask of pruneBatchTasks) {
     try {
-      await taskQueue.enqueue('task-handler-queue', `prune_audit_log_ids`, [pruneBatchTasks[x]])
+      await taskQueue.enqueue('task-handler-queue', `prune_audit_log_ids`, [pruneBatchTask])
     } catch (error) {
       console.error(`Could not enqueue prune task : ${error.message}`)
     }
@@ -215,21 +215,13 @@ async function pruneAuditDataAsync () {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await regNodeSequelize.sync({ logging: false })
-      await calBlockSequelize.sync({ logging: false })
-      await nodeAuditSequelize.sync({ logging: false })
-      await cachedAuditChallenge.getAuditChallengeSequelize().sync({ logging: false })
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  let modelSqlzArray = [
+    nodeAuditSequelize,
+    calBlockSequelize,
+    regNodeSequelize,
+    cachedAuditChallenge.getAuditChallengeSequelize()
+  ]
+  await connections.openStorageConnectionAsync(modelSqlzArray)
 }
 
 /**
@@ -253,25 +245,11 @@ function openRedisConnection (redisURIs) {
 
 async function performLeaderElection () {
   IS_LEADER = false
-  let leaderElectionConfig = {
-    key: env.AUDIT_PRODUCER_LEADER_KEY,
-    consul: {
-      host: env.CONSUL_HOST,
-      port: env.CONSUL_PORT,
-      ttl: 15,
-      lockDelay: 1
-    }
-  }
-
-  leaderElection(leaderElectionConfig)
-    .on('gainedLeadership', function () {
-      console.log(`leaderElection : elected `)
-      IS_LEADER = true
-    })
-    .on('error', function (err) {
-      console.error(`leaderElection : error : lock session invalidated : ${err}`)
-      IS_LEADER = false
-    })
+  connections.performLeaderElection(leaderElection,
+    env.AUDIT_PRODUCER_LEADER_KEY, env.CONSUL_HOST, env.CONSUL_PORT, null,
+    () => { IS_LEADER = true },
+    () => { IS_LEADER = false }
+  )
 }
 
 async function checkForGenesisBlockAsync () {
@@ -296,7 +274,7 @@ async function initResqueQueueAsync () {
   taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
-function setGenerateNewChallengeInterval () {
+function setGenerateNewChallengeTrigger () {
   let currentMinute = new Date().getUTCMinutes()
 
   // determine the minutes of the hour to run process based on NEW_AUDIT_CHALLENGES_PER_HOUR
@@ -324,7 +302,7 @@ function setGenerateNewChallengeInterval () {
   })
 }
 
-function setPerformNodeAuditInterval () {
+function setPerformNodeAuditTrigger () {
   let currentMinute = new Date().getUTCMinutes()
 
   // determine the minutes of the hour to run process based on NODE_AUDIT_ROUNDS_PER_HOUR
@@ -356,7 +334,7 @@ function setPerformNodeAuditInterval () {
   })
 }
 
-function setPerformCreditTopoffInterval () {
+function setPerformCreditTopoffTrigger () {
   let currentDay = new Date().getUTCDate()
 
   heart.createEvent(5, async function (count, last) {
@@ -370,7 +348,7 @@ function setPerformCreditTopoffInterval () {
   })
 }
 
-async function startWatchesAndIntervalsAsync () {
+async function setTimedTriggeredEventsAsync () {
   // attempt to generate a new audit challenge on startup
   if (IS_LEADER) {
     try {
@@ -380,9 +358,9 @@ async function startWatchesAndIntervalsAsync () {
     }
   }
 
-  setGenerateNewChallengeInterval()
-  setPerformNodeAuditInterval()
-  setPerformCreditTopoffInterval()
+  setGenerateNewChallengeTrigger()
+  setPerformNodeAuditTrigger()
+  setPerformCreditTopoffTrigger()
 }
 
 // process all steps need to start the application
@@ -390,9 +368,8 @@ async function start () {
   if (env.NODE_ENV === 'test') return
   try {
     // init consul
-    consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
+    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT)
     cachedAuditChallenge.setConsul(consul)
-    console.log('Consul connection established')
     // init DB
     await openStorageConnectionAsync()
     // init Redis
@@ -402,7 +379,7 @@ async function start () {
     // ensure at least 1 calendar block exist
     await checkForGenesisBlockAsync()
     // start main processing
-    await startWatchesAndIntervalsAsync()
+    await setTimedTriggeredEventsAsync()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)

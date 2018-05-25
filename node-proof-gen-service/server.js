@@ -224,12 +224,10 @@ async function consumeProofReadyMessageAsync (msg) {
 }
 
 async function storeProofsAsync (proofs) {
-  // compress proofs to binary format Base64
-  let proofsBase64 = proofs.map((proof) => chpBinary.objectToBase64Sync(proof))
   // save proof to proof proxy
-  for (let x = 0; x < proofs.length; x++) {
+  for (let proof of proofs) {
     try {
-      await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proofs[x].hash_id_core, proofsBase64[x]])
+      await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
     } catch (error) {
       console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
     }
@@ -259,58 +257,26 @@ function openRedisConnection (redisURIs) {
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
  *
- * @param {string} connectionString - The connection string for the RabbitMQ instance, an AMQP URI
+ * @param {string} connectURI - The connection URI for the RabbitMQ instance
  */
-async function openRMQConnectionAsync (connectionString) {
-  let rmqConnected = false
-  while (!rmqConnected) {
-    try {
-      // connect to rabbitmq server
-      let conn = await amqp.connect(connectionString)
-      // create communication channel
-      let chan = await conn.createConfirmChannel()
-      // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_IN_GEN_QUEUE, { durable: true })
-      chan.assertQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, { durable: true })
-      chan.prefetch(env.RMQ_PREFETCH_COUNT_GEN)
-      amqpChannel = chan
-      // Continuously load the HASHES from RMQ with hash objects to process
-      chan.consume(env.RMQ_WORK_IN_GEN_QUEUE, (msg) => {
-        consumeProofReadyMessageAsync(msg)
-      })
-      // if the channel closes for any reason, attempt to reconnect
-      conn.on('close', async () => {
-        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
-        amqpChannel = null
-        await utils.sleep(5000)
-        await openRMQConnectionAsync(connectionString)
-      })
-      console.log('RabbitMQ connection established')
-      rmqConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
+async function openRMQConnectionAsync (connectURI) {
+  await connections.openStandardRMQConnectionAsync(amqp, connectURI,
+    [env.RMQ_WORK_IN_GEN_QUEUE, env.RMQ_WORK_OUT_TASK_ACC_QUEUE],
+    env.RMQ_PREFETCH_COUNT_GEN,
+    { queue: env.RMQ_WORK_IN_GEN_QUEUE, method: (msg) => { consumeProofReadyMessageAsync(msg) } },
+    (chan) => { amqpChannel = chan },
+    () => {
+      amqpChannel = null
+      setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
     }
-  }
+  )
 }
 
 /**
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await cachedProofState.openConnectionAsync()
-      console.log('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  await connections.openStorageConnectionAsync([cachedProofState.sequelize])
 }
 
 /**

@@ -18,7 +18,6 @@
 const env = require('./lib/parse-env.js')('task-handler')
 
 const amqp = require('amqplib')
-const utils = require('./lib/utils.js')
 const debugPkg = require('debug')
 const semver = require('semver')
 const retry = require('async-retry')
@@ -585,20 +584,12 @@ async function getTNTBalance (tntAddress, checkMethod) {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let dbConnected = false
-  while (!dbConnected) {
-    try {
-      await registeredNodeSequelize.sync({ logging: false })
-      await nodeAuditSequelize.sync({ logging: false })
-      await cachedAuditChallenge.getAuditChallengeSequelize().sync({ logging: false })
-      debug.general('Sequelize connection established')
-      dbConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+  let modelSqlzArray = [
+    registeredNodeSequelize,
+    nodeAuditSequelize,
+    cachedAuditChallenge.getAuditChallengeSequelize()
+  ]
+  await connections.openStorageConnectionAsync(modelSqlzArray, debug)
 }
 
 /**
@@ -623,34 +614,20 @@ function openRedisConnection (redisURIs) {
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
  *
- * @param {string} connectionString - The connection string for the RabbitMQ instance, an AMQP URI
+ * @param {string} connectURI - The connection URI for the RabbitMQ instance
  */
-async function openRMQConnectionAsync (connectionString) {
-  let rmqConnected = false
-  while (!rmqConnected) {
-    try {
-      // connect to rabbitmq server
-      let conn = await amqp.connect(connectionString)
-      // create communication channel
-      let chan = await conn.createConfirmChannel()
-      // the connection and channel have been established
-      chan.assertQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, { durable: true })
-      amqpChannel = chan
-      // if the channel closes for any reason, attempt to reconnect
-      conn.on('close', async () => {
-        console.error('Connection to RMQ closed.  Reconnecting in 5 seconds...')
-        amqpChannel = null
-        await utils.sleep(5000)
-        await openRMQConnectionAsync(connectionString)
-      })
-      console.log('RabbitMQ connection established')
-      rmqConnected = true
-    } catch (error) {
-      // catch errors when attempting to establish connection
-      console.error('Cannot establish RabbitMQ connection. Attempting in 5 seconds...')
-      await utils.sleep(5000)
-    }
-  }
+async function openRMQConnectionAsync (connectURI) {
+  await connections.openStandardRMQConnectionAsync(amqp, connectURI,
+    [env.RMQ_WORK_OUT_TASK_ACC_QUEUE],
+    null,
+    null,
+    (chan) => { amqpChannel = chan },
+    () => {
+      amqpChannel = null
+      setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
+    },
+    debug
+  )
 }
 
 async function initResqueWorkerAsync () {
@@ -681,39 +658,35 @@ async function initResqueWorkerAsync () {
 }
 
 // This initalizes all the consul watches
-function startWatches () {
-  console.log('starting watches')
-
-  // Continuous watch on the consul key holding the regNodesLimit count.
-  var minNodeVersionExistingWatch = consul.watch({ method: consul.kv.get, options: { key: env.MIN_NODE_VERSION_EXISTING_KEY } })
-
-  // Store the updated regNodesLimit count on change
-  minNodeVersionExistingWatch.on('change', function (data, res) {
-    // process only if a value has been returned
-    if (data && data.Value) {
-      minNodeVersionExisting = data.Value
-    }
-  })
-
-  minNodeVersionExistingWatch.on('error', function (err) {
-    console.error('minNodeVersionExistingWatch error: ', err)
-  })
+function startConsulWatches () {
+  let watches = [{
+    key: env.MIN_NODE_VERSION_EXISTING_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) {
+        minNodeVersionExisting = data.Value
+      }
+    },
+    onError: null
+  }]
+  connections.startConsulWatches(consul, watches, null, debug)
 }
 
 // process all steps need to start the application
 async function start () {
   try {
     // init consul
-    consul = cnsl({ host: env.CONSUL_HOST, port: env.CONSUL_PORT })
-    console.log('Consul connection established')
+    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT, debug)
     // init DB
     await openStorageConnectionAsync()
     // init Redis
     openRedisConnection(env.REDIS_CONNECT_URIS)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    // init watches
-    startWatches()
+    // init Resque worker
+    await initResqueWorkerAsync()
+    // init consul watches
+    startConsulWatches()
     debug.general('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)
