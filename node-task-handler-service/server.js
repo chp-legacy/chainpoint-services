@@ -548,12 +548,8 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
   return nodeResponse.body
 }
 
-async function getTNTBalance (tntAddress, checkMethod) {
-  let headers = {}
-  if (checkMethod === 'geth') headers = { 'geth-only': true }
-
+async function getTNTBalance (tntAddress) {
   let options = {
-    headers: headers,
     method: 'GET',
     uri: `${env.ETH_TNT_TX_CONNECT_URI}/balance/${tntAddress}`,
     json: true,

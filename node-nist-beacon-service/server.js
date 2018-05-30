@@ -64,6 +64,7 @@ function startIntervals () {
         console.error(`getNistLatest : caught err : ${error.message}`)
       }
     },
+    immediate: true, // run this once immediately
     ms: env.NIST_INTERVAL_MS
   }]
   connections.startIntervals(intervals)
@@ -74,8 +75,6 @@ async function start () {
   try {
     // init consul
     consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT)
-    // get initial value for service start
-    getNistLatest()
     // init interval functions
     startIntervals()
     console.log('startup completed successfully')

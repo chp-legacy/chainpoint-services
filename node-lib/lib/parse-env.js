@@ -189,7 +189,9 @@ module.exports = (service) => {
       envDefinitions.BITCOIN_WIF = envalid.str({ desc: 'The Bitcoin private key WIF used for transaction creation' })
       break
     case 'eth-tnt-tx':
-      envDefinitions.ETH_TNT_TOKEN_ADDR = validateETHAddress({ desc: 'The address where the contract is on the blockchain.' })
+      envDefinitions.ETH_TNT_SOURCE_WALLET_PK = envalid.str({ desc: 'The private key for the source TNT / ETH wallet' })
+      envDefinitions.ETH_ETHERSCAN_API_KEY = envalid.str({ desc: 'API key for Infura service provider' })
+      envDefinitions.ETH_INFURA_API_KEY = envalid.str({ desc: 'API key for Etherscan service provider' })
       break
     case 'eth-contracts':
       envDefinitions.ETH_TNT_TOKEN_ADDR = validateETHAddress({ desc: 'The address where the contract is on the blockchain.' })
