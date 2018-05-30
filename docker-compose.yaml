@@ -424,23 +424,18 @@ services:
       dockerfile: Dockerfile.eth-tnt-tx
     container_name: eth-tnt-tx-core
     depends_on:
-      - base
-      - ganache
-      - eth-contracts
+      - redis
     networks:
       - chainpoint
     environment:
       NODE_ENV: development
       LISTEN_TX_PORT: 8085
-      ETH_TNT_TOKEN_ADDR: ${ETH_TNT_TOKEN_ADDR}
-      # Standard Ethereum Keystore encrypted private key file
-      ETH_WALLET: ${ETH_WALLET}
-      ETH_WALLET_PASSWORD: ${ETH_WALLET_PASSWORD}
+      ETH_TNT_SOURCE_WALLET_PK: ${ETH_TNT_SOURCE_WALLET_PK}
+      ETH_ETHERSCAN_API_KEY: ${ETH_ETHERSCAN_API_KEY}
+      ETH_INFURA_API_KEY: ${ETH_INFURA_API_KEY}
     ports:
       - "8085:8085" # REST API
     command: yarn start
-    volumes:
-      - ./data/contracts:/home/node/app/contracts:ro
 
   # Ethereum TNT Listener
   # Listens for incoming TNT transfers from the nodes
