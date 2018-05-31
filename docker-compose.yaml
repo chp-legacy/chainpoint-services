@@ -234,6 +234,7 @@ services:
       NODE_ENV: development
       ANCHOR_BTC: ${ANCHOR_BTC}
       ANCHOR_ETH: ${ANCHOR_ETH}
+      CHAINPOINT_CORE_BASE_URI: ${CHAINPOINT_CORE_BASE_URI}
 
   # Proof Generation
   # Responsible for constructing, signing, and validating Chainpoint proofs
@@ -266,6 +267,7 @@ services:
       - chainpoint
     environment:
       NODE_ENV: development
+      CHAINPOINT_CORE_BASE_URI: ${CHAINPOINT_CORE_BASE_URI}
 
   # RabbitMQ
   #
