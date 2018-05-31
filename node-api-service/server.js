@@ -223,12 +223,20 @@ function startConsulWatches () {
       if (data && data.Value) config.setMostRecentChallengeKey(data.Value)
     },
     onError: null
+  }, {
+    key: env.ENFORCE_PRIVATE_STAKE_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) hashes.setEnforcePrivateStakeState(data.Value)
+    },
+    onError: null
   }]
 
   let defaults = [
     { key: env.REG_NODES_LIMIT_KEY, value: '0' },
     { key: env.MIN_NODE_VERSION_EXISTING_KEY, value: '0.0.1' },
-    { key: env.MIN_NODE_VERSION_NEW_KEY, value: '0.0.1' }
+    { key: env.MIN_NODE_VERSION_NEW_KEY, value: '0.0.1' },
+    { key: env.ENFORCE_PRIVATE_STAKE_KEY, value: 'true' }
   ]
   connections.startConsulWatches(consul, watches, defaults)
 }
