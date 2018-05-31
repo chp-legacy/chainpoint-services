@@ -198,7 +198,7 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
     // if the balance check passed, add a 24 hour lived value in redis confirming the pass
     if (tntBalancePass) await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${tntAddr}`, tntBalanceGrains, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
   } catch (error) {
-    console.error(`getTNTBalance : Unable to query for TNT balance for ${tntAddr} : ${error.message}`)
+    console.error(`performAuditPublicAsync : getTNTBalance : Unable to query for TNT balance for ${tntAddr} : ${error.message}`)
   }
 
   // perform the minimum credit check
@@ -321,7 +321,7 @@ async function performAuditPrivateAsync (nodeData) {
     // if the balance check passed, add a 24 hour lived value in redis confirming the pass
     if (tntBalancePass) await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${tntAddr}`, tntBalanceGrains, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
   } catch (error) {
-    console.error(`getTNTBalance : Unable to query for TNT balance for ${tntAddr} : ${error.message}`)
+    console.error(`performAuditPrivateAsync : getTNTBalance : Unable to query for TNT balance for ${tntAddr} : ${error.message}`)
   }
 
   return `Private Audit complete for ${tntAddr} : Balance = ${tntBalanceGrains} TNT grains, Pass = ${tntBalancePass ? 'True' : 'False'}`
