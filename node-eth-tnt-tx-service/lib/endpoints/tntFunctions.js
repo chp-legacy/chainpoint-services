@@ -154,7 +154,7 @@ async function postTransferV1Async (req, res, next) {
   try {
     await retry(async bail => {
       let tx = await writeContract.transfer(req.params.to_addr, grains, {
-        gasLimit: 50000,
+        gasLimit: 60000,
         gasPrice: recommendedGasPrice || 10000000000 // Use 10 Gwei as default if recommendedGasPrice is not set
       })
 
