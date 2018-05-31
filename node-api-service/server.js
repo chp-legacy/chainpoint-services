@@ -169,10 +169,12 @@ function openRedisConnection (redisURIs) {
       redis = newRedis
       hashes.setRedis(redis)
       config.setRedis(redis)
+      nodes.setRedis(redis)
     }, () => {
       redis = null
       hashes.setRedis(null)
       config.setRedis(null)
+      nodes.setRedis(null)
       setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     })
 }

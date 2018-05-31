@@ -21,6 +21,7 @@ const BLAKE2s = require('blake2s-js')
 const _ = require('lodash')
 const crypto = require('crypto')
 const registeredNode = require('../models/RegisteredNode.js')
+const tntUnits = require('../tntUnits.js')
 
 // Disable temporarily
 // const TNT_CREDIT_COST_POST_HASH = 1
@@ -45,6 +46,13 @@ let nistLatestEpoch = null
 // pull in variables defined in shared RegisteredNode module
 let sequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
+
+// The minimium TNT grains required to operate a Node
+const minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
+
+// toggle the enforcement of minimum TNT balance for private Nodes
+// when enabled, a private Node must have the minimum TNT balance before Core accepts hashes from it
+let enforcePrivateNodeStake = false
 
 /**
  * Converts an array of hash strings to a object suitable to
@@ -205,6 +213,22 @@ async function postHashV1Async (req, res, next) {
     return next(new restify.InternalServerError('Message could not be delivered'))
   }
 
+  // validate balance compliance for private Nodes, if necessary
+  if (enforcePrivateNodeStake) {
+    // check for presense of Node balance check key for this tnt address
+    try {
+      let balanceValue = await redis.get(`${env.BALANCE_CHECK_KEY_PREFIX}:${tntAddrHeaderParam}`)
+      if (balanceValue === null) {
+        // No value was found at that key, the Node has not passed a balance check in the last 24 hours
+        let minTNTBalanceNeeded = tntUnits.grainsToTNT(minGrainsBalanceNeeded)
+        return next(new restify.NotAuthorizedError(`TNT address ${tntAddrHeaderParam} does not have the minimum balance of ${minTNTBalanceNeeded} TNT for Node operation`))
+      }
+    } catch (error) {
+      // report error but allow to proceed
+      console.error(`ERROR : unable to query redis balance keys : ${error.message}`)
+    }
+  }
+
   // Validate the calculated HMAC
   let regNode = null
   try {
@@ -224,7 +248,7 @@ async function postHashV1Async (req, res, next) {
 
       // Set the found Node in cache, expiring in 24 hours, for next time
       try {
-        await redis.hmset(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, {tntAddr: regNode.tntAddr, hmacKey: regNode.hmacKey, tntCredit: regNode.tntCredit})
+        await redis.hmset(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, { tntAddr: regNode.tntAddr, hmacKey: regNode.hmacKey, tntCredit: regNode.tntCredit })
         await redis.expire(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, 60 * 60 * 24)
       } catch (error) {
         console.error(error.message)
@@ -292,5 +316,6 @@ module.exports = {
   getNistLatest: () => { return nistLatest },
   setNistLatest: (val) => { updateNistVars(val) },
   setHashesRegisteredNode: (regNode) => { RegisteredNode = regNode },
-  setRedis: (redisClient) => { redis = redisClient }
+  setRedis: (redisClient) => { redis = redisClient },
+  setEnforcePrivateStakeState: (enabled) => { enforcePrivateNodeStake = (enabled === 'true') }
 }
