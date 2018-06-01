@@ -215,7 +215,7 @@ async function postHashV1Async (req, res, next) {
 
   // validate balance compliance for private Nodes, if necessary
   if (enforcePrivateNodeStake) {
-    // check for presense of Node balance check key for this tnt address
+    // check for presence of Node balance check key for this tnt address
     try {
       let balanceValue = await redis.get(`${env.BALANCE_CHECK_KEY_PREFIX}:${tntAddrHeaderParam}`)
       if (balanceValue === null) {
