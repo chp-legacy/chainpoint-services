@@ -93,7 +93,7 @@ let envDefinitions = {
 
   // Redis related variables
   REDIS_CONNECT_URIS: envalid.str({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI, or a comma seperated list of Sentinel URIs' }),
-  BALANCE_CHECK_KEY_PREFIX: envalid.str({ devDefault: 'API:NodeBalance', desc: 'The prefix for the Redis key containing Node balance information' }),
+  BALANCE_CHECK_KEY_PREFIX: envalid.str({ default: 'API:NodeBalance', desc: 'The prefix for the Redis key containing Node balance information' }),
 
   // Service Specific Variables
 
