@@ -85,6 +85,9 @@ const MIN_PASSING_CREDIT_BALANCE = 10800
 // The minimium TNT grains required to operate a Node
 const minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
 
+// The lifespan of balance pass redis entries
+const BALANCE_PASS_EXPIRE_MINUTES = 60 * 24 // 1 day
+
 // This value is set once the connection has been established
 let redis = null
 
@@ -107,7 +110,8 @@ const jobs = {
   'prune_btctx_states_ids': Object.assign({ perform: pruneBTCTxStatesByIdsAsync }, pluginOptions),
   'prune_btchead_states_ids': Object.assign({ perform: pruneBTCHeadStatesByIdsAsync }, pluginOptions),
   // tasks from the audit producer service
-  'audit_node': Object.assign({ perform: performAuditAsync }, pluginOptions),
+  'audit_public_node': Object.assign({ perform: performAuditPublicAsync }, pluginOptions),
+  'audit_private_node': Object.assign({ perform: performAuditPrivateAsync }, pluginOptions),
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
   'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
   'update_audit_score_items': Object.assign({ perform: updateAuditScoreItemsAsync }, pluginOptions),
@@ -172,7 +176,7 @@ async function pruneBTCHeadStatesByIdsAsync (ids) {
 // tasks from the audit producer service
 // ******************************************************
 
-async function performAuditAsync (nodeData, activeNodeCount) {
+async function performAuditPublicAsync (nodeData, activeNodeCount) {
   let tntAddr = nodeData.tnt_addr
   let publicUri = nodeData.public_uri
   let currentCreditBalance = nodeData.tnt_credit
@@ -190,8 +194,11 @@ async function performAuditAsync (nodeData, activeNodeCount) {
   try {
     tntBalanceGrains = await getTNTBalance(tntAddr)
     tntBalancePass = tntBalanceGrains >= minGrainsBalanceNeeded
+
+    // if the balance check passed, add a 24 hour lived value in redis confirming the pass
+    if (tntBalancePass) await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${tntAddr}`, tntBalanceGrains, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
   } catch (error) {
-    console.error(`getTNTBalance : Unable to query for TNT balance : ${error.message}`)
+    console.error(`performAuditPublicAsync : getTNTBalance : Unable to query for TNT balance for ${tntAddr} : ${error.message}`)
   }
 
   // perform the minimum credit check
@@ -299,7 +306,25 @@ async function performAuditAsync (nodeData, activeNodeCount) {
 
   await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
 
-  return `Audit complete for ${tntAddr} at ${publicUri} : Pass = ${publicIPPass && timePass && calStatePass && minCreditsPass && nodeVersionPass && tntBalancePass}`
+  return `Public Audit complete for ${tntAddr} at ${publicUri} : Pass = ${publicIPPass && timePass && calStatePass && minCreditsPass && nodeVersionPass && tntBalancePass}`
+}
+
+async function performAuditPrivateAsync (nodeData) {
+  let tntAddr = nodeData.tnt_addr
+  let tntBalanceGrains = null
+  let tntBalancePass = false
+
+  try {
+    tntBalanceGrains = await getTNTBalance(tntAddr)
+    tntBalancePass = tntBalanceGrains >= minGrainsBalanceNeeded
+
+    // if the balance check passed, add a 24 hour lived value in redis confirming the pass
+    if (tntBalancePass) await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${tntAddr}`, tntBalanceGrains, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
+  } catch (error) {
+    console.error(`performAuditPrivateAsync : getTNTBalance : Unable to query for TNT balance for ${tntAddr} : ${error.message}`)
+  }
+
+  return `Private Audit complete for ${tntAddr} : Balance = ${tntBalanceGrains} TNT grains, Pass = ${tntBalancePass ? 'True' : 'False'}`
 }
 
 async function pruneAuditLogsByIdsAsync (ids) {

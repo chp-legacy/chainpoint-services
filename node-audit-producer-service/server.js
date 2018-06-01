@@ -65,8 +65,8 @@ let Op = regNodeSequelize.Op
 
 // Retrieve all registered Nodes with public_uris for auditing.
 async function auditNodesAsync () {
-  // get list of all Registered Nodes to audit
-  let nodesReadyForAudit = []
+  // get list of all public Registered Nodes to audit
+  let publicNodesReadyForAudit = []
   try {
     let sqlQuery = `SELECT rn.tnt_addr, rn.public_uri, rn.tnt_credit, rn.pass_count, rn.fail_count, rn.consecutive_passes, 
                    rn.consecutive_fails, rn.created_at, rn.updated_at, al.audit_at, al.public_ip_pass, al.public_uri AS audit_uri, 
@@ -82,31 +82,59 @@ async function auditNodesAsync () {
                    ) AS al
                    ON rn.tnt_addr = al.tnt_addr
                    WHERE rn.public_uri IS NOT NULL`
-    nodesReadyForAudit = await regNodeSequelize.query(sqlQuery, { type: regNodeSequelize.QueryTypes.SELECT })
-    console.log(`${nodesReadyForAudit.length} public Nodes ready for audit were found`)
+    publicNodesReadyForAudit = await regNodeSequelize.query(sqlQuery, { type: regNodeSequelize.QueryTypes.SELECT })
+    console.log(`${publicNodesReadyForAudit.length} public Nodes ready for audit were found`)
   } catch (error) {
     let message = `Could not retrieve public Node data : ${error.message}`
     throw new Error(message)
   }
 
   // get the total active node count, needed to deliver to Nodes during audit process
-  let activeNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 } } })
+  let activePublicNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 } } })
 
-  // iterate through each Registered Node, queue up an audit task for task handler
-  for (let nodeReadyForAudit of nodesReadyForAudit) {
+  // iterate through each public Registered Node, queue up an audit task for task handler
+  for (let publicNodeReadyForAudit of publicNodesReadyForAudit) {
     try {
       await taskQueue.enqueue(
         'task-handler-queue',
-        `audit_node`,
+        `audit_public_node`,
         [
-          nodeReadyForAudit,
-          activeNodeCount
+          publicNodeReadyForAudit,
+          activePublicNodeCount
         ])
     } catch (error) {
-      console.error(`Could not enqueue audit_node task : ${error.message}`)
+      console.error(`Could not enqueue audit_public_node task : ${error.message}`)
     }
   }
-  console.log(`Audit tasks queued for task-handler`)
+  console.log(`Audit public tasks queued for task-handler`)
+
+  // get list of all private Registered Nodes to audit
+  let privateNodesReadyForAudit = []
+  try {
+    let sqlQuery = `SELECT rn.tnt_addr, rn.public_uri
+                   FROM chainpoint_registered_nodes rn
+                   WHERE rn.public_uri IS NULL`
+    privateNodesReadyForAudit = await regNodeSequelize.query(sqlQuery, { type: regNodeSequelize.QueryTypes.SELECT })
+    console.log(`${privateNodesReadyForAudit.length} private Nodes ready for audit were found`)
+  } catch (error) {
+    let message = `Could not retrieve private Node data : ${error.message}`
+    throw new Error(message)
+  }
+
+  // iterate through each public Registered Node, queue up an audit task for task handler
+  for (let privateNodeReadyForAudit of privateNodesReadyForAudit) {
+    try {
+      await taskQueue.enqueue(
+        'task-handler-queue',
+        `audit_private_node`,
+        [
+          privateNodeReadyForAudit
+        ])
+    } catch (error) {
+      console.error(`Could not enqueue audit_private_node task : ${error.message}`)
+    }
+  }
+  console.log(`Audit private tasks queued for task-handler`)
 
   try {
     let decPrivateNodesQuery = `UPDATE chainpoint_registered_nodes SET audit_score = GREATEST(audit_score - 1, 0) WHERE public_uri IS NULL`

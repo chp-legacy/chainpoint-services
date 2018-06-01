@@ -33,6 +33,10 @@ let registeredNodeSequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
 let Op = registeredNodeSequelize.Op
 
+// The redis connection used for all redis communication
+// This value is set once the connection has been established
+let redis = null
+
 // The maximum  number of registered Nodes allowed
 // This value is updated from consul events as changes are detected
 let regNodesLimit = 0
@@ -48,6 +52,9 @@ let minNodeVersionExisting = null
 
 // the minimum audit passing Node version for newly registering Nodes, set by consul
 let minNodeVersionNew = null
+
+// The lifespan of balance pass redis entries
+const BALANCE_PASS_EXPIRE_MINUTES = 60 * 24 // 1 day
 
 // validate eth address is well formed
 let isEthereumAddr = (address) => {
@@ -190,6 +197,8 @@ async function postNodeV1Async (req, res, next) {
       let minTNTBalanceNeeded = tntUnits.grainsToTNT(minGrainsBalanceNeeded)
       return next(new restify.ForbiddenError(`TNT address ${lowerCasedTntAddrParam} does not have the minimum balance of ${minTNTBalanceNeeded} TNT for Node operation`))
     }
+    // create a balance check entry for this tnt address
+    await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${lowerCasedTntAddrParam}`, nodeBalance, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
   } catch (error) {
     return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
   }
@@ -343,6 +352,8 @@ async function putNodeV1Async (req, res, next) {
         let minTNTBalanceNeeded = tntUnits.grainsToTNT(minGrainsBalanceNeeded)
         return next(new restify.ForbiddenError(`TNT address ${lowerCasedTntAddrParam} does not have the minimum balance of ${minTNTBalanceNeeded} TNT for Node operation`))
       }
+      // create a balance check entry for this tnt address
+      await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${lowerCasedTntAddrParam}`, nodeBalance, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
     } catch (error) {
       return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
     }
@@ -413,5 +424,6 @@ module.exports = {
   setLimitDirect: (val) => { regNodesLimit = val },
   overrideGetTNTGrainsBalanceForAddressAsync: (func) => { getTNTGrainsBalanceForAddressAsync = func },
   setMinNodeVersionExisting: (v) => { minNodeVersionExisting = v },
-  setMinNodeVersionNew: (v) => { minNodeVersionNew = v }
+  setMinNodeVersionNew: (v) => { minNodeVersionNew = v },
+  setRedis: (redisClient) => { redis = redisClient }
 }
