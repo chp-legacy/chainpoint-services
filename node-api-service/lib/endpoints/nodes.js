@@ -72,8 +72,19 @@ let isHMAC = (hmac) => {
  */
 async function getNodesRandomV1Async (req, res, next) {
   // get a list of random healthy Nodes
-  let sqlQuery = `SELECT public_uri FROM chainpoint_registered_nodes 
-                  WHERE consecutive_passes > 0  
+  // Produce a weighted health score and select 25 Nodes from the top 1000
+  // cp_health_score counts for 75% of the score, pf_health_score for 25%
+  let sqlQuery = `SELECT public_uri FROM 
+                  (
+                    SELECT public_uri, ROUND(((cp_health_score * 3 + pf_health_score * 1) / 4), 4) AS weighted_score FROM 
+                    (
+                      SELECT public_uri, 
+                      CASE (pass_count+fail_count) WHEN 0 THEN 0 ELSE ROUND(pass_count/(pass_count+fail_count), 4) END AS pf_health_score,
+                      LEAST(ROUND(consecutive_passes / 48, 4), 1) AS cp_health_score
+                      FROM chainpoint_registered_nodes 
+                    )
+                    ORDER BY weighted_score DESC LIMIT 1000
+                  )
                   ORDER BY RANDOM() LIMIT ${RANDOM_NODES_RESULT_LIMIT}`
   let rndNodes = await registeredNodeSequelize.query(sqlQuery, { type: registeredNodeSequelize.QueryTypes.SELECT })
 
