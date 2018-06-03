@@ -1,7 +1,5 @@
-# chainpoint/node-base
-#
-# A base container that all chainpoint node based
-# services will inherit from.
+# A base Docker image that all Chainpoint Node.js based
+# images will inherit from.
 
 # Node.js LTS on Alpine Linux
 # see: https://github.com/nodejs/LTS

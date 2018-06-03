@@ -38,7 +38,6 @@ build-config:
 ## build                     : Build all
 .PHONY : build
 build:
-	docker run --rm -w /usr/src/app -v ~/.docker:/root/.docker -v /var/run/docker.sock:/var/run/docker.sock -v "$(PWD)":/usr/src/app jizhilong/docker-make:latest docker-make --no-push
 	docker container prune -f
 	docker-compose build
 
@@ -47,21 +46,14 @@ build:
 pull:
 	docker-compose pull
 
-## push                      : Push Docker images using docker-make
-.PHONY : push
-push:
-	docker run --rm -w /usr/src/app -v ~/.docker:/root/.docker -v /var/run/docker.sock:/var/run/docker.sock -v "$(PWD)":/usr/src/app jizhilong/docker-make:latest docker-make
-
 ## test-api                  : Run API test suite with Mocha
 .PHONY : test-api
 test-api: cockroachdb-setup
-	docker run --rm -w /usr/src/app -v ~/.docker:/root/.docker -v /var/run/docker.sock:/var/run/docker.sock -v "$(PWD)":/usr/src/app jizhilong/docker-make:latest docker-make --no-push node-api-service-test
 	docker-compose up --build api-test
 
 ## test-aggregator           : Run aggregator test suite with Mocha
 .PHONY : test-aggregator
 test-aggregator:
-	docker run --rm -w /usr/src/app -v ~/.docker:/root/.docker -v /var/run/docker.sock:/var/run/docker.sock -v "$(PWD)":/usr/src/app jizhilong/docker-make:latest docker-make --no-push node-aggregator-service-test
 	docker-compose up --build aggregator-test
 
 ## test                      : Run all application tests
@@ -117,7 +109,7 @@ burn: clean prune
 ## yarn                      : Install Node Javascript dependencies
 .PHONY : yarn
 yarn:
-	docker run -it --rm --volume "$(PWD)":/usr/src/app --volume /var/run/docker.sock:/var/run/docker.sock --volume ~/.docker:/root/.docker --volume "$(PWD)":/wd --workdir /wd quay.io/chainpoint/node-base:latest yarn
+	docker run -it --rm --volume "$(PWD)":/usr/src/app --volume /var/run/docker.sock:/var/run/docker.sock --volume ~/.docker:/root/.docker --volume "$(PWD)":/wd --workdir /wd gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-base:latest yarn
 
 ## redis                     : Connect to the local Redis with `redis-cli`
 .PHONY : redis
