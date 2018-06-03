@@ -344,7 +344,7 @@ services:
   #
   consul:
     restart: always
-    image: consul:1.0.6
+    image: consul:1.1.0
     container_name: consul-core
     ports:
       - "8300:8300"
@@ -364,7 +364,7 @@ services:
   #
   roach1:
     restart: always
-    image: cockroachdb/cockroach:v2.0.1
+    image: cockroachdb/cockroach:v2.0.2
     container_name: roach1-core
     ports:
       - "26257:26257"
