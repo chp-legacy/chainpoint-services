@@ -5,6 +5,7 @@ COPY node-lib/lib /home/node/app/lib
 COPY node-eth-tnt-listener-service/package.json node-eth-tnt-listener-service/yarn.lock /home/node/app/
 RUN yarn
 
-ADD node-eth-tnt-listener-service/* /home/node/app/
+COPY node-eth-tnt-listener-service/contracts /home/node/app/contracts/
+COPY node-eth-tnt-listener-service/server.js /home/node/app/
 
 CMD ["yarn", "start"]

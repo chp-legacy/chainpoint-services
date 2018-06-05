@@ -1,0 +1,12 @@
+.*
+*.yaml
+*.log*
+Dockerfile.*
+Makefile
+data/*
+bin/*
+
+# exclude all node_modules dirs under root dir or a sub-directory
+# If not excluded this has very negative performance on docker-compose build
+node_modules*
+*/node_modules*
