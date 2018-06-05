@@ -5,6 +5,7 @@ COPY node-lib/lib /home/node/app/lib
 COPY node-eth-tnt-tx-service/package.json node-eth-tnt-tx-service/yarn.lock /home/node/app/
 RUN yarn
 
-ADD node-eth-tnt-tx-service/* /home/node/app/
+COPY node-eth-tnt-tx-service/contracts /home/node/app/contracts/
+COPY node-eth-tnt-tx-service/server.js /home/node/app/
 
 CMD ["yarn", "start"]
