@@ -85,9 +85,6 @@ const MIN_PASSING_CREDIT_BALANCE = 10800
 // The minimium TNT grains required to operate a Node
 const minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
 
-// The lifespan of balance pass redis entries
-const BALANCE_PASS_EXPIRE_MINUTES = 60 * 24 // 1 day
-
 // This value is set once the connection has been established
 let redis = null
 
@@ -194,9 +191,6 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
   try {
     tntBalanceGrains = await getTNTBalance(tntAddr)
     tntBalancePass = tntBalanceGrains >= minGrainsBalanceNeeded
-
-    // if the balance check passed, add a 24 hour lived value in redis confirming the pass
-    if (tntBalancePass) await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${tntAddr}`, tntBalanceGrains, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
   } catch (error) {
     console.error(`performAuditPublicAsync : getTNTBalance : Unable to query for TNT balance for ${tntAddr} : ${error.message}`)
   }
@@ -311,18 +305,26 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
 
 async function performAuditPrivateAsync (nodeData) {
   let tntAddr = nodeData.tnt_addr
+  let publicUri = null
+
+  let publicIPPass = false
+  let nodeMSDelta = null
+  let timePass = false
+  let calStatePass = false
+  let minCreditsPass = false
+  let nodeVersion = null
+  let nodeVersionPass = false
   let tntBalanceGrains = null
   let tntBalancePass = false
 
   try {
     tntBalanceGrains = await getTNTBalance(tntAddr)
     tntBalancePass = tntBalanceGrains >= minGrainsBalanceNeeded
-
-    // if the balance check passed, add a 24 hour lived value in redis confirming the pass
-    if (tntBalancePass) await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${tntAddr}`, tntBalanceGrains, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
   } catch (error) {
     console.error(`performAuditPrivateAsync : getTNTBalance : Unable to query for TNT balance for ${tntAddr} : ${error.message}`)
   }
+
+  await addAuditToLogAsync(tntAddr, publicUri, Date.now(), publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
 
   return `Private Audit complete for ${tntAddr} : Balance = ${tntBalanceGrains} TNT grains, Pass = ${tntBalancePass ? 'True' : 'False'}`
 }
