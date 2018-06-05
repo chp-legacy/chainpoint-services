@@ -251,12 +251,13 @@ async function pollForNewAuditDataAsync () {
     // retrieve the LAST_AUDIT_AT_PROCESSED_KEY value
     let lastAuditAtProcessed = await redis.get(LAST_AUDIT_AT_PROCESSED_KEY)
     if (lastAuditAtProcessed == null) {
-      // this value has not been initialized yet, set to 30 minutes ago
-      lastAuditAtProcessed = Date.now() - 30 * 60 * 1000
+      // this value has not been initialized yet, set to 45 minutes ago
+      lastAuditAtProcessed = Date.now() - 45 * 60 * 1000
     }
 
     // retrieve all log entries since LAST_AUDIT_AT_PROCESSED
-    let logItems = await NodeAuditLog.findAll({ where: { auditAt: { [Op.gte]: lastAuditAtProcessed } }, attributes: ['tntAddr', 'auditAt', 'tntBalanceGrains', 'tntBalancePass'], order: [['auditAt', 'ASC']], raw: true })
+    let logItems = await NodeAuditLog.findAll({ where: { auditAt: { [Op.gt]: lastAuditAtProcessed } }, attributes: ['tntAddr', 'auditAt', 'tntBalanceGrains', 'tntBalancePass'], order: [['auditAt', 'ASC']], raw: true })
+    if (!logItems || logItems.length === 0) return
     lastAuditAtProcessed = logItems[logItems.length - 1].auditAt
 
     // only keep log items where the balance check has passed
