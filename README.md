@@ -61,6 +61,29 @@ You can modify the `.env` as needed, any changes will be ignored by Git.
 
 Running `make up` should build and start all services for you.
 
+## Build
+
+### Build for local `docker-compose`
+
+```
+make build
+```
+
+### Build for Google Container Repository
+
+The normal build process for Docker images for production is to
+simply `git push` commits which will trigger Google Container Repository (gcr.io)
+to build and tag those images for use by GKE.
+
+Alternatively, you can manually run test builds without using the triggers.
+
+```
+gcloud config set project chainpoint-registry
+
+# remote build : will build and push to gcr.io, substituting variables present for triggers.
+gcloud container builds submit --config cloudbuild.yaml --substitutions=REPO_NAME=delete-me,COMMIT_SHA=deadbeef .
+```
+
 ## License
 
 [GNU Affero General Public License v3.0](http://www.gnu.org/licenses/agpl-3.0.txt)

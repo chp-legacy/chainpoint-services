@@ -35,6 +35,15 @@ services:
     networks:
       - chainpoint
 
+  # Node.js Base Image
+  # See : https://stackoverflow.com/questions/37933204/building-common-dependencies-with-docker-compose
+  #
+  base:
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-base:${DOCKER_TAG}
+    build:
+      context: .
+      dockerfile: Dockerfile.node-base
+
   # HTTP API
   # Restify Node public web API service.
   #
@@ -53,10 +62,12 @@ services:
   #
   api:
     restart: always
-    image: quay.io/chainpoint/node-api-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-api-service:${DOCKER_TAG}
     build:
-      context: ./node-api-service
+      context: .
+      dockerfile: Dockerfile.api
     depends_on:
+      - base
       - roach1
       - redis
       - rabbitmq
@@ -72,12 +83,13 @@ services:
       VIRTUAL_HOST: api.local
 
   api-test:
-    image: quay.io/chainpoint/node-api-service-test:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-api-service-test:${DOCKER_TAG}
     container_name: node-api-service-test
     build:
-      context: ./node-api-service
-      dockerfile: Dockerfile.test
+      context: .
+      dockerfile: Dockerfile.api-test
     depends_on:
+      - base
       - roach1
       - redis
       - rabbitmq
@@ -100,10 +112,12 @@ services:
   #
   aggregator:
     restart: always
-    image: quay.io/chainpoint/node-aggregator-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-aggregator-service:${DOCKER_TAG}
     build:
-      context: ./node-aggregator-service
+      context: .
+      dockerfile: Dockerfile.aggregator
     depends_on:
+      - base
       - rabbitmq
       - nist-beacon
     networks:
@@ -112,12 +126,13 @@ services:
       NODE_ENV: development
 
   aggregator-test:
-    image: quay.io/chainpoint/node-aggregator-service-test:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-aggregator-service-test:${DOCKER_TAG}
     container_name: node-aggregator-service-test
     build:
-      context: ./node-aggregator-service
-      dockerfile: Dockerfile.test
+      context: .
+      dockerfile: Dockerfile.aggregator-test
     depends_on:
+      - base
       - rabbitmq
       - nist-beacon
     networks:
@@ -134,11 +149,13 @@ services:
   #
   nist-beacon:
     restart: always
-    image: quay.io/chainpoint/node-nist-beacon-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-nist-beacon-service:${DOCKER_TAG}
     build:
-      context: ./node-nist-beacon-service
+      context: .
+      dockerfile: Dockerfile.nist-beacon
     container_name: nist-beacon-core
     depends_on:
+      - base
       - redis
       - consul
     networks:
@@ -156,11 +173,13 @@ services:
   #
   calendar:
     restart: always
-    image: quay.io/chainpoint/node-calendar-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-calendar-service:${DOCKER_TAG}
     build:
-      context: ./node-calendar-service
+      context: .
+      dockerfile: Dockerfile.calendar
     container_name: calendar-core
     depends_on:
+      - base
       - roach1
       - rabbitmq
       - consul
@@ -183,11 +202,13 @@ services:
   #
   btc-tx:
     restart: always
-    image: quay.io/chainpoint/node-btc-tx-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-btc-tx-service:${DOCKER_TAG}
     build:
-      context: ./node-btc-tx-service
+      context: .
+      dockerfile: Dockerfile.btc-tx
     container_name: btc-tx-core
     depends_on:
+      - base
       - roach1
       - rabbitmq
     networks:
@@ -203,11 +224,13 @@ services:
   #
   btc-mon:
     restart: always
-    image: quay.io/chainpoint/node-btc-mon-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-btc-mon-service:${DOCKER_TAG}
     build:
-      context: ./node-btc-mon-service
+      context: .
+      dockerfile: Dockerfile.btc-mon
     container_name: btc-mon-core
     depends_on:
+      - base
       - rabbitmq
       - redis
     networks:
@@ -221,10 +244,12 @@ services:
   #
   proof-state:
     restart: always
-    image: quay.io/chainpoint/node-proof-state-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-proof-state-service:${DOCKER_TAG}
     build:
-      context: ./node-proof-state-service
+      context: .
+      dockerfile: Dockerfile.proof-state
     depends_on:
+      - base
       - rabbitmq
       - roach1
       - consul
@@ -242,10 +267,12 @@ services:
   #
   proof-gen:
     restart: always
-    image: quay.io/chainpoint/node-proof-gen-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-proof-gen-service:${DOCKER_TAG}
     build:
-      context: ./node-proof-gen-service
+      context: .
+      dockerfile: Dockerfile.proof-gen
     depends_on:
+      - base
       - rabbitmq
       - roach1
     networks:
@@ -255,11 +282,13 @@ services:
 
   audit-producer:
     restart: always
-    image: quay.io/chainpoint/node-audit-producer-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-audit-producer-service:${DOCKER_TAG}
     build:
-      context: ./node-audit-producer-service
+      context: .
+      dockerfile: Dockerfile.audit-producer
     container_name: audit-producer
     depends_on:
+      - base
       - roach1
       - rabbitmq
       - consul
@@ -315,7 +344,7 @@ services:
   #
   consul:
     restart: always
-    image: consul:1.0.6
+    image: consul:1.1.0
     container_name: consul-core
     ports:
       - "8300:8300"
@@ -335,7 +364,7 @@ services:
   #
   roach1:
     restart: always
-    image: cockroachdb/cockroach:v2.0.1
+    image: cockroachdb/cockroach:v2.0.2
     container_name: roach1-core
     ports:
       - "26257:26257"
@@ -367,11 +396,13 @@ services:
   # migrated TNT contract in ganache.
   #
   eth-contracts:
-    image: quay.io/chainpoint/node-eth-contracts:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-eth-contracts:${DOCKER_TAG}
     build:
-      context: ./node-eth-contracts
+      context: .
+      dockerfile: Dockerfile.eth-contracts
     container_name: eth-contracts-core
     depends_on:
+      - base
       - ganache
     networks:
       - chainpoint
@@ -387,11 +418,13 @@ services:
   #
   eth-tnt-tx-service:
     restart: always
-    image: quay.io/chainpoint/node-eth-tnt-tx-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-eth-tnt-tx-service:${DOCKER_TAG}
     build:
-      context: ./node-eth-tnt-tx-service
+      context: .
+      dockerfile: Dockerfile.eth-tnt-tx
     container_name: eth-tnt-tx-core
     depends_on:
+      - base
       - ganache
       - eth-contracts
     networks:
@@ -413,11 +446,12 @@ services:
   # Listens for incoming TNT transfers from the nodes
   #
   #eth-tnt-listener-service:
-  #  image: quay.io/chainpoint/node-eth-tnt-listener-service:${DOCKER_TAG}
+  #  image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-eth-tnt-listener-service:${DOCKER_TAG}
   #  build:
   #    context: ./node-eth-tnt-listener-service
   #  container_name: eth-tnt-listener-core
   #  depends_on:
+  #    - base
   #    - ganache
   #    - roach1
   #    - eth-contracts
@@ -437,11 +471,13 @@ services:
   #
   tnt-reward:
     restart: always
-    image: quay.io/chainpoint/node-tnt-reward-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-tnt-reward-service:${DOCKER_TAG}
     build:
-      context: ./node-tnt-reward-service
+      context: .
+      dockerfile: Dockerfile.tnt-reward
     container_name: tnt-reward-core
     depends_on:
+      - base
       - eth-tnt-tx-service
       - rabbitmq
       - consul
@@ -458,10 +494,12 @@ services:
   #
   task-handler:
     restart: always
-    image: quay.io/chainpoint/node-task-handler-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-task-handler-service:${DOCKER_TAG}
     build:
-      context: ./node-task-handler-service
+      context: .
+      dockerfile: Dockerfile.task-handler
     depends_on:
+      - base
       - roach1
       - redis
       - rabbitmq
@@ -482,8 +520,9 @@ services:
   #
   task-handler-admin:
     restart: always
-    image: corbinu/node-resque-web
+    image: gcr.io/chainpoint-registry/github-chainpoint-resque-web:729120d93d6565851311d8e82a9c1ebb1bd85b09
     depends_on:
+      - base
       - redis
       - task-handler
     networks:
@@ -502,10 +541,12 @@ services:
   # 
   task-accumulator:
     restart: always
-    image: quay.io/chainpoint/node-task-accumulator-service:${DOCKER_TAG}
+    image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-task-accumulator-service:${DOCKER_TAG}
     build:
-      context: ./node-task-accumulator-service
+      context: .
+      dockerfile: Dockerfile.task-accumulator
     depends_on:
+      - base
       - redis
       - rabbitmq
     networks:

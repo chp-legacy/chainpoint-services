@@ -46,6 +46,9 @@ const AUDIT_LOG_EXPIRE_HOURS = 6
 // the amount of credits to top off all Nodes with daily
 const creditTopoffAmount = 86400
 
+// The lifespan of balance pass redis entries
+const BALANCE_PASS_EXPIRE_MINUTES = 60 * 24 // 1 day
+
 // create a heartbeat for every 200ms
 // 1 second heartbeats had a drift that caused occasional skipping of a whole second
 // decreasing the interval of the heartbeat and checking current time resolves this
@@ -239,6 +242,43 @@ async function pruneAuditDataAsync () {
   }
 }
 
+// Retrieved new audit log data since LAST_AUDIT_AT_PROCESSED and
+// creates/updates balance check redis keys as needed
+async function pollForNewAuditDataAsync () {
+  const LAST_AUDIT_AT_PROCESSED_KEY = 'AuditProducer:BalanceChecks:LastAuditAtProcessed'
+
+  try {
+    // retrieve the LAST_AUDIT_AT_PROCESSED_KEY value
+    let lastAuditAtProcessed = await redis.get(LAST_AUDIT_AT_PROCESSED_KEY)
+    if (lastAuditAtProcessed == null) {
+      // this value has not been initialized yet, set to 30 minutes ago
+      lastAuditAtProcessed = Date.now() - 30 * 60 * 1000
+    }
+
+    // retrieve all log entries since LAST_AUDIT_AT_PROCESSED
+    let logItems = await NodeAuditLog.findAll({ where: { auditAt: { [Op.gte]: lastAuditAtProcessed } }, attributes: ['tntAddr', 'auditAt', 'tntBalanceGrains', 'tntBalancePass'], order: [['auditAt', 'ASC']], raw: true })
+    lastAuditAtProcessed = logItems[logItems.length - 1].auditAt
+
+    // only keep log items where the balance check has passed
+    logItems = logItems.filter((logItem) => logItem.tntBalancePass)
+
+    // for all log items, if the balance check passed, add/refresh a 24 hour lived value in redis confirming the pass
+    let multi = redis.multi()
+
+    logItems.forEach((logItem) => {
+      multi.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${logItem.tntAddr}`, logItem.tntBalanceGrains, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
+    })
+
+    // finally, update LAST_AUDIT_AT_PROCESSED_KEY to the value of the most recent audit_at value in logItems
+    multi.set(LAST_AUDIT_AT_PROCESSED_KEY, lastAuditAtProcessed)
+
+    await multi.exec()
+    if (logItems.length > 0) console.log(`${logItems.length} Node balance check Redis entries added/refreshed.`)
+  } catch (error) {
+    console.error(`An error occurred while polling for new audit data and creating balance check entries in: ${error.message}`)
+  }
+}
+
 /**
  * Opens a storage connection
  **/
@@ -300,6 +340,12 @@ async function checkForGenesisBlockAsync () {
  */
 async function initResqueQueueAsync () {
   taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
+}
+
+// This initalizes the JS intervals that checks for new audit data
+function startIntervals () {
+  let intervals = [{ function: pollForNewAuditDataAsync, ms: 60000 }]
+  connections.startIntervals(intervals)
 }
 
 function setGenerateNewChallengeTrigger () {
@@ -406,6 +452,8 @@ async function start () {
     performLeaderElection()
     // ensure at least 1 calendar block exist
     await checkForGenesisBlockAsync()
+    // init interval functions
+    startIntervals()
     // start main processing
     await setTimedTriggeredEventsAsync()
     console.log('startup completed successfully')
