@@ -424,6 +424,7 @@ services:
       dockerfile: Dockerfile.eth-tnt-tx
     container_name: eth-tnt-tx-core
     depends_on:
+      - base
       - redis
     networks:
       - chainpoint
