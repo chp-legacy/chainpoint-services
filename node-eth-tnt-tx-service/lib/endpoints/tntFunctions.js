@@ -34,11 +34,19 @@ const GAS_PRICE_HISTORY_KEY = 'ETH_TNT_Tx:GasPriceHistory'
 const network = env.isProduction ? ethers.providers.networks.homestead : ethers.providers.networks.ropsten
 const tntSourceWalletPK = env.ETH_TNT_SOURCE_WALLET_PK
 const tntContractAddr = tntDefinition.networks[env.isProduction ? '1' : '3'].address
+
+// configure providers
+// balanceCheckProvider will use infura with json-rpc as a fallback measure (etherscan will not handle balance check volume)
+// tntTransactionProvider will use infura with etherscan and json-rpc as fallback measures for less frequest request
 const etherscanProvider = new ethers.providers.EtherscanProvider(network, env.ETH_ETHERSCAN_API_KEY)
 const infuraProvider = new ethers.providers.InfuraProvider(network, env.ETH_INFURA_API_KEY)
-const fallbackProvider = new ethers.providers.FallbackProvider([infuraProvider, etherscanProvider])
-const readContract = new ethers.Contract(tntContractAddr, tntDefinition.abi, infuraProvider)
-const wallet = new ethers.Wallet(tntSourceWalletPK, fallbackProvider)
+const parityJsonRpcProvider = new ethers.providers.JsonRpcProvider(env.ETH_JSON_RPC_URI, network)
+
+const balanceCheckProvider = new ethers.providers.FallbackProvider([infuraProvider, parityJsonRpcProvider])
+const tntTransactionProvider = new ethers.providers.FallbackProvider([infuraProvider, etherscanProvider, parityJsonRpcProvider])
+
+const readContract = new ethers.Contract(tntContractAddr, tntDefinition.abi, balanceCheckProvider)
+const wallet = new ethers.Wallet(tntSourceWalletPK, tntTransactionProvider)
 const writeContract = new ethers.Contract(tntContractAddr, tntDefinition.abi, wallet)
 
 // validate addresses are individually well formed
@@ -56,7 +64,7 @@ async function updateETHGasPriceAsync () {
     let currentTimestamp = Date.now()
     let newExpireTimestamp = currentTimestamp + 60 * 60 * 1000 // one hour from now
     // Get the latest gas price recommendation
-    let currentGasPrice = await fallbackProvider.getGasPrice()
+    let currentGasPrice = await tntTransactionProvider.getGasPrice()
     // Add lastest gas price to sorted set
     await redis.zadd(GAS_PRICE_HISTORY_KEY, newExpireTimestamp, currentGasPrice.toString())
     // Prune sorted set items older than 1 hour
