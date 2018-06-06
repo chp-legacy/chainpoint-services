@@ -250,6 +250,7 @@ function startIntervals (intervals, debug) {
   logMessage('starting intervals', debug, 'general')
 
   intervals.forEach((interval) => {
+    if (interval.immediate) interval.function()
     setInterval(interval.function, interval.ms)
   })
 }

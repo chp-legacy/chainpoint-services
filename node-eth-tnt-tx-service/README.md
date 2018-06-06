@@ -4,10 +4,6 @@ This service is responsible for interacting with the token contract.  It allows 
 
 This is available through a REST based API.
 
-## Configuration
-
-The built contract JSON files should be exposed in the `/contracts` folder.  In development, this is done through a docker volume but production can be handled differently if needed. 
-
 ## Starting
 
 ```text
