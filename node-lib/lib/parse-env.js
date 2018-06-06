@@ -192,6 +192,7 @@ module.exports = (service) => {
       envDefinitions.ETH_TNT_SOURCE_WALLET_PK = envalid.str({ desc: 'The private key for the source TNT / ETH wallet' })
       envDefinitions.ETH_ETHERSCAN_API_KEY = envalid.str({ desc: 'API key for Infura service provider' })
       envDefinitions.ETH_INFURA_API_KEY = envalid.str({ desc: 'API key for Etherscan service provider' })
+      envDefinitions.ETH_JSON_RPC_URI = envalid.str({ desc: 'The Parity/Geth JSON-RPC URI for the JsonRpc provoider' })
       break
     case 'eth-contracts':
       envDefinitions.ETH_TNT_TOKEN_ADDR = validateETHAddress({ desc: 'The address where the contract is on the blockchain.' })
