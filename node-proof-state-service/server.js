@@ -64,19 +64,7 @@ async function ConsumeAggregationMessageAsync (msg) {
     // Store this state information
     await cachedProofState.writeAggStateObjectsBulkAsync(stateObjects)
 
-    let aggObj = {}
-    aggObj.agg_id = messageObj.agg_id
-    aggObj.agg_root = messageObj.agg_root
-
-    try {
-      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(aggObj)), { persistent: true, type: 'aggregator' })
-      console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[aggregator] publish message acked', aggObj.agg_id)
-    } catch (error) {
-      console.error(`${env.RMQ_WORK_OUT_CAL_QUEUE} [aggregator] publish message nacked ${aggObj.agg_id}`)
-      throw new Error(error.message)
-    }
-
-    // New states has been written, events logged, and cal message queued, ack consumption of original message
+    // New states has been written, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
   } catch (error) {
