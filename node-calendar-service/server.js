@@ -379,17 +379,18 @@ async function consumeRewardMessageAsync (msg) {
   }
 }
 
+// Build Merkle tree from aggregation root objects
 function generateCalendarTree (aggregationRootObjects) {
   debug.general(`generateCalendarTree : begin`)
 
   let treeDataObj = null
   // create merkle tree only if there is at least one root to process
-  if (rootsForTree.length > 0) {
+  if (aggregationRootObjects.length > 0) {
     // clear the merkleTools instance to prepare for a new tree
     merkleTools.resetTree()
 
     // get root values from root objects
-    let leaves = rootsForTree.map((rootObj) => {
+    let leaves = aggregationRootObjects.map((rootObj) => {
       return rootObj.agg_root
     })
 
@@ -401,23 +402,22 @@ function generateCalendarTree (aggregationRootObjects) {
     treeDataObj = {}
     treeDataObj.cal_root = merkleTools.getMerkleRoot()
 
-    let proofData = rootsForTree.map((rootItem, index) => {
+    let proofData = aggregationRootObjects.map((rootItem, index) => {
       // push the agg_id and corresponding proof onto the array
       let proofDataItem = {}
       proofDataItem.agg_id = rootItem.agg_id
-      proofDataItem.agg_msg = rootItem.msg
       let proof = merkleTools.getProof(index)
       proofDataItem.proof = utils.formatAsChainpointV3Ops(proof, 'sha-256')
       return proofDataItem
     })
     treeDataObj.proofData = proofData
-    debug.general(`generateCalendarTree : rootsForTree length : ${rootsForTree.length}`)
+    debug.general(`generateCalendarTree : aggregationRootObjects length : ${aggregationRootObjects.length}`)
   }
   debug.general(`generateCalendarTree : end`)
   return treeDataObj
 }
 
-// Write tree to calendar block DB and also to proof state service via RMQ
+// Write tree to calendar block DB
 async function persistCalendarTreeAsync (treeDataObj) {
   debug.calendar(`persistCalendarTreeAsync : begin`)
 
