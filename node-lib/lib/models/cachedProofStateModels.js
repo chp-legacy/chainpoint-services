@@ -234,6 +234,18 @@ async function getAggStateObjectsByHashIdsAsync (hashIds) {
   return results
 }
 
+async function getAggStateInfoSinceTimestampAsync (timestamp) {
+  let results = await AggStates.findAll({
+    where: {
+      created_at: { [Op.gt]: new Date(timestamp) }
+    },
+    attributes: ['agg_id', 'agg_root', 'created_at'],
+    order: [['created_at', 'ASC']],
+    raw: true
+  })
+  return results
+}
+
 async function getCalStateObjectsByAggIdsAsync (aggIds) {
   let aggIdData = aggIds.map((aggId) => { return { aggId: aggId, data: null } })
 
@@ -603,6 +615,7 @@ module.exports = {
   getHashIdsByAggIdsAsync: getHashIdsByAggIdsAsync,
   getHashIdsByBtcTxIdAsync: getHashIdsByBtcTxIdAsync,
   getAggStateObjectsByHashIdsAsync: getAggStateObjectsByHashIdsAsync,
+  getAggStateInfoSinceTimestampAsync: getAggStateInfoSinceTimestampAsync,
   getCalStateObjectsByAggIdsAsync: getCalStateObjectsByAggIdsAsync,
   getAnchorBTCAggStateObjectsByCalIdsAsync: getAnchorBTCAggStateObjectsByCalIdsAsync,
   getBTCTxStateObjectByAnchorBTCAggIdAsync: getBTCTxStateObjectByAnchorBTCAggIdAsync,

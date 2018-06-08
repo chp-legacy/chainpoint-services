@@ -549,8 +549,8 @@ async function queueCalStateDataMessageAsync (treeDataObj, block) {
     // An error as occurred publishing a message
     console.error(`queueCalStateDataMessageAsync : ${env.RMQ_WORK_OUT_STATE_QUEUE} [cal] publish message nacked`)
     throw new Error(`queueCalStateDataMessageAsync : Unable to publish state message : ${error.message}`)
-      }
   }
+}
 
 // queue message for state service with btc-a state data
 async function queueBtcAStateDataMessageAsync (treeDataObj) {
@@ -679,13 +679,38 @@ async function initializeCalendarBlock0Async () {
 
 async function processCalendarInterval () {
   try {
-    // this must not be retried since it mutates state.
-    let treeDataObj = generateCalendarTree(rootsForTree)
+    // Get agg_state objects since last calendar aggregation
+    let lastProcessedTimestamp = await coreNetworkState.getLastAggStateProcessedForCalBlockTimestamp()
+    if (lastProcessedTimestamp === null) {
+      // there is no entry found, most likely first run, default to 60 seconds ago
+      lastProcessedTimestamp = Date.now() - 60000
+    } else {
+      // look back an additional 500ms to account for possible time offset between CRDB instances
+      lastProcessedTimestamp = lastProcessedTimestamp - 500
+    }
+    let aggStates = await cachedProofState.getAggStateInfoSinceTimestampAsync(lastProcessedTimestamp)
+    let aggregationRootObjects = aggStates.map((aggStateObj) => {
+      return { agg_id: aggStateObj.agg_id, agg_root: aggStateObj.agg_root }
+    })
+
+    debug.calendar(`scheduleJob : calendar : aggregationRootObjects.length : ${aggregationRootObjects.length}`)
+
+    // Build Merkle tree and proofs for each aggregation object
+    let treeDataObj = generateCalendarTree(aggregationRootObjects)
+
     if (!_.isEmpty(treeDataObj)) {
+      // Write tree to calendar block DB
       let block = await persistCalendarTreeAsync(treeDataObj)
 
-      // queue message for state service
+      // Queue message for state service
       await queueCalStateDataMessageAsync(treeDataObj, block)
+
+      // Update global state table
+      if (aggStates.length > 0) {
+        let mostRecentTimestampThisInterval = aggStates[aggStates.length - 1].created_at.getTime()
+        let success = await coreNetworkState.setLastAggStateProcessedForCalBlockTimestamp(mostRecentTimestampThisInterval)
+        if (!success) throw new Error(`setLastAggStateProcessedForCalBlockTimestamp failed`)
+      }
     } else {
       debug.calendar('scheduleJob : processCalendarInterval : no treeData (hashes) to process for calendar interval')
     }
