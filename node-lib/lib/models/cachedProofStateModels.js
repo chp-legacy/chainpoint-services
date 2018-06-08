@@ -81,7 +81,8 @@ let AggStates = sequelize.define('chainpoint_proof_agg_states', {
   hash_id: { type: Sequelize.UUID, primaryKey: true },
   hash: { type: Sequelize.STRING },
   agg_id: { type: Sequelize.UUID },
-  agg_state: { type: Sequelize.TEXT }
+  agg_state: { type: Sequelize.TEXT },
+  agg_root: { type: Sequelize.STRING, allowNull: true }
 }, {
   indexes: [
     {
@@ -408,7 +409,7 @@ async function getBTCHeadStateObjectByBTCTxIdAsync (btcTxId) {
 }
 
 async function writeAggStateObjectsBulkAsync (stateObjects) {
-  let insertCmd = 'INSERT INTO chainpoint_proof_agg_states (hash_id, hash, agg_id, agg_state, created_at, updated_at) VALUES '
+  let insertCmd = 'INSERT INTO chainpoint_proof_agg_states (hash_id, hash, agg_id, agg_state, agg_root, created_at, updated_at) VALUES '
 
   let insertValues = stateObjects.map((stateObject) => {
     // use sequelize.escape() to sanitize input values just to be safe
@@ -416,7 +417,8 @@ async function writeAggStateObjectsBulkAsync (stateObjects) {
     let hash = sequelize.escape(stateObject.hash)
     let aggId = sequelize.escape(stateObject.agg_id)
     let aggState = sequelize.escape(JSON.stringify(stateObject.agg_state))
-    return `(${hashId}, ${hash}, ${aggId}, ${aggState}, now(), now())`
+    let aggRoot = sequelize.escape(stateObject.agg_root)
+    return `(${hashId}, ${hash}, ${aggId}, ${aggState}, ${aggRoot}, now(), now())`
   })
 
   insertCmd = insertCmd + insertValues.join(', ') + ' ON CONFLICT (hash_id) DO NOTHING'

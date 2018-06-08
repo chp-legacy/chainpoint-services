@@ -57,6 +57,7 @@ async function ConsumeAggregationMessageAsync (msg) {
     stateObj.agg_id = messageObj.agg_id
     stateObj.agg_state = {}
     stateObj.agg_state.ops = proofDataItem.proof
+    stateObj.agg_root = messageObj.agg_root
     return stateObj
   })
 
