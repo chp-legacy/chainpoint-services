@@ -694,6 +694,7 @@ async function processCalendarInterval () {
     })
 
     debug.calendar(`scheduleJob : calendar : aggregationRootObjects.length : ${aggregationRootObjects.length}`)
+    if (aggregationRootObjects.length === 0) return
 
     // Build Merkle tree and proofs for each aggregation object
     let treeDataObj = generateCalendarTree(aggregationRootObjects)
