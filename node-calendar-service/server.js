@@ -23,6 +23,8 @@ const amqp = require('amqplib')
 const uuidv1 = require('uuid/v1')
 const crypto = require('crypto')
 const calendarBlock = require('./lib/models/CalendarBlock.js')
+const cachedProofState = require('./lib/models/cachedProofStateModels.js')
+const coreNetworkState = require('./lib/models/coreNetworkState.js')
 const cnsl = require('consul')
 const utils = require('./lib/utils.js')
 const rp = require('request-promise-native')
@@ -80,7 +82,7 @@ let amqpChannel = null
 let nistLatest = null
 
 // pull in variables defined in shared CalendarBlock module
-const sequelize = calendarBlock.sequelize
+const calBlockSequelize = calendarBlock.sequelize
 const CalendarBlock = calendarBlock.CalendarBlock
 const pgClientPool = calendarBlock.pgClientPool
 
@@ -842,7 +844,12 @@ async function getTNTGrainsBalanceForWalletAsync () {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  await connections.openStorageConnectionAsync([sequelize], debug)
+  let modelSqlzArray = [
+    cachedProofState.sequelize,
+    calBlockSequelize,
+    coreNetworkState.sequelize
+  ]
+  await connections.openStorageConnectionAsync(modelSqlzArray, debug)
 
   // Pre-check the current Calendar block count.
   // Trigger creation of the genesis block if needed
