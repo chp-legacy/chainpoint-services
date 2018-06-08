@@ -69,10 +69,6 @@ const zeroStr = '000000000000000000000000000000000000000000000000000000000000000
 // The merkle tools object for building trees and generating proof paths
 const merkleTools = new MerkleTools()
 
-// An array of all Merkle tree roots from aggregators needing
-// to be processed. Will be filled as new roots arrive on the queue.
-let AGGREGATION_ROOTS = []
-
 // The channel used for all amqp communication
 // This value is set once the connection has been established
 let amqpChannel = null
