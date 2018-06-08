@@ -869,6 +869,21 @@ async function openStorageConnectionAsync () {
 }
 
 /**
+ * Opens a Redis connection
+ *
+ * @param {string} redisURI - The connection string for the Redis instance, an Redis URI
+ */
+function openRedisConnection (redisURIs) {
+  connections.openRedisConnection(redisURIs,
+    (newRedis) => {
+      cachedProofState.setRedis(newRedis)
+    }, () => {
+      cachedProofState.setRedis(null)
+      setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
+    })
+}
+
+/**
  * Opens an AMPQ connection and channel
  * Retry logic is included to handle losses of connection
  *
@@ -994,6 +1009,8 @@ async function start () {
     consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT, debug)
     debug.general('start : init Sequelize connection')
     await openStorageConnectionAsync()
+    debug.general('start : init Redis connection')
+    openRedisConnection(env.REDIS_CONNECT_URIS)
     debug.general('start : perform leader election')
     performLeaderElection()
     debug.general('start : init RabbitMQ connection')
