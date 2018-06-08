@@ -224,9 +224,6 @@ function processMessage (msg) {
   if (msg !== null) {
     // determine the source of the message and handle appropriately
     switch (msg.properties.type) {
-      case 'aggregator':
-        consumeAggRootMessage(msg)
-        break
       case 'btctx':
         if (env.ANCHOR_BTC === 'enabled') {
           // Consumes a tx message from the btctx service
@@ -311,16 +308,6 @@ async function executeRetryableBlockWriteTransactionAsync (blockType, dataId, da
   })
 
   return newBlock
-}
-
-function consumeAggRootMessage (msg) {
-  if (msg !== null) {
-    let rootObj = JSON.parse(msg.content.toString())
-
-    // add msg to the root object so that we can ack it during the persistCalendarTreeAsync process
-    rootObj.msg = msg
-    AGGREGATION_ROOTS.push(rootObj)
-  }
 }
 
 async function consumeBtcTxMessageAsync (msg) {
@@ -468,25 +455,12 @@ async function persistCalendarTreeAsync (treeDataObj) {
     throw new Error(`persistCalendarTreeAsync : amqpChannel is null : force retry`)
   }
 
-  // get an array of messages to be acked or nacked in this process
-  let messages = treeDataObj.proofData.map((proofDataItem) => {
-    return proofDataItem.agg_msg
-  })
-
   let block
   try {
     // Store Merkle root of calendar in DB and chain to previous calendar entries
     block = await createCalendarBlockAsync(treeDataObj.cal_root.toString('hex'))
   } catch (error) {
-    _.forEach(messages, (message) => {
-      // nack consumption of all original messages part of this aggregation event
-      if (message !== null) {
-        amqpChannel.nack(message)
-        let rootObj = JSON.parse(message.content.toString())
-        console.error(env.RMQ_WORK_IN_CAL_QUEUE, '[aggregator] consume message nacked', rootObj.agg_id)
-      }
-    })
-    throw new Error(error.message)
+    throw new Error(`persistCalendarTreeAsync : unable to create calendar block : ${error.message}`)
   }
   debug.calendar(`persistCalendarTreeAsync : end`)
   return block
@@ -574,11 +548,6 @@ async function lastBtcAnchorBlockIdAsync () {
 
 // queue messages for state service with cal state data and ack original messages
 async function queueCalStateDataMessageAsync (treeDataObj, block) {
-  // get an array of messages to be acked or nacked in this process
-  let messages = treeDataObj.proofData.map((proofDataItem) => {
-    return proofDataItem.agg_msg
-  })
-
   // create proof state objects for each aggregation root in the tree bound for proof state service
   let calStateData = {}
   calStateData.cal_id = block.id
@@ -605,27 +574,9 @@ async function queueCalStateDataMessageAsync (treeDataObj, block) {
   } catch (error) {
     // An error as occurred publishing a message
     console.error(`queueCalStateDataMessageAsync : ${env.RMQ_WORK_OUT_STATE_QUEUE} [cal] publish message nacked`)
-    console.error(`queueCalStateDataMessageAsync : Unable to publish state message : ${error.message}`)
-    _.forEach(messages, (message) => {
-      // nack consumption of all original messages part of this aggregation event
-      if (message !== null) {
-        amqpChannel.nack(message)
-        let rootObj = JSON.parse(message.content.toString())
-        console.error(`queueCalStateDataMessageAsync : [aggregator] consume message nacked : ${rootObj.agg_id}`)
+    throw new Error(`queueCalStateDataMessageAsync : Unable to publish state message : ${error.message}`)
       }
-    })
-    return
   }
-
-  _.forEach(messages, (message) => {
-    if (message !== null) {
-      // ack consumption of all original messages part of this aggregation event
-      let rootObj = JSON.parse(message.content.toString())
-      amqpChannel.ack(message)
-      debug.calendar(`queueCalStateDataMessageAsync : [aggregator] consume message acked : ${rootObj.agg_id}`)
-    }
-  })
-}
 
 // queue message for state service with btc-a state data
 async function queueBtcAStateDataMessageAsync (treeDataObj) {
