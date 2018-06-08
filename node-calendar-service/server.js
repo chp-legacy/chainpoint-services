@@ -682,7 +682,6 @@ async function initializeCalendarBlock0Async () {
 }
 
 async function processCalendarInterval () {
-  let rootsForTree = AGGREGATION_ROOTS.splice(0)
   try {
     // this must not be retried since it mutates state.
     let treeDataObj = generateCalendarTree(rootsForTree)
@@ -695,10 +694,8 @@ async function processCalendarInterval () {
       debug.calendar('scheduleJob : processCalendarInterval : no treeData (hashes) to process for calendar interval')
     }
   } catch (error) {
-    // an error has occured, return the rootsForTree back to AGGREGATION_ROOTS
-    // to be processed at the next interval
-    AGGREGATION_ROOTS = rootsForTree.concat(AGGREGATION_ROOTS)
-    console.error(`scheduleJob : processCalendarInterval : unable to create calendar block : ${error.message}`)
+    // an error has occured
+    console.error(`scheduleJob : processCalendarInterval : ${error.message}`)
   }
 }
 
@@ -897,8 +894,6 @@ async function openRMQConnectionAsync (connectURI) {
     (chan) => { amqpChannel = chan },
     () => {
       amqpChannel = null
-      // un-acked messaged will be requeued, so clear all work in progress
-      AGGREGATION_ROOTS = []
       setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
     },
     debug
@@ -951,11 +946,8 @@ async function scheduleActionsAsync () {
   let cronScheduleCalendarAnchor = `${calRandomInterval.join(',')} * * * * *`
   debug.calendar(`scheduleJob : calendar : cronScheduleCalendarAnchor : %s`, cronScheduleCalendarAnchor)
   schedule.scheduleJob(cronScheduleCalendarAnchor, async () => {
-    if (AGGREGATION_ROOTS.length > 0) {
-      debug.calendar(`scheduleJob : calendar : AGGREGATION_ROOTS.length : %d`, AGGREGATION_ROOTS.length)
+    if (IS_LEADER) {
       processCalendarInterval()
-    } else {
-      debug.calendar(`scheduleJob : calendar : AGGREGATION_ROOTS.length : 0`)
     }
   })
 
