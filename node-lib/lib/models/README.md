@@ -23,8 +23,6 @@ The following is a description of methods that must be defined in a storage adap
 | writeAggStateObjectAsync(stateObject)     | write the agg state object to storage | boolean indicating success |
 | writeAggStateObjectsAsync(stateObjects)     | write multiple agg state objects to storage individually within a loop| boolean indicating success |
 | writeAggStateObjectsBulkAsync(stateObjects, transaction)     | write multiple agg state objects to storage in one bulk insert | boolean indicating success |
-| writeCalStateObjectAsync(stateObject)     | write the cal state object to storage | boolean indicating success |
-| writeAnchorBTCAggStateObjectAsync(stateObject)     | write the anchor agg state object to storage | boolean indicating success |
 | writeBTCTxStateObjectAsync(stateObject)     | write the btctx state object to storage | boolean indicating success |
 | writeBTCHeadStateObjectAsync(stateObject)     | write the btchead state object to storage | boolean indicating success |
 | deleteProcessedHashesFromAggStatesAsync()     | prune records from agg\_states table | integer |

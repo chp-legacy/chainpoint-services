@@ -425,27 +425,6 @@ async function writeAggStateObjectsBulkAsync (stateObjects) {
   return true
 }
 
-async function writeCalStateObjectAsync (stateObject) {
-  let calId = parseInt(stateObject.cal_id, 10)
-  if (isNaN(calId)) throw new Error(`cal_id value '${stateObject.cal_id}' is not an integer`)
-  let calStateObject = {
-    agg_id: stateObject.agg_id,
-    cal_id: calId,
-    cal_state: JSON.stringify(stateObject.cal_state)
-  }
-  await CalStates.upsert(calStateObject)
-  // Store the state object in redis to cache for next request
-  if (redis) {
-    try {
-      let redisKey = `${CAL_STATE_KEY_PREFIX}:${stateObject.agg_id}`
-      await redis.set(redisKey, JSON.stringify(calStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
-    } catch (error) {
-      console.error(`Redis write error : writeCalStateObjectAsync : ${error.message}`)
-    }
-  }
-  return true
-}
-
 async function writeCalStateObjectsBulkAsync (stateObjects) {
   let insertCmd = 'INSERT INTO chainpoint_proof_cal_states (agg_id, cal_id, cal_state, created_at, updated_at) VALUES '
 
@@ -474,27 +453,6 @@ async function writeCalStateObjectsBulkAsync (stateObjects) {
       await multi.exec()
     } catch (error) {
       console.error(`Redis write error : writeCalStateObjectsBulkAsync : ${error.message}`)
-    }
-  }
-  return true
-}
-
-async function writeAnchorBTCAggStateObjectAsync (stateObject) {
-  let calId = parseInt(stateObject.cal_id, 10)
-  if (isNaN(calId)) throw new Error(`cal_id value '${stateObject.cal_id}' is not an integer`)
-  let anchorBTCAggStateObject = {
-    cal_id: calId,
-    anchor_btc_agg_id: stateObject.anchor_btc_agg_id,
-    anchor_btc_agg_state: JSON.stringify(stateObject.anchor_btc_agg_state)
-  }
-  await AnchorBTCAggStates.upsert(anchorBTCAggStateObject)
-  // Store the state object in redis to cache for next request
-  if (redis) {
-    try {
-      let redisKey = `${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObject.calId}`
-      await redis.set(redisKey, JSON.stringify(anchorBTCAggStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
-    } catch (error) {
-      console.error(`Redis write error : writeAnchorBTCAggStateObjectAsync : ${error.message}`)
     }
   }
   return true
@@ -648,9 +606,7 @@ module.exports = {
   getBTCTxStateObjectByAnchorBTCAggIdAsync: getBTCTxStateObjectByAnchorBTCAggIdAsync,
   getBTCHeadStateObjectByBTCTxIdAsync: getBTCHeadStateObjectByBTCTxIdAsync,
   writeAggStateObjectsBulkAsync: writeAggStateObjectsBulkAsync,
-  writeCalStateObjectAsync: writeCalStateObjectAsync,
   writeCalStateObjectsBulkAsync: writeCalStateObjectsBulkAsync,
-  writeAnchorBTCAggStateObjectAsync: writeAnchorBTCAggStateObjectAsync,
   writeAnchorBTCAggStateObjectsAsync: writeAnchorBTCAggStateObjectsAsync,
   writeBTCTxStateObjectAsync: writeBTCTxStateObjectAsync,
   writeBTCHeadStateObjectAsync: writeBTCHeadStateObjectAsync,
