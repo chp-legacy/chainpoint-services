@@ -467,7 +467,7 @@ async function writeCalStateObjectsBulkAsync (stateObjects) {
     let multi = redis.multi()
 
     stateObjects.forEach((stateObj) => {
-      multi.set(`${CAL_STATE_KEY_PREFIX}:${stateObj.agg_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+      multi.set(`${CAL_STATE_KEY_PREFIX}:${stateObj.agg_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60, 'NX')
     })
 
     try {
@@ -526,7 +526,7 @@ async function writeAnchorBTCAggStateObjectsAsync (stateObjects) {
     let multi = redis.multi()
 
     stateObjects.forEach((stateObj) => {
-      multi.set(`${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObj.cal_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+      multi.set(`${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObj.cal_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60, 'NX')
     })
 
     try {
