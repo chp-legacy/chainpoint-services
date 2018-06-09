@@ -899,7 +899,7 @@ function openRedisConnection (redisURIs) {
     }, () => {
       cachedProofState.setRedis(null)
       setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
-    })
+    }, debug)
 }
 
 /**
