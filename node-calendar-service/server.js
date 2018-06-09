@@ -685,9 +685,10 @@ async function processCalendarInterval () {
       // there is no entry found, most likely first run, default to 60 seconds ago
       lastProcessedTimestamp = Date.now() - 60000
     } else {
-      // look back an additional 500ms to account for possible time offset between CRDB instances
+      // look back an additional 500ms to account for possible latency between CRDB instances
       lastProcessedTimestamp = lastProcessedTimestamp - 500
     }
+    let thisIntervalEndTimestamp = Date.now()
     let aggStates = await cachedProofState.getAggStateInfoSinceTimestampAsync(lastProcessedTimestamp)
     let aggregationRootObjects = aggStates.map((aggStateObj) => {
       return { agg_id: aggStateObj.agg_id, agg_root: aggStateObj.agg_root }
@@ -707,10 +708,10 @@ async function processCalendarInterval () {
       await queueCalStateDataMessageAsync(treeDataObj, block)
 
       // Update global state table
-      if (aggStates.length > 0) {
-        let mostRecentTimestampThisInterval = aggStates[aggStates.length - 1].created_at.getTime()
-        let success = await coreNetworkState.setLastAggStateProcessedForCalBlockTimestamp(mostRecentTimestampThisInterval)
-        if (!success) throw new Error(`setLastAggStateProcessedForCalBlockTimestamp failed`)
+      try {
+        await coreNetworkState.setLastAggStateProcessedForCalBlockTimestamp(thisIntervalEndTimestamp)
+      } catch (error) {
+        throw new Error(`setLastAggStateProcessedForCalBlockTimestamp failed with value ${thisIntervalEndTimestamp}`)
       }
     } else {
       debug.calendar('scheduleJob : processCalendarInterval : no treeData (hashes) to process for calendar interval')
