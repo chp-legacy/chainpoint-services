@@ -78,7 +78,7 @@ let CoreNetworkState = sequelize.define('chainpoint_core_network_state', {
 })
 
 const LAST_AGG_STATE_PROCESSED_FOR_CAL_BLOCK_TIMESTAMP = 'LAST_AGG_STATE_PROCESSED_FOR_CAL_BLOCK_TIMESTAMP'
-const LAST_CAL_STATE_PROCESSED_FOR_BTC_A_BLOCK_TIMESTAMP = 'LAST_CAL_STATE_PROCESSED_FOR_BTC_A_BLOCK_TIMESTAMP'
+const LAST_CAL_BLOCK_HEIGHT_PROCESSED_FOR_BTC_A_BLOCK = 'LAST_CAL_BLOCK_HEIGHT_PROCESSED_FOR_BTC_A_BLOCK'
 
 async function getLastAggStateProcessedForCalBlockTimestamp () {
   let results = await CoreNetworkState.find({ where: { stateKey: LAST_AGG_STATE_PROCESSED_FOR_CAL_BLOCK_TIMESTAMP }, raw: true })
@@ -93,14 +93,14 @@ async function setLastAggStateProcessedForCalBlockTimestamp (value) {
   await CoreNetworkState.upsert(stateObject)
 }
 
-async function getLastCalStateProcessedForBtcABlockTimestamp () {
-  let results = await CoreNetworkState.find({ where: { stateKey: LAST_CAL_STATE_PROCESSED_FOR_BTC_A_BLOCK_TIMESTAMP }, raw: true })
+async function getLastCalBlockHeightProcessedForBtcABlock () {
+  let results = await CoreNetworkState.find({ where: { stateKey: LAST_CAL_BLOCK_HEIGHT_PROCESSED_FOR_BTC_A_BLOCK }, raw: true })
   return results ? results.stateValue : null
 }
 
-async function setLastCalStateProcessedForBtcABlockTimestamp (value) {
+async function setLastCalBlockHeightProcessedForBtcABlock (value) {
   let stateObject = {
-    stateKey: LAST_CAL_STATE_PROCESSED_FOR_BTC_A_BLOCK_TIMESTAMP,
+    stateKey: LAST_CAL_BLOCK_HEIGHT_PROCESSED_FOR_BTC_A_BLOCK,
     stateValue: value.toString()
   }
   await CoreNetworkState.upsert(stateObject)
@@ -108,8 +108,8 @@ async function setLastCalStateProcessedForBtcABlockTimestamp (value) {
 
 module.exports = {
   getLastAggStateProcessedForCalBlockTimestamp: getLastAggStateProcessedForCalBlockTimestamp,
-  getLastCalStateProcessedForBtcABlockTimestamp: getLastCalStateProcessedForBtcABlockTimestamp,
+  getLastCalBlockHeightProcessedForBtcABlock: getLastCalBlockHeightProcessedForBtcABlock,
   setLastAggStateProcessedForCalBlockTimestamp: setLastAggStateProcessedForCalBlockTimestamp,
-  setLastCalStateProcessedForBtcABlockTimestamp: setLastCalStateProcessedForBtcABlockTimestamp,
+  setLastCalBlockHeightProcessedForBtcABlock: setLastCalBlockHeightProcessedForBtcABlock,
   sequelize: sequelize
 }
