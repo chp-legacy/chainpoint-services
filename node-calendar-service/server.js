@@ -996,10 +996,8 @@ async function scheduleActionsAsync () {
     }
   })
 
-  // BTC anchor : run every 60 min, in every zone,
-  // at the top and bottom of the hour. Pick a random second
-  // at the top of the hour to de-conflict zones running the same code.
-  let cronScheduleBtcAnchor = `${_.random(59)} 0 * * * *`
+  // BTC anchor : run every 60 min
+  let cronScheduleBtcAnchor = `0 0 * * * *`
   debug.btcAnchor(`scheduleJob : BTC anchor : cronScheduleBtcAnchor : ${cronScheduleBtcAnchor}`)
   schedule.scheduleJob(cronScheduleBtcAnchor, async () => {
     if (IS_LEADER && env.ANCHOR_BTC === 'enabled') {
