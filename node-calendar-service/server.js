@@ -739,7 +739,10 @@ async function processBtcAnchorInterval () {
     let mostRecentCalBlockProcessed
     try {
       // find newest 'cal' block in treeData, save as a marker for next interval
-      mostRecentCalBlockProcessed = treeData.proofData.reduce((value, dataItem) => dataItem.cal_id > value ? dataItem.cal_id : value, 0)
+      mostRecentCalBlockProcessed = blocks.reduce((value, block) => block.id > value ? block.id : value, -1)
+      // In the unlikely event that 0 blocks were added in this interval, do nothing
+      if (mostRecentCalBlockProcessed === -1) return
+      // otherwise, set the most recent block of this interval to use as the start of the next interval
       await coreNetworkState.setLastCalBlockHeightProcessedForBtcABlock(mostRecentCalBlockProcessed)
     } catch (error) {
       throw new Error(`setLastCalBlockHeightProcessedForBtcABlock failed with value ${mostRecentCalBlockProcessed}`)
