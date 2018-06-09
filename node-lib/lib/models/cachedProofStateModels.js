@@ -91,7 +91,7 @@ let AggStates = sequelize.define('chainpoint_proof_agg_states', {
     },
     {
       unique: false,
-      fields: ['created_at']
+      fields: ['created_at', 'agg_id', 'agg_root']
     }
   ],
     // enable timestamps
@@ -235,14 +235,10 @@ async function getAggStateObjectsByHashIdsAsync (hashIds) {
 }
 
 async function getAggStateInfoSinceTimestampAsync (timestamp) {
-  let results = await AggStates.findAll({
-    where: {
-      created_at: { [Op.gt]: new Date(timestamp) }
-    },
-    attributes: ['agg_id', 'agg_root', 'created_at'],
-    order: [['created_at', 'ASC']],
-    raw: true
-  })
+  let results = await sequelize.query(`SELECT DISTINCT agg_id, agg_root 
+  FROM chainpoint_proof_agg_states
+  WHERE created_at > '${new Date(timestamp)}'
+  ORDER BY created_at`, { type: sequelize.QueryTypes.SELECT })
   return results
 }
 
