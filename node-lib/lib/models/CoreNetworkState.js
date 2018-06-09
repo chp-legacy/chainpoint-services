@@ -81,31 +81,29 @@ const LAST_AGG_STATE_PROCESSED_FOR_CAL_BLOCK_TIMESTAMP = 'LAST_AGG_STATE_PROCESS
 const LAST_CAL_STATE_PROCESSED_FOR_BTC_A_BLOCK_TIMESTAMP = 'LAST_CAL_STATE_PROCESSED_FOR_BTC_A_BLOCK_TIMESTAMP'
 
 async function getLastAggStateProcessedForCalBlockTimestamp () {
-  let results = await CoreNetworkState.find({ where: { state_key: LAST_AGG_STATE_PROCESSED_FOR_CAL_BLOCK_TIMESTAMP }, raw: true })
+  let results = await CoreNetworkState.find({ where: { stateKey: LAST_AGG_STATE_PROCESSED_FOR_CAL_BLOCK_TIMESTAMP }, raw: true })
   return results ? results.stateValue : null
 }
 
 async function setLastAggStateProcessedForCalBlockTimestamp (value) {
   let stateObject = {
     stateKey: LAST_AGG_STATE_PROCESSED_FOR_CAL_BLOCK_TIMESTAMP,
-    stateValue: value
+    stateValue: value.toString()
   }
-  let result = await CoreNetworkState.upsert(stateObject)
-  return result
+  await CoreNetworkState.upsert(stateObject)
 }
 
 async function getLastCalStateProcessedForBtcABlockTimestamp () {
-  let results = await CoreNetworkState.find({ where: { state_key: LAST_CAL_STATE_PROCESSED_FOR_BTC_A_BLOCK_TIMESTAMP }, raw: true })
+  let results = await CoreNetworkState.find({ where: { stateKey: LAST_CAL_STATE_PROCESSED_FOR_BTC_A_BLOCK_TIMESTAMP }, raw: true })
   return results ? results.stateValue : null
 }
 
 async function setLastCalStateProcessedForBtcABlockTimestamp (value) {
   let stateObject = {
     stateKey: LAST_CAL_STATE_PROCESSED_FOR_BTC_A_BLOCK_TIMESTAMP,
-    stateValue: value
+    stateValue: value.toString()
   }
-  let result = await CoreNetworkState.upsert(stateObject)
-  return result
+  await CoreNetworkState.upsert(stateObject)
 }
 
 module.exports = {
