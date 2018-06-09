@@ -82,7 +82,7 @@ const LAST_CAL_BLOCK_HEIGHT_PROCESSED_FOR_BTC_A_BLOCK = 'LAST_CAL_BLOCK_HEIGHT_P
 
 async function getLastAggStateProcessedForCalBlockTimestamp () {
   let results = await CoreNetworkState.find({ where: { stateKey: LAST_AGG_STATE_PROCESSED_FOR_CAL_BLOCK_TIMESTAMP }, raw: true })
-  return results ? results.stateValue : null
+  return results ? parseInt(results.stateValue) : null
 }
 
 async function setLastAggStateProcessedForCalBlockTimestamp (value) {
@@ -95,7 +95,7 @@ async function setLastAggStateProcessedForCalBlockTimestamp (value) {
 
 async function getLastCalBlockHeightProcessedForBtcABlock () {
   let results = await CoreNetworkState.find({ where: { stateKey: LAST_CAL_BLOCK_HEIGHT_PROCESSED_FOR_BTC_A_BLOCK }, raw: true })
-  return results ? results.stateValue : null
+  return results ? parseInt(results.stateValue) : null
 }
 
 async function setLastCalBlockHeightProcessedForBtcABlock (value) {
