@@ -293,6 +293,7 @@ async function writeTransactionAsync (blockType, dataId, dataVal, debuglogger) {
     throw error
   }
 }
+
 async function executeRetryableBlockWriteTransactionAsync (blockType, dataId, dataVal, debuglogger) {
   let newBlock = await retry(async bail => {
     let newBlock = await writeTransactionAsync(blockType, dataId, dataVal, debuglogger)
@@ -440,9 +441,9 @@ async function persistCalendarTreeAsync (treeDataObj) {
   return block
 }
 
-// Aggregate all block hashes on chain since last BTC anchor block, add new
+// Aggregate all block hashes on chain since last BTC aggregation, add new
 // BTC anchor block to calendar, add new proof state entries, anchor root
-async function aggregateAndAnchorBTCAsync (lastBtcAnchorBlockId) {
+async function aggregateAndAnchorBTCAsync (blocks) {
   debug.btcAnchor(`aggregateAndAnchorBTCAsync : begin`)
 
   // if the amqp channel is null (closed), processing should not continue,
@@ -455,16 +456,6 @@ async function aggregateAndAnchorBTCAsync (lastBtcAnchorBlockId) {
 
   let treeData = {}
   try {
-    // Retrieve ALL Calendar blocks since last anchor block created.
-    if (!lastBtcAnchorBlockId) lastBtcAnchorBlockId = -1
-    let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastBtcAnchorBlockId } }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
-    debug.btcAnchor('aggregateAndAnchorBTCAsync : btc blocks.length to anchor : %d', blocks.length)
-
-    if (blocks.length === 0) {
-      debug.btcAnchor('aggregateAndAnchorBTCAsync : No blocks to anchor since last btc-a : returning')
-      return
-    }
-
     // Build merkle tree with block hashes
     let leaves = blocks.map((blockObj) => {
       return blockObj.hash
@@ -700,21 +691,17 @@ async function processCalendarInterval () {
     // Build Merkle tree and proofs for each aggregation object
     let treeDataObj = generateCalendarTree(aggregationRootObjects)
 
-    if (!_.isEmpty(treeDataObj)) {
-      // Write tree to calendar block DB
-      let block = await persistCalendarTreeAsync(treeDataObj)
+    // Write tree to calendar block DB
+    let block = await persistCalendarTreeAsync(treeDataObj)
 
-      // Queue message for state service
-      await queueCalStateDataMessageAsync(treeDataObj, block)
+    // Queue message for state service
+    await queueCalStateDataMessageAsync(treeDataObj, block)
 
-      // Update global state table
-      try {
-        await coreNetworkState.setLastAggStateProcessedForCalBlockTimestamp(thisIntervalEndTimestamp)
-      } catch (error) {
-        throw new Error(`setLastAggStateProcessedForCalBlockTimestamp failed with value ${thisIntervalEndTimestamp}`)
-      }
-    } else {
-      debug.calendar('scheduleJob : processCalendarInterval : no treeData (hashes) to process for calendar interval')
+    // Update global state table
+    try {
+      await coreNetworkState.setLastAggStateProcessedForCalBlockTimestamp(thisIntervalEndTimestamp)
+    } catch (error) {
+      throw new Error(`setLastAggStateProcessedForCalBlockTimestamp failed with value ${thisIntervalEndTimestamp}`)
     }
   } catch (error) {
     // an error has occured
@@ -730,12 +717,33 @@ async function processNistInterval () {
   }
 }
 
-async function processBtcAnchorInterval (lastBtcAnchorBlockId) {
+async function processBtcAnchorInterval () {
   try {
-    let treeData = await aggregateAndAnchorBTCAsync(lastBtcAnchorBlockId)
+    // Get ALL calendar blocks since last btc-a aggregation
+    let lastProcessedCalHeight = await coreNetworkState.getLastCalBlockHeightProcessedForBtcABlock()
+    if (lastProcessedCalHeight === null) {
+      // there is no entry found, most likely first run, default to most recent btc-a block
+      lastProcessedCalHeight = await lastBtcAnchorBlockIdAsync()
+    }
+    let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastProcessedCalHeight } }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
+    debug.btcAnchor('scheduleJob : calendar : processBtcAnchorInterval : btc blocks.length to anchor : %d', blocks.length)
+    if (blocks.length === 0) return
 
-    // queue message for state service
+    // Build tree and write new btc-a to calendar
+    let treeData = await aggregateAndAnchorBTCAsync(blocks)
+
+    // Queue message for state service
     await queueBtcAStateDataMessageAsync(treeData)
+
+    // Update global state table
+    let mostRecentCalBlockProcessed
+    try {
+      // find newest 'cal' block in treeData, save as a marker for next interval
+      mostRecentCalBlockProcessed = treeData.proofData.reduce((value, dataItem) => dataItem.cal_id > value ? dataItem.cal_id : value, 0)
+      await coreNetworkState.setLastCalBlockHeightProcessedForBtcABlock(mostRecentCalBlockProcessed)
+    } catch (error) {
+      throw new Error(`setLastCalBlockHeightProcessedForBtcABlock failed with value ${mostRecentCalBlockProcessed}`)
+    }
   } catch (error) {
     console.error(`scheduleJob : processBtcAnchorInterval : unable to aggregate and create BTC anchor block : ${error.message}`)
   }
@@ -996,10 +1004,9 @@ async function scheduleActionsAsync () {
   schedule.scheduleJob(cronScheduleBtcAnchor, async () => {
     if (IS_LEADER && env.ANCHOR_BTC === 'enabled') {
       debug.btcAnchor(`scheduleJob : BTC anchor : ANCHOR_BTC enabled`)
-      // Create a btc-a block using new blocks since lastBtcAnchorBlockId
+      // Create a btc-a block
       try {
-        let lastBtcAnchorBlockId = await lastBtcAnchorBlockIdAsync()
-        processBtcAnchorInterval(lastBtcAnchorBlockId)
+        processBtcAnchorInterval()
       } catch (error) {
         console.error(`scheduleJob : BTC anchor : ${error.message}`)
       }
