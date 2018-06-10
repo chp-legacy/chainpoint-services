@@ -736,16 +736,16 @@ async function processBtcAnchorInterval () {
     await queueBtcAStateDataMessageAsync(treeData)
 
     // Update global state table
-    let mostRecentCalBlockProcessed
+    let thisIntervalEndBlockHeight
     try {
-      // find newest 'cal' block in treeData, save as a marker for next interval
-      mostRecentCalBlockProcessed = blocks.reduce((value, block) => block.id > value ? block.id : value, -1)
+      // find latest block in treeData, save as a marker for next interval
+      thisIntervalEndBlockHeight = blocks.reduce((value, block) => block.id > value ? block.id : value, -1)
       // In the unlikely event that 0 blocks were added in this interval, do nothing
-      if (mostRecentCalBlockProcessed === -1) return
-      // otherwise, set the most recent block of this interval to use as the start of the next interval
-      await coreNetworkState.setLastCalBlockHeightProcessedForBtcABlock(mostRecentCalBlockProcessed)
+      if (thisIntervalEndBlockHeight === -1) return
+      // otherwise, set the most recent block of this interval to use to determine the start of the next interval
+      await coreNetworkState.setLastCalBlockHeightProcessedForBtcABlock(thisIntervalEndBlockHeight)
     } catch (error) {
-      throw new Error(`setLastCalBlockHeightProcessedForBtcABlock failed with value ${mostRecentCalBlockProcessed}`)
+      throw new Error(`setLastCalBlockHeightProcessedForBtcABlock failed with value ${thisIntervalEndBlockHeight}`)
     }
   } catch (error) {
     console.error(`scheduleJob : processBtcAnchorInterval : unable to aggregate and create BTC anchor block : ${error.message}`)
