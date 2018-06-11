@@ -81,7 +81,8 @@ let AggStates = sequelize.define('chainpoint_proof_agg_states', {
   hash_id: { type: Sequelize.UUID, primaryKey: true },
   hash: { type: Sequelize.STRING },
   agg_id: { type: Sequelize.UUID },
-  agg_state: { type: Sequelize.TEXT }
+  agg_state: { type: Sequelize.TEXT },
+  agg_root: { type: Sequelize.STRING, allowNull: true }
 }, {
   indexes: [
     {
@@ -90,7 +91,7 @@ let AggStates = sequelize.define('chainpoint_proof_agg_states', {
     },
     {
       unique: false,
-      fields: ['created_at']
+      fields: ['created_at', 'agg_id', 'agg_root']
     }
   ],
     // enable timestamps
@@ -230,6 +231,14 @@ async function getAggStateObjectsByHashIdsAsync (hashIds) {
     },
     raw: true
   })
+  return results
+}
+
+async function getAggStateInfoSinceTimestampAsync (timestamp) {
+  let results = await sequelize.query(`SELECT DISTINCT agg_id, agg_root 
+  FROM chainpoint_proof_agg_states
+  WHERE created_at > '${new Date(timestamp).toISOString()}'
+  ORDER BY created_at`, { type: sequelize.QueryTypes.SELECT })
   return results
 }
 
@@ -408,7 +417,7 @@ async function getBTCHeadStateObjectByBTCTxIdAsync (btcTxId) {
 }
 
 async function writeAggStateObjectsBulkAsync (stateObjects) {
-  let insertCmd = 'INSERT INTO chainpoint_proof_agg_states (hash_id, hash, agg_id, agg_state, created_at, updated_at) VALUES '
+  let insertCmd = 'INSERT INTO chainpoint_proof_agg_states (hash_id, hash, agg_id, agg_state, agg_root, created_at, updated_at) VALUES '
 
   let insertValues = stateObjects.map((stateObject) => {
     // use sequelize.escape() to sanitize input values just to be safe
@@ -416,33 +425,13 @@ async function writeAggStateObjectsBulkAsync (stateObjects) {
     let hash = sequelize.escape(stateObject.hash)
     let aggId = sequelize.escape(stateObject.agg_id)
     let aggState = sequelize.escape(JSON.stringify(stateObject.agg_state))
-    return `(${hashId}, ${hash}, ${aggId}, ${aggState}, now(), now())`
+    let aggRoot = sequelize.escape(stateObject.agg_root)
+    return `(${hashId}, ${hash}, ${aggId}, ${aggState}, ${aggRoot}, now(), now())`
   })
 
   insertCmd = insertCmd + insertValues.join(', ') + ' ON CONFLICT (hash_id) DO NOTHING'
 
   await sequelize.query(insertCmd, { type: sequelize.QueryTypes.INSERT })
-  return true
-}
-
-async function writeCalStateObjectAsync (stateObject) {
-  let calId = parseInt(stateObject.cal_id, 10)
-  if (isNaN(calId)) throw new Error(`cal_id value '${stateObject.cal_id}' is not an integer`)
-  let calStateObject = {
-    agg_id: stateObject.agg_id,
-    cal_id: calId,
-    cal_state: JSON.stringify(stateObject.cal_state)
-  }
-  await CalStates.upsert(calStateObject)
-  // Store the state object in redis to cache for next request
-  if (redis) {
-    try {
-      let redisKey = `${CAL_STATE_KEY_PREFIX}:${stateObject.agg_id}`
-      await redis.set(redisKey, JSON.stringify(calStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
-    } catch (error) {
-      console.error(`Redis write error : writeCalStateObjectAsync : ${error.message}`)
-    }
-  }
   return true
 }
 
@@ -467,34 +456,13 @@ async function writeCalStateObjectsBulkAsync (stateObjects) {
     let multi = redis.multi()
 
     stateObjects.forEach((stateObj) => {
-      multi.set(`${CAL_STATE_KEY_PREFIX}:${stateObj.agg_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+      multi.set(`${CAL_STATE_KEY_PREFIX}:${stateObj.agg_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60, 'NX')
     })
 
     try {
       await multi.exec()
     } catch (error) {
       console.error(`Redis write error : writeCalStateObjectsBulkAsync : ${error.message}`)
-    }
-  }
-  return true
-}
-
-async function writeAnchorBTCAggStateObjectAsync (stateObject) {
-  let calId = parseInt(stateObject.cal_id, 10)
-  if (isNaN(calId)) throw new Error(`cal_id value '${stateObject.cal_id}' is not an integer`)
-  let anchorBTCAggStateObject = {
-    cal_id: calId,
-    anchor_btc_agg_id: stateObject.anchor_btc_agg_id,
-    anchor_btc_agg_state: JSON.stringify(stateObject.anchor_btc_agg_state)
-  }
-  await AnchorBTCAggStates.upsert(anchorBTCAggStateObject)
-  // Store the state object in redis to cache for next request
-  if (redis) {
-    try {
-      let redisKey = `${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObject.calId}`
-      await redis.set(redisKey, JSON.stringify(anchorBTCAggStateObject), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
-    } catch (error) {
-      console.error(`Redis write error : writeAnchorBTCAggStateObjectAsync : ${error.message}`)
     }
   }
   return true
@@ -526,7 +494,7 @@ async function writeAnchorBTCAggStateObjectsAsync (stateObjects) {
     let multi = redis.multi()
 
     stateObjects.forEach((stateObj) => {
-      multi.set(`${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObj.cal_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60)
+      multi.set(`${ANCHOR_BTC_AGG_STATE_KEY_PREFIX}:${stateObj.cal_id}`, JSON.stringify(stateObj), 'EX', PROOF_STATE_CACHE_EXPIRE_MINUTES * 60, 'NX')
     })
 
     try {
@@ -643,14 +611,13 @@ module.exports = {
   getHashIdsByAggIdsAsync: getHashIdsByAggIdsAsync,
   getHashIdsByBtcTxIdAsync: getHashIdsByBtcTxIdAsync,
   getAggStateObjectsByHashIdsAsync: getAggStateObjectsByHashIdsAsync,
+  getAggStateInfoSinceTimestampAsync: getAggStateInfoSinceTimestampAsync,
   getCalStateObjectsByAggIdsAsync: getCalStateObjectsByAggIdsAsync,
   getAnchorBTCAggStateObjectsByCalIdsAsync: getAnchorBTCAggStateObjectsByCalIdsAsync,
   getBTCTxStateObjectByAnchorBTCAggIdAsync: getBTCTxStateObjectByAnchorBTCAggIdAsync,
   getBTCHeadStateObjectByBTCTxIdAsync: getBTCHeadStateObjectByBTCTxIdAsync,
   writeAggStateObjectsBulkAsync: writeAggStateObjectsBulkAsync,
-  writeCalStateObjectAsync: writeCalStateObjectAsync,
   writeCalStateObjectsBulkAsync: writeCalStateObjectsBulkAsync,
-  writeAnchorBTCAggStateObjectAsync: writeAnchorBTCAggStateObjectAsync,
   writeAnchorBTCAggStateObjectsAsync: writeAnchorBTCAggStateObjectsAsync,
   writeBTCTxStateObjectAsync: writeBTCTxStateObjectAsync,
   writeBTCHeadStateObjectAsync: writeBTCHeadStateObjectAsync,
