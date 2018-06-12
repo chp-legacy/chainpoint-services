@@ -12,13 +12,11 @@
     "async-retry": "^1.2.1",
     "envalid": "^4.1.4",
     "ethereumjs-wallet": "^0.6.0",
-    "js-sha3": "^0.7.0",
+    "ethers": "^3.0.17",
+    "ioredis": "^3.2.2",
     "lodash": "^4.17.10",
-    "request": "^2.85.0",
-    "request-promise-native": "^1.0.5",
     "restify": "^4.3.0",
     "truffle-contract": "^3.0.5",
-    "web3": "^0.19.0",
     "web3-provider-engine": "^14.0.5"
   }
 }
