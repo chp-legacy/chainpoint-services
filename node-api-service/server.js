@@ -249,7 +249,8 @@ function startConsulWatches () {
     { key: env.REG_NODES_LIMIT_KEY, value: '0' },
     { key: env.MIN_NODE_VERSION_EXISTING_KEY, value: '0.0.1' },
     { key: env.MIN_NODE_VERSION_NEW_KEY, value: '0.0.1' },
-    { key: env.ENFORCE_PRIVATE_STAKE_KEY, value: 'true' }
+    { key: env.ENFORCE_PRIVATE_STAKE_KEY, value: 'true' },
+    { key: env.NODE_AGGREGATION_INTERVAL_SECONDS_KEY, value: `${env.NODE_AGGREGATION_INTERVAL_SECONDS_DEFAULT}` }
   ]
   connections.startConsulWatches(consul, watches, defaults)
 }
