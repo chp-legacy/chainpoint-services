@@ -22,6 +22,8 @@ const restify = require('restify')
 
 let CalendarBlock = calendarBlock.CalendarBlock
 
+let NODE_AGGREGATION_INTERVAL_SECONDS
+
 function getCorePublicKeyList () {
   return {
     '09b0ec65fa25': 'Q88brO55SfkY5S0Rbnyh3gh1s6izAj9v4BSWVF1dce0=',
@@ -47,6 +49,7 @@ async function getConfigInfoV1Async (req, res, next) {
     if (!topCoreBlock) throw new Error('no blocks found on calendar')
 
     let mostRecentChallenge = await cachedAuditChallenge.getMostRecentChallengeDataSolutionRemovedAsync()
+    let node_aggregation_interval_seconds = NODE_AGGREGATION_INTERVAL_SECONDS // eslint-disable-line
 
     result = {
       chainpoint_core_base_uri: env.CHAINPOINT_CORE_BASE_URI,
@@ -55,6 +58,7 @@ async function getConfigInfoV1Async (req, res, next) {
         height: parseInt(topCoreBlock.id),
         audit_challenge: mostRecentChallenge || undefined
       },
+      node_aggregation_interval_seconds: node_aggregation_interval_seconds,
       core_eth_address: coreEthAddress,
       node_min_version: minNodeVersionExisting
     }
@@ -72,7 +76,10 @@ module.exports = {
   getConfigInfoV1Async: getConfigInfoV1Async,
   setCalendarBlock: (calBlock) => { CalendarBlock = calBlock },
   setRedis: (r) => { cachedAuditChallenge.setRedis(r) },
-  setConsul: (c) => { cachedAuditChallenge.setConsul(c) },
+  setConsul: async (c) => {
+    cachedAuditChallenge.setConsul(c)
+  },
+  setNodeAggregationInterval: (val) => { NODE_AGGREGATION_INTERVAL_SECONDS = val },
   setMostRecentChallengeKey: (key) => { cachedAuditChallenge.setMostRecentChallengeKey(key) },
   getAuditChallengeSequelize: () => { return cachedAuditChallenge.getAuditChallengeSequelize() },
   setMinNodeVersionExisting: (v) => { minNodeVersionExisting = v }

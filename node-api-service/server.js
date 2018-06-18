@@ -232,13 +232,25 @@ function startConsulWatches () {
       if (data && data.Value) hashes.setEnforcePrivateStakeState(data.Value)
     },
     onError: null
+  },
+  {
+    key: env.NODE_AGGREGATION_INTERVAL_SECONDS_KEY,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) {
+        let newVal = parseInt(data.Value, 10)
+        config.setNodeAggregationInterval(newVal)
+      }
+    },
+    onError: null
   }]
 
   let defaults = [
     { key: env.REG_NODES_LIMIT_KEY, value: '0' },
     { key: env.MIN_NODE_VERSION_EXISTING_KEY, value: '0.0.1' },
     { key: env.MIN_NODE_VERSION_NEW_KEY, value: '0.0.1' },
-    { key: env.ENFORCE_PRIVATE_STAKE_KEY, value: 'true' }
+    { key: env.ENFORCE_PRIVATE_STAKE_KEY, value: 'true' },
+    { key: env.NODE_AGGREGATION_INTERVAL_SECONDS_KEY, value: `${env.NODE_AGGREGATION_INTERVAL_SECONDS_DEFAULT}` }
   ]
   connections.startConsulWatches(consul, watches, defaults)
 }
@@ -249,7 +261,7 @@ async function start () {
   try {
     // init consul
     consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT)
-    config.setConsul(consul)
+    await config.setConsul(consul)
     // init Redis
     openRedisConnection(env.REDIS_CONNECT_URIS)
     // init DB
