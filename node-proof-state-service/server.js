@@ -65,62 +65,10 @@ async function ConsumeAggregationMessageAsync (msg) {
     // Store this state information
     await cachedProofState.writeAggStateObjectsBulkAsync(stateObjects)
 
-    let aggObj = {}
-    aggObj.agg_id = messageObj.agg_id
-    aggObj.agg_root = messageObj.agg_root
-
-    try {
-      await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_CAL_QUEUE, Buffer.from(JSON.stringify(aggObj)), { persistent: true, type: 'aggregator' })
-      console.log(env.RMQ_WORK_OUT_CAL_QUEUE, '[aggregator] publish message acked', aggObj.agg_id)
-    } catch (error) {
-      console.error(`${env.RMQ_WORK_OUT_CAL_QUEUE} [aggregator] publish message nacked ${aggObj.agg_id}`)
-      throw new Error(error.message)
-    }
-
-    // New states has been written, events logged, and cal message queued, ack consumption of original message
+    // New states has been written, ack consumption of original message
     amqpChannel.ack(msg)
     console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
   } catch (error) {
-    amqpChannel.nack(msg)
-    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
-  }
-}
-
-/**
-* Writes the state data to persistent storage and queues proof ready messages bound for the proof gen
-*
-* @param {amqp message object} msg - The AMQP message received from the queue
-*/
-async function ConsumeCalendarMessageAsync (msg) {
-  let messageObj = JSON.parse(msg.content.toString())
-  let stateObj = {}
-  stateObj.agg_id = messageObj.agg_id
-  stateObj.cal_id = messageObj.cal_id
-  stateObj.cal_state = messageObj.cal_state
-
-  try {
-    // CRDB
-    let rows = await cachedProofState.getHashIdsByAggIdAsync(stateObj.agg_id)
-
-    await cachedProofState.writeCalStateObjectAsync(stateObj)
-
-    for (let hashIdRow of rows) {
-      // construct a calendar 'proof ready' message for a given hash
-      let dataOutObj = {}
-      dataOutObj.hash_id = hashIdRow.hash_id
-      try {
-        await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_GEN_QUEUE, Buffer.from(JSON.stringify(dataOutObj)), { persistent: true, type: 'cal' })
-      } catch (error) {
-        console.error(env.RMQ_WORK_OUT_GEN_QUEUE, '[cal] publish message nacked')
-        throw new Error(error.message)
-      }
-    }
-    // New messages have been published, ack consumption of original message
-    amqpChannel.ack(msg)
-    console.log(msg.fields.routingKey, '[' + msg.properties.type + '] consume message acked')
-  } catch (error) {
-    console.error(`Unable to process calendar message: ${error.message}`)
-    // An error as occurred publishing a message, nack consumption of original message
     amqpChannel.nack(msg)
     console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
   }
@@ -174,30 +122,6 @@ async function ConsumeCalendarBatchMessageAsync (msg) {
   } catch (error) {
     console.error(`Unable to process calendar message: ${error.message}`)
     // An error as occurred publishing a message, nack consumption of original message
-    amqpChannel.nack(msg)
-    console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
-  }
-}
-
-/**
-* Writes the state data to persistent storage
-*
-* @param {amqp message object} msg - The AMQP message received from the queue
-*/
-async function ConsumeAnchorBTCAggMessageAsync (msg) {
-  let messageObj = JSON.parse(msg.content.toString())
-  let stateObj = {}
-  stateObj.cal_id = messageObj.cal_id
-  stateObj.anchor_btc_agg_id = messageObj.anchor_btc_agg_id
-  stateObj.anchor_btc_agg_state = messageObj.anchor_btc_agg_state
-
-  try {
-    await cachedProofState.writeAnchorBTCAggStateObjectAsync(stateObj)
-
-    // New message has been published and event logged, ack consumption of original message
-    amqpChannel.ack(msg)
-    console.log(`${msg.fields.routingKey} [${msg.properties.type}] consume message acked`)
-  } catch (error) {
     amqpChannel.nack(msg)
     console.error(`${msg.fields.routingKey} [${msg.properties.type}] consume message nacked: ${error.message}`)
   }
@@ -376,20 +300,10 @@ function processMessage (msg) {
         // Stores state information and logs event in hash tracker
         ConsumeAggregationMessageAsync(msg)
         break
-      case 'cal':
-        // Consumes a calendar state message from the Calendar service
-        // Stores state information and publishes proof ready messages bound for the proof gen service
-        ConsumeCalendarMessageAsync(msg)
-        break
       case 'cal_batch':
         // Consumes a calendar batch state message from the Calendar service
         // Stores the batch of state information and publishes proof ready messages bound for the proof gen service
         ConsumeCalendarBatchMessageAsync(msg)
-        break
-      case 'anchor_btc_agg':
-        // Consumes a anchor BTC aggregation state message from the Calendar service
-        // Stores state information for anchor agregation events
-        ConsumeAnchorBTCAggMessageAsync(msg)
         break
       case 'anchor_btc_agg_batch':
         // Consumes a anchor BTC aggregation state message from the Calendar service
