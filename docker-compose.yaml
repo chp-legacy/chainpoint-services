@@ -56,7 +56,10 @@ services:
   # to rebuild its reverse proxy host config and must be
   # passed in by the HTTP client:
   #
-  # curl -i -H 'Host: api.local' http://127.0.0.1/
+  # Start With:
+  # docker-compose up -d --build nginx-proxy
+  #
+  # curl -i http://127.0.0.1/
   #
   # PORTS : 8080
   #

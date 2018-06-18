@@ -22,8 +22,6 @@ const restify = require('restify')
 const corsMiddleware = require('restify-cors-middleware')
 const hashes = require('./lib/endpoints/hashes.js')
 const nodes = require('./lib/endpoints/nodes.js')
-const proofs = require('./lib/endpoints/proofs.js')
-const verify = require('./lib/endpoints/verify.js')
 const calendar = require('./lib/endpoints/calendar.js')
 const config = require('./lib/endpoints/config.js')
 const root = require('./lib/endpoints/root.js')
@@ -96,12 +94,6 @@ server.use(restify.bodyParser({
 
 // submit hash(es)
 server.post({ path: '/hashes', version: '1.0.0' }, hashes.postHashV1Async)
-// get a single proof with a single hash_id
-server.get({ path: '/proofs/:hash_id', version: '1.0.0' }, proofs.getProofsByIDV1Async)
-// get multiple proofs with 'hashids' header param
-server.get({ path: '/proofs', version: '1.0.0' }, proofs.getProofsByIDV1Async)
-// verify one or more proofs
-server.post({ path: '/verify', version: '1.0.0' }, verify.postProofsForVerificationV1)
 // get the block objects for the calendar in the specified block range
 server.get({ path: '/calendar/blockrange/:index', version: '1.0.0' }, calendar.getCalBlockRangeV2Async)
 // get the block hash for the calendar at the specified hieght
@@ -133,7 +125,6 @@ async function openStorageConnectionAsync () {
     hashes.getSequelize(),
     nodes.getRegisteredNodeSequelize(),
     calendar.getCalendarBlockSequelize(),
-    verify.getCalendarBlockSequelize(),
     config.getAuditChallengeSequelize()
   ]
   await connections.openStorageConnectionAsync(modelSqlzArray)
