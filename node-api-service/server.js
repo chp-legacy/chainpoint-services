@@ -286,7 +286,6 @@ start()
 module.exports = {
   setRedis: (redisClient) => {
     redis = redisClient
-    proofs.setRedis(redis)
     hashes.setRedis(redis)
   },
   setAMQPChannel: (chan) => {
