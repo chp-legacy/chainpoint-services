@@ -37,10 +37,6 @@ let Op = registeredNodeSequelize.Op
 // This value is set once the connection has been established
 let redis = null
 
-// The maximum  number of registered Nodes allowed
-// This value is updated from consul events as changes are detected
-let regNodesLimit = 0
-
 // The number of results to return when responding to a random nodes query
 const RANDOM_NODES_RESULT_LIMIT = 25
 
@@ -170,16 +166,6 @@ async function postNodeV1Async (req, res, next) {
   }
 
   try {
-    let totalCount = await RegisteredNode.count()
-    if (totalCount >= regNodesLimit) {
-      return next(new restify.ForbiddenError('Maximum number of Node registrations has been reached'))
-    }
-  } catch (error) {
-    console.error(`Unable to count registered Nodes: ${error.message}`)
-    return next(new restify.InternalServerError('unable to count registered Nodes'))
-  }
-
-  try {
     let count = await RegisteredNode.count({ where: { tntAddr: lowerCasedTntAddrParam } })
     if (count >= 1) {
       return next(new restify.ConflictError('the Ethereum address provided is already registered'))
@@ -212,18 +198,6 @@ async function postNodeV1Async (req, res, next) {
     await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${lowerCasedTntAddrParam}`, nodeBalance, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
   } catch (error) {
     return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
-  }
-
-  // Do the registered Node count last to be as close to the creation of the record
-  // as possible and avoid overrages to the extent we can.
-  try {
-    let totalCount = await RegisteredNode.count()
-    if (totalCount >= regNodesLimit) {
-      return next(new restify.ForbiddenError('Maximum number of Node registrations has been reached'))
-    }
-  } catch (error) {
-    console.error(`Unable to count registered Nodes: ${error.message}`)
-    return next(new restify.InternalServerError('unable to count registered Nodes'))
   }
 
   let randHMACKey = crypto.randomBytes(32).toString('hex')
@@ -382,18 +356,6 @@ async function putNodeV1Async (req, res, next) {
   return next()
 }
 
-function updateRegNodesLimit (count) {
-  try {
-    let newRegNodesLimit = parseInt(count)
-    if (!(newRegNodesLimit >= 0) || newRegNodesLimit === null) throw new Error('Bad regNodesLimit value')
-    regNodesLimit = newRegNodesLimit
-    console.log(`Registered Nodes limit updated to ${count}`)
-  } catch (error) {
-    // the regNodesLimit value being set must be bad
-    console.error(error.message)
-  }
-}
-
 let getTNTGrainsBalanceForAddressAsync = async (tntAddress) => {
   let options = {
     headers: [
@@ -431,8 +393,6 @@ module.exports = {
   postNodeV1Async: postNodeV1Async,
   putNodeV1Async: putNodeV1Async,
   setNodesRegisteredNode: (regNode) => { RegisteredNode = regNode },
-  setRegNodesLimit: (val) => { updateRegNodesLimit(val) },
-  setLimitDirect: (val) => { regNodesLimit = val },
   overrideGetTNTGrainsBalanceForAddressAsync: (func) => { getTNTGrainsBalanceForAddressAsync = func },
   setMinNodeVersionExisting: (v) => { minNodeVersionExisting = v },
   setMinNodeVersionNew: (v) => { minNodeVersionNew = v },

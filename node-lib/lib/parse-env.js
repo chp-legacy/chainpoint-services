@@ -72,7 +72,6 @@ let envDefinitions = {
   CONSUL_HOST: envalid.str({ default: 'consul', desc: 'Consul server host' }),
   CONSUL_PORT: envalid.num({ default: 8500, desc: 'Consul server port' }),
   NIST_KEY: envalid.str({ default: 'service/nist/latest', desc: 'The consul key to write to, watch to receive updated NIST object' }),
-  REG_NODES_LIMIT_KEY: envalid.str({ default: 'service/api/nodelimit', desc: 'The consul key to write to, watch to receive updated registered Nodes limit' }),
   AUDIT_CHALLENGE_RECENT_KEY: envalid.str({ default: 'service/audit/mostrecentrediskey', desc: 'Key used for acquiring most recent audit challenge redis key' }),
   MIN_NODE_VERSION_EXISTING_KEY: envalid.str({ default: 'service/api/minnodeversionexisting', desc: 'Key used for the minimum acceptable Node version for existing registrations and to pass audits' }),
   MIN_NODE_VERSION_NEW_KEY: envalid.str({ default: 'service/api/minnodeversionnew', desc: 'Key used for the minimum acceptable Node version for new registrations' }),

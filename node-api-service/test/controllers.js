@@ -925,7 +925,6 @@ describe('Nodes Controller', () => {
         }
       })
 
-      app.setRegNodesLimit(10)
       app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
@@ -987,7 +986,6 @@ describe('Nodes Controller', () => {
         }
       })
 
-      app.setRegNodesLimit(10)
       app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
@@ -1049,7 +1047,6 @@ describe('Nodes Controller', () => {
         }
       })
 
-      app.setRegNodesLimit(10)
       app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)

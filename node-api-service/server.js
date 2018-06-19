@@ -182,15 +182,6 @@ function startConsulWatches () {
     },
     onError: null
   }, {
-    key: env.REG_NODES_LIMIT_KEY,
-    onChange: (data, res) => {
-      // process only if a value has been returned
-      if (data && data.Value) {
-        nodes.setRegNodesLimit(data.Value)
-      }
-    },
-    onError: null
-  }, {
     key: env.MIN_NODE_VERSION_EXISTING_KEY,
     onChange: (data, res) => {
       // process only if a value has been returned
@@ -237,7 +228,6 @@ function startConsulWatches () {
   }]
 
   let defaults = [
-    { key: env.REG_NODES_LIMIT_KEY, value: '0' },
     { key: env.MIN_NODE_VERSION_EXISTING_KEY, value: '0.0.1' },
     { key: env.MIN_NODE_VERSION_NEW_KEY, value: '0.0.1' },
     { key: env.ENFORCE_PRIVATE_STAKE_KEY, value: 'true' },
@@ -288,7 +278,6 @@ module.exports = {
   setNodesRegisteredNode: (regNode) => { nodes.setNodesRegisteredNode(regNode) },
   server: server,
   config: config,
-  setRegNodesLimit: (val) => { nodes.setLimitDirect(val) },
   setMinNodeVersionNew: (val) => { nodes.setMinNodeVersionNew(val) },
   setMinNodeVersionExisting: (val) => { nodes.setMinNodeVersionExisting(val) },
   overrideGetTNTGrainsBalanceForAddressAsync: (func) => { nodes.overrideGetTNTGrainsBalanceForAddressAsync(func) }
