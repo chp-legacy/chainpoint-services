@@ -60,12 +60,6 @@ describe('Proofs Controller', () => {
     })
 
     it('should return success with valid hash_id', (done) => {
-      app.setRedis({
-        get: (id, callback) => {
-          callback(null, '{ "chainpoint": "proof" }')
-        }
-      })
-
       request(server)
         .get('/proofs/d4f0dc90-2f55-11e7-b598-41e628860234')
         .set('Content-type', 'text/plain')
@@ -107,11 +101,11 @@ describe('Proofs Controller', () => {
         .get('/proofs/')
         .set('Content-type', 'text/plain')
         .set('hashids', 'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
-        'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
-        'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
-        'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
-        'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
-        'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a')
+          'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
+          'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
+          'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
+          'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
+          'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a')
         .expect('Content-type', /json/)
         .expect(409)
         .end((err, res) => {
@@ -127,12 +121,6 @@ describe('Proofs Controller', () => {
     })
 
     it('should return success with one valid hash_id in hashids', (done) => {
-      app.setRedis({
-        get: (id, callback) => {
-          callback(null, '{ "chainpoint": "proof" }')
-        }
-      })
-
       request(server)
         .get('/proofs/')
         .set('Content-type', 'text/plain')
@@ -151,12 +139,6 @@ describe('Proofs Controller', () => {
     })
 
     it('should return success with multiple valid hash_ids in hashids', (done) => {
-      app.setRedis({
-        get: (id, callback) => {
-          callback(null, '{ "chainpoint": "proof" }')
-        }
-      })
-
       request(server)
         .get('/proofs/')
         .set('Content-type', 'text/plain')
