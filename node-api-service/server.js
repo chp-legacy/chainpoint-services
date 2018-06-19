@@ -204,14 +204,18 @@ function startConsulWatches () {
     key: env.AUDIT_CHALLENGE_RECENT_KEY,
     onChange: (data, res) => {
       // process only if a value has been returned
-      if (data && data.Value) config.setMostRecentChallengeKey(data.Value)
+      if (data && data.Value) {
+        config.setMostRecentChallengeKey(data.Value)
+      }
     },
     onError: null
   }, {
     key: env.ENFORCE_PRIVATE_STAKE_KEY,
     onChange: (data, res) => {
       // process only if a value has been returned
-      if (data && data.Value) hashes.setEnforcePrivateStakeState(data.Value)
+      if (data && data.Value) {
+        hashes.setEnforcePrivateStakeState(data.Value)
+      }
     },
     onError: null
   },
