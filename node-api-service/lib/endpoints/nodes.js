@@ -130,6 +130,7 @@ async function postNodeV1Async (req, res, next) {
       return next(new restify.UpgradeRequiredError(`Node version ${minNodeVersionNew} or greater required`))
     }
   }
+
   if (!minNodeVersionOK) {
     return next(new restify.UpgradeRequiredError(`Node version ${minNodeVersionNew} or greater required`))
   }
@@ -356,6 +357,26 @@ async function putNodeV1Async (req, res, next) {
   return next()
 }
 
+function updateMinNodeVersionNew (ver) {
+  try {
+    if (!semver.valid(ver) || ver === null) throw new Error(`Bad minNodeVersionNew semver value : ${ver}`)
+    minNodeVersionNew = ver
+    console.log(`Minimum Node version for *new* Nodes updated to ${ver}`)
+  } catch (error) {
+    console.error(`Could not update minNodeVersionNew : ${error.message}`)
+  }
+}
+
+function updateMinNodeVersionExisting (ver) {
+  try {
+    if (!semver.valid(ver) || ver === null) throw new Error(`Bad minNodeVersionExisting semver value : ${ver}`)
+    minNodeVersionExisting = ver
+    console.log(`Minimum Node version for *existing* Nodes updated to ${ver}`)
+  } catch (error) {
+    console.error(`Could not update minNodeVersionExisting : ${error.message}`)
+  }
+}
+
 let getTNTGrainsBalanceForAddressAsync = async (tntAddress) => {
   let options = {
     headers: [
@@ -394,7 +415,7 @@ module.exports = {
   putNodeV1Async: putNodeV1Async,
   setNodesRegisteredNode: (regNode) => { RegisteredNode = regNode },
   overrideGetTNTGrainsBalanceForAddressAsync: (func) => { getTNTGrainsBalanceForAddressAsync = func },
-  setMinNodeVersionExisting: (v) => { minNodeVersionExisting = v },
-  setMinNodeVersionNew: (v) => { minNodeVersionNew = v },
+  setMinNodeVersionExisting: (ver) => { updateMinNodeVersionExisting(ver) },
+  setMinNodeVersionNew: (ver) => { updateMinNodeVersionNew(ver) },
   setRedis: (redisClient) => { redis = redisClient }
 }
