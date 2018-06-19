@@ -22,8 +22,6 @@ const restify = require('restify')
 const corsMiddleware = require('restify-cors-middleware')
 const hashes = require('./lib/endpoints/hashes.js')
 const nodes = require('./lib/endpoints/nodes.js')
-const proofs = require('./lib/endpoints/proofs.js')
-const verify = require('./lib/endpoints/verify.js')
 const calendar = require('./lib/endpoints/calendar.js')
 const config = require('./lib/endpoints/config.js')
 const root = require('./lib/endpoints/root.js')
@@ -96,12 +94,6 @@ server.use(restify.bodyParser({
 
 // submit hash(es)
 server.post({ path: '/hashes', version: '1.0.0' }, hashes.postHashV1Async)
-// get a single proof with a single hash_id
-server.get({ path: '/proofs/:hash_id', version: '1.0.0' }, proofs.getProofsByIDV1Async)
-// get multiple proofs with 'hashids' header param
-server.get({ path: '/proofs', version: '1.0.0' }, proofs.getProofsByIDV1Async)
-// verify one or more proofs
-server.post({ path: '/verify', version: '1.0.0' }, verify.postProofsForVerificationV1)
 // get the block objects for the calendar in the specified block range
 server.get({ path: '/calendar/blockrange/:index', version: '1.0.0' }, calendar.getCalBlockRangeV2Async)
 // get the block hash for the calendar at the specified hieght
@@ -133,7 +125,6 @@ async function openStorageConnectionAsync () {
     hashes.getSequelize(),
     nodes.getRegisteredNodeSequelize(),
     calendar.getCalendarBlockSequelize(),
-    verify.getCalendarBlockSequelize(),
     config.getAuditChallengeSequelize()
   ]
   await connections.openStorageConnectionAsync(modelSqlzArray)
@@ -191,15 +182,6 @@ function startConsulWatches () {
     },
     onError: null
   }, {
-    key: env.REG_NODES_LIMIT_KEY,
-    onChange: (data, res) => {
-      // process only if a value has been returned
-      if (data && data.Value) {
-        nodes.setRegNodesLimit(data.Value)
-      }
-    },
-    onError: null
-  }, {
     key: env.MIN_NODE_VERSION_EXISTING_KEY,
     onChange: (data, res) => {
       // process only if a value has been returned
@@ -222,14 +204,18 @@ function startConsulWatches () {
     key: env.AUDIT_CHALLENGE_RECENT_KEY,
     onChange: (data, res) => {
       // process only if a value has been returned
-      if (data && data.Value) config.setMostRecentChallengeKey(data.Value)
+      if (data && data.Value) {
+        config.setMostRecentChallengeKey(data.Value)
+      }
     },
     onError: null
   }, {
     key: env.ENFORCE_PRIVATE_STAKE_KEY,
     onChange: (data, res) => {
       // process only if a value has been returned
-      if (data && data.Value) hashes.setEnforcePrivateStakeState(data.Value)
+      if (data && data.Value) {
+        hashes.setEnforcePrivateStakeState(data.Value)
+      }
     },
     onError: null
   },
@@ -246,7 +232,6 @@ function startConsulWatches () {
   }]
 
   let defaults = [
-    { key: env.REG_NODES_LIMIT_KEY, value: '0' },
     { key: env.MIN_NODE_VERSION_EXISTING_KEY, value: '0.0.1' },
     { key: env.MIN_NODE_VERSION_NEW_KEY, value: '0.0.1' },
     { key: env.ENFORCE_PRIVATE_STAKE_KEY, value: 'true' },
@@ -297,7 +282,6 @@ module.exports = {
   setNodesRegisteredNode: (regNode) => { nodes.setNodesRegisteredNode(regNode) },
   server: server,
   config: config,
-  setRegNodesLimit: (val) => { nodes.setLimitDirect(val) },
   setMinNodeVersionNew: (val) => { nodes.setMinNodeVersionNew(val) },
   setMinNodeVersionExisting: (val) => { nodes.setMinNodeVersionExisting(val) },
   overrideGetTNTGrainsBalanceForAddressAsync: (func) => { nodes.overrideGetTNTGrainsBalanceForAddressAsync(func) }

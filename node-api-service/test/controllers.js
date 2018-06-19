@@ -671,9 +671,6 @@ describe('Config Controller', () => {
           expect(res.body).to.have.property('chainpoint_core_base_uri').and.to.equal('http://test.chainpoint.org')
           expect(res.body).to.have.property('anchor_btc')
           expect(res.body).to.have.property('anchor_eth')
-          expect(res.body).to.have.property('proof_expire_minutes')
-          expect(res.body).to.have.property('get_proofs_max_rest')
-          expect(res.body).to.have.property('post_verify_proofs_max')
           expect(res.body).to.have.property('public_keys')
           expect(res.body).to.have.property('calendar')
           expect(res.body.calendar).to.have.property('height')
@@ -928,7 +925,6 @@ describe('Nodes Controller', () => {
         }
       })
 
-      app.setRegNodesLimit(10)
       app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
@@ -990,7 +986,6 @@ describe('Nodes Controller', () => {
         }
       })
 
-      app.setRegNodesLimit(10)
       app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
@@ -1052,7 +1047,6 @@ describe('Nodes Controller', () => {
         }
       })
 
-      app.setRegNodesLimit(10)
       app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
 
       request(server)
