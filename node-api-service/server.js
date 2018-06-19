@@ -287,6 +287,7 @@ module.exports = {
   setRedis: (redisClient) => {
     redis = redisClient
     hashes.setRedis(redis)
+    nodes.setRedis(redis)
   },
   setAMQPChannel: (chan) => {
     hashes.setAMQPChannel(chan)
@@ -297,5 +298,7 @@ module.exports = {
   server: server,
   config: config,
   setRegNodesLimit: (val) => { nodes.setLimitDirect(val) },
+  setMinNodeVersionNew: (val) => { nodes.setMinNodeVersionNew(val) },
+  setMinNodeVersionExisting: (val) => { nodes.setMinNodeVersionExisting(val) },
   overrideGetTNTGrainsBalanceForAddressAsync: (func) => { nodes.overrideGetTNTGrainsBalanceForAddressAsync(func) }
 }

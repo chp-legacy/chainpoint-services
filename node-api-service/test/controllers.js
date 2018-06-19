@@ -18,6 +18,16 @@ const app = require('../server')
 const server = app.server
 const hashes = require('../lib/endpoints/hashes')
 
+app.setRedis({
+  hgetall: (key) => { return null },
+  hmset: (key, value) => { return null },
+  expire: (key, ms) => { return null },
+  set: (key) => { return null }
+})
+
+app.setMinNodeVersionNew('1.2.0')
+app.setMinNodeVersionExisting('1.2.0')
+
 describe('Home Controller', () => {
   describe('GET /', () => {
     it('should return teapot error', (done) => {
@@ -33,129 +43,6 @@ describe('Home Controller', () => {
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
             .and.to.equal('This is an API endpoint. Please consult https://chainpoint.org')
-          done()
-        })
-    })
-  })
-})
-
-describe('Proofs Controller', () => {
-  describe('GET /proofs/hash_id', () => {
-    it('should return proper error with bad hash_id', (done) => {
-      request(server)
-        .get('/proofs/badid')
-        .set('Content-type', 'text/plain')
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid request: bad hash_id')
-          done()
-        })
-    })
-
-    it('should return success with valid hash_id', (done) => {
-      request(server)
-        .get('/proofs/d4f0dc90-2f55-11e7-b598-41e628860234')
-        .set('Content-type', 'text/plain')
-        .expect('Content-type', /json/)
-        .expect(200)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body.length).to.equal(1)
-          expect(res.body[0]).to.have.property('hash_id')
-            .and.to.be.a('string')
-            .and.to.equal('d4f0dc90-2f55-11e7-b598-41e628860234')
-          expect(res.body[0]).to.have.property('proof')
-          done()
-        })
-    })
-  })
-
-  describe('GET /proofs/', () => {
-    it('should return proper error with no hash_id', (done) => {
-      request(server)
-        .get('/proofs/')
-        .set('Content-type', 'text/plain')
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid request: at least one hash id required')
-          done()
-        })
-    })
-
-    it('should return proper error with too many hashids', (done) => {
-      request(server)
-        .get('/proofs/')
-        .set('Content-type', 'text/plain')
-        .set('hashids', 'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
-          'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
-          'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
-          'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
-          'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,' +
-          'a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a,a')
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid request: too many hash ids (250 max)')
-          done()
-        })
-    })
-
-    it('should return success with one valid hash_id in hashids', (done) => {
-      request(server)
-        .get('/proofs/')
-        .set('Content-type', 'text/plain')
-        .set('hashids', 'd4f0dc90-2f55-11e7-b598-41e628860234')
-        .expect('Content-type', /json/)
-        .expect(200)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body.length).to.equal(1)
-          expect(res.body[0]).to.have.property('hash_id')
-            .and.to.be.a('string')
-            .and.to.equal('d4f0dc90-2f55-11e7-b598-41e628860234')
-          expect(res.body[0]).to.have.property('proof')
-          done()
-        })
-    })
-
-    it('should return success with multiple valid hash_ids in hashids', (done) => {
-      request(server)
-        .get('/proofs/')
-        .set('Content-type', 'text/plain')
-        .set('hashids', 'd4f0dc90-2f55-11e7-b598-41e628860234, d4f0dc90-2f55-11e7-b598-41e628860234')
-        .expect('Content-type', /json/)
-        .expect(200)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body.length).to.equal(2)
-          expect(res.body[0]).to.have.property('hash_id')
-            .and.to.be.a('string')
-            .and.to.equal('d4f0dc90-2f55-11e7-b598-41e628860234')
-          expect(res.body[0]).to.have.property('proof')
-          expect(res.body[1]).to.have.property('hash_id')
-            .and.to.be.a('string')
-            .and.to.equal('d4f0dc90-2f55-11e7-b598-41e628860234')
-          expect(res.body[1]).to.have.property('proof')
           done()
         })
     })
@@ -386,12 +273,6 @@ describe('Hashes Controller', () => {
         sendToQueue: function () { }
       })
 
-      app.setRedis({
-        hgetallAsync: (key) => { return null },
-        hmsetAsync: (key, value) => { return null },
-        expire: (key, ms) => { return null }
-      })
-
       app.setNistLatest('1400585240:8E00C0AF2B68E33CC453BF45A1689A6804700C083478FEB34E4694422999B6F745C2F837D7BA983F9D7BA52F7CC62965B8E1B7384CD8177003B5D3A0D099D93C')
       app.setHashesRegisteredNode({
         findOne: (params) => {
@@ -420,12 +301,6 @@ describe('Hashes Controller', () => {
     it('should return proper error with bad hmac value', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
-      })
-
-      app.setRedis({
-        hgetallAsync: (key) => { return null },
-        hmsetAsync: (key, value) => { return null },
-        expire: (key, ms) => { return null }
       })
 
       let tntAddr = '0x1234567890123456789012345678901234567890'
@@ -509,12 +384,6 @@ describe('Hashes Controller', () => {
         sendToQueue: function () { }
       })
 
-      app.setRedis({
-        hgetallAsync: (key) => { return null },
-        hmsetAsync: (key, value) => { return null },
-        expire: (key, ms) => { return null }
-      })
-
       let tntAddr = '0x1234567890123456789012345678901234567890'
 
       let hmacKey = crypto.randomBytes(32).toString('hex')
@@ -553,12 +422,6 @@ describe('Hashes Controller', () => {
     it('should return a v1 UUID node embedded with a partial SHA256 over timestamp and hash', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
-      })
-
-      app.setRedis({
-        hgetallAsync: (key) => { return null },
-        hmsetAsync: (key, value) => { return null },
-        expire: (key, ms) => { return null }
       })
 
       let tntAddr = '0x1234567890123456789012345678901234567890'
@@ -617,12 +480,6 @@ describe('Hashes Controller', () => {
     it('should return proper result with valid call', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
-      })
-
-      app.setRedis({
-        hgetallAsync: (key) => { return null },
-        hmsetAsync: (key, value) => { return null },
-        expire: (key, ms) => { return null }
       })
 
       let tntAddr = '0x1234567890123456789012345678901234567890'
@@ -778,105 +635,6 @@ describe('Calendar Controller', () => {
           expect(res.body).to.have.property('message')
             .and.to.be.a('string')
             .and.to.equal('invalid request, height must be a positive integer')
-          done()
-        })
-    })
-  })
-})
-
-describe('Verify Controller', () => {
-  describe('POST /verify', () => {
-    it('should return proper error with invalid content type', (done) => {
-      request(server)
-        .post('/verify')
-        .set('Content-type', 'text/plain')
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid content type')
-          done()
-        })
-    })
-
-    it('should return proper error with missing proofs', (done) => {
-      request(server)
-        .post('/verify')
-        .send({ name: 'Manny' })
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid JSON body, missing proofs')
-          done()
-        })
-    })
-
-    it('should return proper error with bad proofs array', (done) => {
-      request(server)
-        .post('/verify')
-        .send({ proofs: 'Manny' })
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid JSON body, proofs is not an Array')
-          done()
-        })
-    })
-
-    it('should return proper error with empty proofs array', (done) => {
-      request(server)
-        .post('/verify')
-        .send({ proofs: [] })
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid JSON body, proofs Array is empty')
-          done()
-        })
-    })
-
-    it('should return proper error with too many proofs', (done) => {
-      let proofs = []
-      for (let x = 0; x < 1100; x++) {
-        proofs.push('proof')
-      }
-
-      request(server)
-        .post('/verify')
-        .send({ proofs: proofs })
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid JSON body, proofs Array max size of 1000 exceeded')
           done()
         })
     })
