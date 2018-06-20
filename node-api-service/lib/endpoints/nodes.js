@@ -298,7 +298,7 @@ async function putNodeV1Async (req, res, next) {
     } else {
       whereClause = { tntAddr: lowerCasedTntAddrParam }
     }
-    let results = await RegisteredNode.findAll({ where: whereClause, raw: true, attributes: ['tntAddr', 'publicUri', 'hmacKey'] })
+    let results = await RegisteredNode.findAll({ where: whereClause, attributes: ['tntAddr', 'publicUri', 'hmacKey'] })
     if (results.length === 0) {
       // no results found, a node with this tntAddr does not exist
       res.status(404)
@@ -372,8 +372,8 @@ async function putNodeV1Async (req, res, next) {
   }
 
   res.send({
-    tnt_addr: lowerCasedTntAddrParam,
-    public_uri: req.params.public_uri
+    tnt_addr: regNode.tntAddr,
+    public_uri: regNode.publicUri || undefined
   })
   return next()
 }
