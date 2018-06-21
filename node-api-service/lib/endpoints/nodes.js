@@ -306,8 +306,8 @@ async function putNodeV1Async (req, res, next) {
       res.send({ code: 'NotFoundError', message: 'could not find registered Node' })
       return next()
     } else if (results.length === 1) {
-      // one results found
-      // if the tntAddr doesnt match, it was just a publicUri match, but a node with this tntAddr does not exist
+      // One results found. If the tntAddr doesn't match, it was just a
+      // publicUri match, but a node with this tntAddr does not exist
       if (results[0].tntAddr !== lowerCasedTntAddrParam) {
         res.status(404)
         res.noCache()
