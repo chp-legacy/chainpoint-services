@@ -899,20 +899,26 @@ describe('Nodes Controller', () => {
       let data = []
 
       app.setNodesRegisteredNode({
-        count: (params) => {
-          if (!params) return data.length
-          if (params.where.tntAddr) {
-            let matches = data.filter((row) => {
-              return row.tntAddr === params.where.tntAddr
-            })
-            return matches.length
+        findOne: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
           }
-          if (params.where.publicUri) {
-            let matches = data.filter((row) => {
-              return row.publicUri === params.where.publicUri
-            })
-            return matches.length
-          }
+          let result = null
+          result = data.find((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          })
+          return result
         },
         create: (params) => {
           let row = {
@@ -960,20 +966,26 @@ describe('Nodes Controller', () => {
       let data = []
 
       app.setNodesRegisteredNode({
-        count: (params) => {
-          if (!params) return data.length
-          if (params.where.tntAddr) {
-            let matches = data.filter((row) => {
-              return row.tntAddr === params.where.tntAddr
-            })
-            return matches.length
+        findOne: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
           }
-          if (params.where.publicUri) {
-            let matches = data.filter((row) => {
-              return row.publicUri === params.where.publicUri
-            })
-            return matches.length
-          }
+          let result = null
+          result = data.find((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          })
+          return result
         },
         create: (params) => {
           let row = {
@@ -1021,20 +1033,26 @@ describe('Nodes Controller', () => {
       let data = []
 
       app.setNodesRegisteredNode({
-        count: (params) => {
-          if (!params) return data.length
-          if (params.where.tntAddr) {
-            let matches = data.filter((row) => {
-              return row.tntAddr === params.where.tntAddr
-            })
-            return matches.length
+        findOne: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
           }
-          if (params.where.publicUri) {
-            let matches = data.filter((row) => {
-              return row.publicUri === params.where.publicUri
-            })
-            return matches.length
-          }
+          let result = null
+          result = data.find((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          })
+          return result
         },
         create: (params) => {
           let row = {
@@ -1169,98 +1187,6 @@ describe('Nodes Controller', () => {
         })
     })
 
-    it('should return error with malformed public_uri', (done) => {
-      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
-      let publicUri = 'baduri'
-      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
-
-      request(server)
-        .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
-        .send({ public_uri: publicUri })
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('invalid JSON body, invalid public_uri')
-          done()
-        })
-    })
-
-    it('should return error with non-IP public_uri', (done) => {
-      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
-      let publicUri = 'http://www.chainpoint.org'
-      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
-
-      request(server)
-        .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
-        .send({ public_uri: publicUri })
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('public_uri hostname must be an IP')
-          done()
-        })
-    })
-
-    it('should return error with private public_uri', (done) => {
-      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
-      let publicUri = 'http://127.0.0.1'
-      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
-
-      request(server)
-        .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
-        .send({ public_uri: publicUri })
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('public_uri hostname must not be a private IP')
-          done()
-        })
-    })
-
-    it('should return error with 0.0.0.0 public_uri', (done) => {
-      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
-      let publicUri = 'http://0.0.0.0'
-      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
-
-      request(server)
-        .put('/nodes/' + randTntAddr)
-        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
-        .send({ public_uri: publicUri })
-        .expect('Content-type', /json/)
-        .expect(409)
-        .end((err, res) => {
-          expect(err).to.equal(null)
-          expect(res.body).to.have.property('code')
-            .and.to.be.a('string')
-            .and.to.equal('InvalidArgument')
-          expect(res.body).to.have.property('message')
-            .and.to.be.a('string')
-            .and.to.equal('0.0.0.0 not allowed in public_uri')
-          done()
-        })
-    })
-
     it('should return error with missing hmac', (done) => {
       let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
       let publicUri = 'http://65.198.32.187'
@@ -1353,6 +1279,98 @@ describe('Nodes Controller', () => {
         })
     })
 
+    it('should return error with malformed public_uri', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'baduri'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+        .send({ public_uri: publicUri, hmac: crypto.randomBytes(32).toString('hex') })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('invalid JSON body, invalid public_uri')
+          done()
+        })
+    })
+
+    it('should return error with non-IP public_uri', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://www.chainpoint.org'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+        .send({ public_uri: publicUri, hmac: crypto.randomBytes(32).toString('hex') })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('public_uri hostname must be an IP')
+          done()
+        })
+    })
+
+    it('should return error with private public_uri', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://127.0.0.1'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+        .send({ public_uri: publicUri, hmac: crypto.randomBytes(32).toString('hex') })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('public_uri hostname must not be a private IP')
+          done()
+        })
+    })
+
+    it('should return error with 0.0.0.0 public_uri', (done) => {
+      let randTntAddr = '0x' + crypto.randomBytes(20).toString('hex')
+      let publicUri = 'http://0.0.0.0'
+      app.overrideGetTNTGrainsBalanceForAddressAsync(async (addr) => { return 500000000000 })
+
+      request(server)
+        .put('/nodes/' + randTntAddr)
+        .set('X-Node-Version', process.env.MIN_NODE_VERSION_EXISTING)
+        .send({ public_uri: publicUri, hmac: crypto.randomBytes(32).toString('hex') })
+        .expect('Content-type', /json/)
+        .expect(409)
+        .end((err, res) => {
+          expect(err).to.equal(null)
+          expect(res.body).to.have.property('code')
+            .and.to.be.a('string')
+            .and.to.equal('InvalidArgument')
+          expect(res.body).to.have.property('message')
+            .and.to.be.a('string')
+            .and.to.equal('0.0.0.0 not allowed in public_uri')
+          done()
+        })
+    })
+
     it('should return error for node registration not found', (done) => {
       app.setAMQPChannel({
         sendToQueue: function () { }
@@ -1363,14 +1381,31 @@ describe('Nodes Controller', () => {
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
       let data = []
-      let regNode = null
 
       app.setNodesRegisteredNode({
-        count: (params) => {
-          let matches = data.filter((row) => {
-            return row.tntAddr === params.where.tntAddr
+        findAll: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let results = []
+          results = data.filter((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          }).map((item) => {
+            item.save = () => { }
+            return item
           })
-          return matches.length
+          return results
         },
         create: (params) => {
           let row = {
@@ -1380,11 +1415,6 @@ describe('Nodes Controller', () => {
           }
           data.push(row)
           return row
-        },
-        find: (params) => {
-          regNode = data.find((item) => { return item.tntAddr === params.where.tntAddr })
-          if (regNode) regNode.save = () => { }
-          return regNode
         }
       })
 
@@ -1418,14 +1448,52 @@ describe('Nodes Controller', () => {
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
       let data = []
-      let regNode = null
 
       app.setNodesRegisteredNode({
-        count: (params) => {
-          let matches = data.filter((row) => {
-            return row.tntAddr === params.where.tntAddr
+        findAll: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let results = []
+          results = data.filter((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          }).map((item) => {
+            item.save = () => { }
+            return item
           })
-          return matches.length
+          return results
+        },
+        findOne: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let result = null
+          result = data.find((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          })
+          return result
         },
         create: (params) => {
           let row = {
@@ -1435,11 +1503,6 @@ describe('Nodes Controller', () => {
           }
           data.push(row)
           return row
-        },
-        find: (params) => {
-          regNode = data.find((item) => { return item.tntAddr === params.where.tntAddr })
-          if (regNode) regNode.save = () => { }
-          return regNode
         }
       })
 
@@ -1482,14 +1545,52 @@ describe('Nodes Controller', () => {
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
       let data = []
-      let regNode = null
 
       app.setNodesRegisteredNode({
-        count: (params) => {
-          let matches = data.filter((row) => {
-            return row.tntAddr === params.where.tntAddr
+        findAll: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let results = []
+          results = data.filter((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          }).map((item) => {
+            item.save = () => { }
+            return item
           })
-          return matches.length
+          return results
+        },
+        findOne: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let result = null
+          result = data.find((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          })
+          return result
         },
         create: (params) => {
           let row = {
@@ -1499,11 +1600,6 @@ describe('Nodes Controller', () => {
           }
           data.push(row)
           return row
-        },
-        find: (params) => {
-          regNode = data.find((item) => { return item.tntAddr === params.where.tntAddr })
-          if (regNode) regNode.save = () => { }
-          return regNode
         }
       })
 
@@ -1554,14 +1650,52 @@ describe('Nodes Controller', () => {
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
       let data = []
-      let regNode = null
 
       app.setNodesRegisteredNode({
-        count: (params) => {
-          let matches = data.filter((row) => {
-            return row.tntAddr === params.where.tntAddr
+        findAll: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let results = []
+          results = data.filter((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          }).map((item) => {
+            item.save = () => { }
+            return item
           })
-          return matches.length
+          return results
+        },
+        findOne: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let result = null
+          result = data.find((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          })
+          return result
         },
         create: (params) => {
           let row = {
@@ -1571,11 +1705,6 @@ describe('Nodes Controller', () => {
           }
           data.push(row)
           return row
-        },
-        find: (params) => {
-          regNode = data.find((item) => { return item.tntAddr === params.where.tntAddr })
-          if (regNode) regNode.save = () => { }
-          return regNode
         }
       })
 
@@ -1622,14 +1751,52 @@ describe('Nodes Controller', () => {
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
       let data = []
-      let regNode = null
 
       app.setNodesRegisteredNode({
-        count: (params) => {
-          let matches = data.filter((row) => {
-            return row.tntAddr === params.where.tntAddr
+        findAll: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let results = []
+          results = data.filter((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          }).map((item) => {
+            item.save = () => { }
+            return item
           })
-          return matches.length
+          return results
+        },
+        findOne: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let result = null
+          result = data.find((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          })
+          return result
         },
         create: (params) => {
           let row = {
@@ -1639,11 +1806,6 @@ describe('Nodes Controller', () => {
           }
           data.push(row)
           return row
-        },
-        find: (params) => {
-          regNode = data.find((item) => { return item.tntAddr === params.where.tntAddr })
-          if (regNode) regNode.save = () => { }
-          return regNode
         }
       })
 
@@ -1689,14 +1851,52 @@ describe('Nodes Controller', () => {
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
       let data = []
-      let regNode = null
 
       app.setNodesRegisteredNode({
-        count: (params) => {
-          let matches = data.filter((row) => {
-            return row.tntAddr === params.where.tntAddr
+        findAll: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let results = []
+          results = data.filter((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          }).map((item) => {
+            item.save = () => { }
+            return item
           })
-          return matches.length
+          return results
+        },
+        findOne: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
+          }
+          let result = null
+          result = data.find((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          })
+          return result
         },
         create: (params) => {
           let row = {
@@ -1706,11 +1906,6 @@ describe('Nodes Controller', () => {
           }
           data.push(row)
           return row
-        },
-        find: (params) => {
-          regNode = data.find((item) => { return item.tntAddr === params.where.tntAddr })
-          if (regNode) regNode.save = () => { }
-          return regNode
         }
       })
 
@@ -1757,29 +1952,52 @@ describe('Nodes Controller', () => {
       let hmacKey = crypto.randomBytes(32).toString('hex')
 
       let data = []
-      let regNode = null
 
       app.setNodesRegisteredNode({
-        count: (params) => {
-          if (!params) return data.length
-          if (params.where.tntAddr && params.where.publicUri) {
-            let matches = data.filter((row) => {
-              return (row.publicUri === params.where.publicUri && row.tntAddr !== params.where.tntAddr)
-            })
-            return matches.length
+        findAll: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
           }
-          if (params.where.tntAddr) {
-            let matches = data.filter((row) => {
-              return row.tntAddr === params.where.tntAddr
-            })
-            return matches.length
+          let results = []
+          results = data.filter((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          }).map((item) => {
+            item.save = () => { }
+            return item
+          })
+          return results
+        },
+        findOne: (params) => {
+          let symbols = Object.getOwnPropertySymbols(params.where)
+          let hasOr = symbols.length > 0
+          let findParams = []
+          if (!hasOr) {
+            findParams.push(params.where)
+          } else {
+            for (let param of params.where[Object.getOwnPropertySymbols(params.where)[0]]) {
+              findParams.push(param)
+            }
           }
-          if (params.where.publicUri) {
-            let matches = data.filter((row) => {
-              return row.publicUri === params.where.publicUri
-            })
-            return matches.length
-          }
+          let result = null
+          result = data.find((item) => {
+            if (findParams.length === 1) {
+              return item.tntAddr === findParams[0].tntAddr
+            } else {
+              return item.tntAddr === findParams[0].tntAddr || item.publicUri === findParams[1].publicUri
+            }
+          })
+          return result
         },
         create: (params) => {
           let row = {
@@ -1789,11 +2007,6 @@ describe('Nodes Controller', () => {
           }
           data.push(row)
           return row
-        },
-        find: (params) => {
-          regNode = data.find((item) => { return item.tntAddr === params.where.tntAddr })
-          if (regNode) regNode.save = () => { }
-          return regNode
         }
       })
 

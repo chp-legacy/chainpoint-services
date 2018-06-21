@@ -167,25 +167,26 @@ async function postNodeV1Async (req, res, next) {
   }
 
   try {
-    let count = await RegisteredNode.count({ where: { tntAddr: lowerCasedTntAddrParam } })
-    if (count >= 1) {
-      return next(new restify.ConflictError('the Ethereum address provided is already registered'))
+    let whereClause
+    if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
+      whereClause = { [Op.or]: [{ tntAddr: lowerCasedTntAddrParam }, { publicUri: lowerCasedPublicUri }] }
+    } else {
+      whereClause = { tntAddr: lowerCasedTntAddrParam }
     }
-  } catch (error) {
-    console.error(`Unable to count registered Nodes: ${error.message}`)
-    return next(new restify.InternalServerError('unable to count registered Nodes'))
-  }
-
-  if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
-    try {
-      let count = await RegisteredNode.count({ where: { publicUri: lowerCasedPublicUri } })
-      if (count >= 1) {
+    let result = await RegisteredNode.findOne({ where: whereClause, raw: true, attributes: ['tntAddr', 'publicUri'] })
+    if (result) {
+      // a result was found, so some element of vaidation failed. Identify and return.
+      if (lowerCasedTntAddrParam === result.tntAddr) {
+        // the tnt address is already registered
+        return next(new restify.ConflictError('the Ethereum address provided is already registered'))
+      } else {
+        // the public uri is already in use
         return next(new restify.ConflictError('the public URI provided is already registered'))
       }
-    } catch (error) {
-      console.error(`Unable to count registered Nodes: ${error.message}`)
-      return next(new restify.InternalServerError('unable to count registered Nodes'))
     }
+  } catch (error) {
+    console.error(`Unable to query registered Nodes: ${error.message}`)
+    return next(new restify.InternalServerError('Unable to query registered Nodes'))
   }
 
   // check to see if the Node has the min balance required for Node operation
@@ -262,6 +263,18 @@ async function putNodeV1Async (req, res, next) {
     lowerCasedTntAddrParam = req.params.tnt_addr.toLowerCase()
   }
 
+  if (!req.params.hasOwnProperty('hmac')) {
+    return next(new restify.InvalidArgumentError('invalid JSON body, missing hmac'))
+  }
+
+  if (_.isEmpty(req.params.hmac)) {
+    return next(new restify.InvalidArgumentError('invalid JSON body, empty hmac'))
+  }
+
+  if (!isHMAC(req.params.hmac)) {
+    return next(new restify.InvalidArgumentError('invalid JSON body, invalid hmac'))
+  }
+
   let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toString().toLowerCase() : null
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
@@ -275,75 +288,83 @@ async function putNodeV1Async (req, res, next) {
     if (ip.isPrivate(parsedPublicUri.hostname)) return next(new restify.InvalidArgumentError('public_uri hostname must not be a private IP'))
     // disallow 0.0.0.0
     if (parsedPublicUri.hostname === '0.0.0.0') return next(new restify.InvalidArgumentError('0.0.0.0 not allowed in public_uri'))
-
-    try {
-      let count = await RegisteredNode.count({ where: { publicUri: lowerCasedPublicUri, tntAddr: { [Op.ne]: lowerCasedTntAddrParam } } })
-      if (count >= 1) {
-        return next(new restify.ConflictError('the public URI provided is already registered'))
-      }
-    } catch (error) {
-      console.error(`Unable to count registered Nodes: ${error.message}`)
-      return next(new restify.InternalServerError('unable to count registered Nodes'))
-    }
   }
 
-  if (!req.params.hasOwnProperty('hmac')) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, missing hmac'))
-  }
-
-  if (_.isEmpty(req.params.hmac)) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, empty hmac'))
-  }
-
-  if (!isHMAC(req.params.hmac)) {
-    return next(new restify.InvalidArgumentError('invalid JSON body, invalid hmac'))
-  }
-
+  let regNode
   try {
-    let regNode = await RegisteredNode.find({ where: { tntAddr: lowerCasedTntAddrParam } })
-    if (!regNode) {
+    let whereClause
+    if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
+      whereClause = { [Op.or]: [{ tntAddr: lowerCasedTntAddrParam }, { publicUri: lowerCasedPublicUri }] }
+    } else {
+      whereClause = { tntAddr: lowerCasedTntAddrParam }
+    }
+    let results = await RegisteredNode.findAll({ where: whereClause, attributes: ['tntAddr', 'publicUri', 'hmacKey'] })
+    if (results.length === 0) {
+      // no results found, a node with this tntAddr does not exist
       res.status(404)
       res.noCache()
       res.send({ code: 'NotFoundError', message: 'could not find registered Node' })
       return next()
-    }
-
-    // HMAC-SHA256(hmac-key, TNT_ADDRESS|IP|YYYYMMDDHHmm)
-    // Forces Nodes to be within +/- 1 min of Core to generate a valid HMAC
-    let formattedDateInt = parseInt(moment().utc().format('YYYYMMDDHHmm'))
-    // build an array af acceptable hmac values with -1 minute, current minute, +1 minute
-    let acceptableHMACs = [-1, 0, 1].map((addend) => {
-      // use req.params.tnt_addr below instead of lowerCasedTntAddrParam and
-      // to req.params.public_uri below instead of lowerCasedPublicUri preserve
-      // formatting submitted from Node and used in that Node's calculation
-      let formattedTimeString = (formattedDateInt + addend).toString()
-      let hmacTxt = [req.params.tnt_addr, req.params.public_uri, formattedTimeString].join('')
-      let calculatedHMAC = crypto.createHmac('sha256', regNode.hmacKey).update(hmacTxt).digest('hex')
-      return calculatedHMAC
-    })
-    if (!_.includes(acceptableHMACs, req.params.hmac)) {
-      return next(new restify.InvalidArgumentError('Invalid authentication HMAC provided - Try NTP sync'))
-    }
-
-    if (lowerCasedPublicUri == null || _.isEmpty(lowerCasedPublicUri)) {
-      regNode.publicUri = null
-    } else {
-      regNode.publicUri = lowerCasedPublicUri
-    }
-
-    // check to see if the Node has the min balance required for Node operation
-    try {
-      let nodeBalance = await getTNTGrainsBalanceForAddressAsync(lowerCasedTntAddrParam)
-      if (nodeBalance < minGrainsBalanceNeeded) {
-        let minTNTBalanceNeeded = tntUnits.grainsToTNT(minGrainsBalanceNeeded)
-        return next(new restify.ForbiddenError(`TNT address ${lowerCasedTntAddrParam} does not have the minimum balance of ${minTNTBalanceNeeded} TNT for Node operation`))
+    } else if (results.length === 1) {
+      // One results found. If the tntAddr doesn't match, it was just a
+      // publicUri match, but a node with this tntAddr does not exist
+      if (results[0].tntAddr !== lowerCasedTntAddrParam) {
+        res.status(404)
+        res.noCache()
+        res.send({ code: 'NotFoundError', message: 'could not find registered Node' })
+        return next()
       }
-      // create a balance check entry for this tnt address
-      await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${lowerCasedTntAddrParam}`, nodeBalance, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
-    } catch (error) {
-      return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
+      // a matching register node was found
+      regNode = results[0]
+    } else {
+      // two results found, a matching tntAddr and matching publicUri in different records
+      // this means we have a registered node that is attempting to change its publicUri
+      // to a value already held by a different registered Node at a different tntAddr
+      // the public uri is already in use
+      return next(new restify.ConflictError('the public URI provided is already registered'))
     }
+  } catch (error) {
+    console.error(`Unable to query registered Nodes: ${error.message}`)
+    return next(new restify.InternalServerError('unable to query registered Nodes'))
+  }
 
+  // HMAC-SHA256(hmac-key, TNT_ADDRESS|IP|YYYYMMDDHHmm)
+  // Forces Nodes to be within +/- 1 min of Core to generate a valid HMAC
+  let formattedDateInt = parseInt(moment().utc().format('YYYYMMDDHHmm'))
+  // build an array af acceptable hmac values with -1 minute, current minute, +1 minute
+  let acceptableHMACs = [-1, 0, 1].map((addend) => {
+    // use req.params.tnt_addr below instead of lowerCasedTntAddrParam and
+    // to req.params.public_uri below instead of lowerCasedPublicUri preserve
+    // formatting submitted from Node and used in that Node's calculation
+    let formattedTimeString = (formattedDateInt + addend).toString()
+    let hmacTxt = [req.params.tnt_addr, req.params.public_uri, formattedTimeString].join('')
+    let calculatedHMAC = crypto.createHmac('sha256', regNode.hmacKey).update(hmacTxt).digest('hex')
+    return calculatedHMAC
+  })
+  if (!_.includes(acceptableHMACs, req.params.hmac)) {
+    return next(new restify.InvalidArgumentError('Invalid authentication HMAC provided - Try NTP sync'))
+  }
+
+  if (lowerCasedPublicUri == null || _.isEmpty(lowerCasedPublicUri)) {
+    regNode.publicUri = null
+  } else {
+    regNode.publicUri = lowerCasedPublicUri
+  }
+
+  // check to see if the Node has the min balance required for Node operation
+  try {
+    let nodeBalance = await getTNTGrainsBalanceForAddressAsync(lowerCasedTntAddrParam)
+    if (nodeBalance < minGrainsBalanceNeeded) {
+      let minTNTBalanceNeeded = tntUnits.grainsToTNT(minGrainsBalanceNeeded)
+      return next(new restify.ForbiddenError(`TNT address ${lowerCasedTntAddrParam} does not have the minimum balance of ${minTNTBalanceNeeded} TNT for Node operation`))
+    }
+    // create a balance check entry for this tnt address
+    await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${lowerCasedTntAddrParam}`, nodeBalance, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
+  } catch (error) {
+    return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
+  }
+
+  try {
     await regNode.save()
   } catch (error) {
     console.error(`Could not update RegisteredNode: ${error.message}`)
@@ -351,8 +372,8 @@ async function putNodeV1Async (req, res, next) {
   }
 
   res.send({
-    tnt_addr: lowerCasedTntAddrParam,
-    public_uri: req.params.public_uri
+    tnt_addr: regNode.tntAddr,
+    public_uri: regNode.publicUri || undefined
   })
   return next()
 }
