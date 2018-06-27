@@ -128,14 +128,31 @@ function generatePostHashResponse (hash, regNode) {
   result.hash = hash
   result.nist = hashNIST
   result.submitted_at = utils.formatDateISO8601NoMs(timestampDate)
-  result.processing_hints = {
-    cal: utils.formatDateISO8601NoMs(utils.addSeconds(timestampDate, 10)),
-    eth: utils.formatDateISO8601NoMs(utils.addMinutes(timestampDate, 41)),
-    btc: utils.formatDateISO8601NoMs(utils.addMinutes(timestampDate, 61))
-  }
+  result.processing_hints = generateProcessingHints(timestampDate)
   result.tnt_credit_balance = parseFloat(regNode.tntCredit)
 
   return result
+}
+
+/**
+ * Generate the expected proof ready times for each proof stage
+ *
+ * @param {Date} timestampDate - The hash submission timestamp
+ * @returns {Object} An Object with 'cal', 'eth', and 'btc' properties
+ *
+ */
+function generateProcessingHints (timestampDate) {
+  let twoHoursFromTimestamp = utils.addMinutes(timestampDate, 120)
+  let oneHourFromTopOfTheHour = new Date(twoHoursFromTimestamp.setHours(twoHoursFromTimestamp.getHours(), 0, 0, 0))
+  let calHint = utils.formatDateISO8601NoMs(utils.addSeconds(timestampDate, 10))
+  let ethHint = utils.formatDateISO8601NoMs(utils.addMinutes(timestampDate, 41))
+  let btcHint = utils.formatDateISO8601NoMs(oneHourFromTopOfTheHour)
+
+  return {
+    cal: calHint,
+    eth: ethHint,
+    btc: btcHint
+  }
 }
 
 /**
