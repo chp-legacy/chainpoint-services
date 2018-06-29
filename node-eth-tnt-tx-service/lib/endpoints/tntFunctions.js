@@ -123,10 +123,11 @@ async function getBalanceByTNTAddrV1Async (req, res, next) {
       factor: 1,        // The exponential factor to use. Default is 2
       minTimeout: 100,   // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 1000,
-      onRetry: (error) => { console.error(`Transfer error : ${error.message}`) }
+      onRetry: (error) => { console.log(`Retrying balance check for ${tntTargetAddress} : Previous attempt did not succeed : ${error.message}`) }
     })
   } catch (error) {
     // if we get this far, transfer has failed, return an error
+    console.error(`getBalanceByTNTAddrV1Async failed : Unable to retrieve TNT balance for ${tntTargetAddress} : ${error.message}`)
     return next(new restify.InternalServerError('server error on balance check'))
   }
 }
@@ -178,10 +179,11 @@ async function postTransferV1Async (req, res, next) {
       factor: 1,        // The exponential factor to use. Default is 2
       minTimeout: 100,   // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 1000,
-      onRetry: (error) => { console.error(`Transfer error : ${error.message}`) }
+      onRetry: (error) => { console.log(`Retrying TNT transfer to ${req.params.to_addr} : Previous attempt did not succeed : ${error.message}`) }
     })
   } catch (error) {
     // if we get this far, transfer has failed, return an error
+    console.error(`postTransferV1Async failed : Unable to complete TNT transfer to ${req.params.to_addr} : ${error.message}`)
     return next(new restify.InternalServerError('server error on transfer'))
   }
 }
