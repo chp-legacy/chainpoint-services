@@ -63,8 +63,8 @@ async function getConfigInfoV1Async (req, res, next) {
       node_min_version: minNodeVersionExisting
     }
   } catch (error) {
-    console.error(`Could not generate config object: ${error.message}`)
-    return next(new restify.InternalServerError('server error'))
+    console.error(`getConfigInfoV1Async failed : Could not generate config object : ${error.message}`)
+    return next(new restify.InternalServerError('Could not generate config object'))
   }
 
   res.cache('public', { maxAge: 60 })
