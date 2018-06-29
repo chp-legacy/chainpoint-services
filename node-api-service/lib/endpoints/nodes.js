@@ -82,7 +82,14 @@ async function getNodesRandomV1Async (req, res, next) {
                     ORDER BY weighted_score DESC LIMIT 1000
                   )
                   ORDER BY RANDOM() LIMIT ${RANDOM_NODES_RESULT_LIMIT}`
-  let rndNodes = await registeredNodeSequelize.query(sqlQuery, { type: registeredNodeSequelize.QueryTypes.SELECT })
+
+  let rndNodes
+  try {
+    rndNodes = await registeredNodeSequelize.query(sqlQuery, { type: registeredNodeSequelize.QueryTypes.SELECT })
+  } catch (error) {
+    console.error(`getNodesRandomV1Async failed : Unable to query for random nodes : ${error.message}`)
+    return next(new restify.InternalServerError(`Unable to query for random nodes`))
+  }
 
   // build well formatted result array
   rndNodes = rndNodes.map((rndNode) => {
@@ -199,7 +206,8 @@ async function postNodeV1Async (req, res, next) {
     // create a balance check entry for this tnt address
     await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${lowerCasedTntAddrParam}`, nodeBalance, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
   } catch (error) {
-    return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
+    console.error(`Unable to check address balance: ${error.message}`)
+    return next(new restify.InternalServerError(`Unable to check address balance`))
   }
 
   let randHMACKey = crypto.randomBytes(32).toString('hex')
@@ -214,7 +222,7 @@ async function postNodeV1Async (req, res, next) {
     })
   } catch (error) {
     console.error(`Could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}: ${error.message}`)
-    return next(new restify.InternalServerError(`could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}`))
+    return next(new restify.InternalServerError(`Could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}`))
   }
 
   res.send({
@@ -325,7 +333,7 @@ async function putNodeV1Async (req, res, next) {
     }
   } catch (error) {
     console.error(`Unable to query registered Nodes: ${error.message}`)
-    return next(new restify.InternalServerError('unable to query registered Nodes'))
+    return next(new restify.InternalServerError('Unable to query registered Nodes'))
   }
 
   // HMAC-SHA256(hmac-key, TNT_ADDRESS|IP|YYYYMMDDHHmm)
@@ -361,14 +369,15 @@ async function putNodeV1Async (req, res, next) {
     // create a balance check entry for this tnt address
     await redis.set(`${env.BALANCE_CHECK_KEY_PREFIX}:${lowerCasedTntAddrParam}`, nodeBalance, 'EX', BALANCE_PASS_EXPIRE_MINUTES * 60)
   } catch (error) {
-    return next(new restify.InternalServerError(`unable to check address balance: ${error.message}`))
+    console.error(`Unable to check address balance: ${error.message}`)
+    return next(new restify.InternalServerError(`Unable to check address balance`))
   }
 
   try {
     await regNode.save()
   } catch (error) {
     console.error(`Could not update RegisteredNode: ${error.message}`)
-    return next(new restify.InternalServerError('could not update RegisteredNode'))
+    return next(new restify.InternalServerError('Could not update RegisteredNode'))
   }
 
   res.send({

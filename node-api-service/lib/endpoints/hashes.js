@@ -242,7 +242,7 @@ async function postHashV1Async (req, res, next) {
       }
     } catch (error) {
       // report error but allow to proceed
-      console.error(`ERROR : unable to query redis balance keys : ${error.message}`)
+      console.error(`ERROR : Unable to query redis balance keys : ${error.message}`)
     }
   }
 
@@ -253,7 +253,7 @@ async function postHashV1Async (req, res, next) {
     try {
       regNode = await redis.hgetall(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`)
     } catch (error) {
-      console.error(error.message)
+      console.error(`ERROR : Unable to query redis : ${error.message}`)
     }
 
     // If Redis cache had no value, retrieve from CRDB instead
@@ -268,7 +268,7 @@ async function postHashV1Async (req, res, next) {
         await redis.hmset(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, { tntAddr: regNode.tntAddr, hmacKey: regNode.hmacKey, tntCredit: regNode.tntCredit })
         await redis.expire(`tntAddr:cachedHMAC:${tntAddrHeaderParam}`, 60 * 60 * 24)
       } catch (error) {
-        console.error(error.message)
+        console.error(`ERROR : Unable to write to redis : ${error.message}`)
       }
     }
 
@@ -287,7 +287,8 @@ async function postHashV1Async (req, res, next) {
     // decrement tntCredit by TNT_CREDIT_COST_POST_HASH
     // await regNode.decrement({ tntCredit: TNT_CREDIT_COST_POST_HASH })
   } catch (error) {
-    return next(new restify.InvalidCredentialsError(`authorization denied: ${error.message}`))
+    console.error(`ERROR : Could not query registered nodes table : ${error.message}`)
+    return next(new restify.InternalServerError('Could not query registered nodes'))
   }
 
   let responseObj = generatePostHashResponse(req.params.hash, regNode)

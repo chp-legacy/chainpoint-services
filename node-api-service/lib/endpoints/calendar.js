@@ -43,7 +43,8 @@ async function getCalBlockByHeightV1Async (req, res, next) {
   try {
     block = await CalendarBlock.findOne({ where: { id: height } })
   } catch (error) {
-    return next(new restify.InternalError(error.message))
+    console.error(`getCalBlockByHeightV1Async failed : Could not query for block by height : ${error.message}`)
+    return next(new restify.InternalServerError('Could not query for block by height'))
   }
 
   if (!block) {
@@ -85,7 +86,8 @@ async function getCalBlockRangeV2Async (req, res, next) {
   try {
     topBlock = await CalendarBlock.findOne({ attributes: ['id'], order: [['id', 'DESC']] })
   } catch (error) {
-    return next(new restify.InternalError(error.message))
+    console.error(`getCalBlockRangeV2Async failed : Could not query for top block : ${error.message}`)
+    return next(new restify.InternalServerError('Could not query for top block'))
   }
 
   let maxBlockRangeReady = Math.floor((parseInt(topBlock.id) + 1) / BLOCKRANGE_SIZE) - 1
@@ -101,7 +103,8 @@ async function getCalBlockRangeV2Async (req, res, next) {
   try {
     blocks = await CalendarBlock.findAll({ where: { id: { [Op.between]: [fromHeight, toHeight] } }, order: [['id', 'ASC']], raw: true })
   } catch (error) {
-    return next(new restify.InternalError(error.message))
+    console.error(`getCalBlockRangeV2Async failed : Could not query for block range : ${error.message}`)
+    return next(new restify.InternalServerError('Could not query for block range'))
   }
   if (!blocks || blocks.length === 0) blocks = []
 
@@ -138,7 +141,8 @@ async function getCalBlockDataByHeightV1Async (req, res, next) {
   try {
     block = await CalendarBlock.findOne({ where: { id: height } })
   } catch (error) {
-    return next(new restify.InternalError(error.message))
+    console.error(`getCalBlockDataByHeightV1Async failed : Could not query for block by height : ${error.message}`)
+    return next(new restify.InternalServerError('Could not query for block by height'))
   }
 
   if (!block) {
@@ -174,7 +178,8 @@ async function getCalBlockHashByHeightV1Async (req, res, next) {
   try {
     block = await CalendarBlock.findOne({ where: { id: height } })
   } catch (error) {
-    return next(new restify.InternalError(error.message))
+    console.error(`getCalBlockHashByHeightV1Async failed : Could not query for block by height : ${error.message}`)
+    return next(new restify.InternalServerError('Could not query for block by height'))
   }
 
   if (!block) {
