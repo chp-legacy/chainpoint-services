@@ -112,7 +112,7 @@ async function getNodesRandomV1Async (req, res, next) {
  * block connnections from abusive IPs
  */
 async function getNodesBlacklistV1Async (req, res, next) {
-  let list = { blacklist: ['167.99.144.245'] }
+  let list = { blacklist: [] }
   res.cache('public', { maxAge: 600 })
   res.send(list)
   return next()
