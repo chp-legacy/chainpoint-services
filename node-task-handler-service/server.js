@@ -581,7 +581,7 @@ async function getTNTBalance (tntAddress) {
     uri: `${env.ETH_TNT_TX_CONNECT_URI}/balance/${tntAddress}`,
     json: true,
     gzip: true,
-    timeout: 10000,
+    timeout: 30000,
     resolveWithFullResponse: true
   }
 

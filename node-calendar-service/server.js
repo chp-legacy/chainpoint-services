@@ -630,7 +630,7 @@ async function sendTNTRewardAsync (ethAddr, tntGrains) {
     },
     json: true,
     gzip: true,
-    timeout: 10000,
+    timeout: 30000,
     resolveWithFullResponse: true
   }
 
@@ -853,7 +853,7 @@ async function getTNTGrainsBalanceForWalletAsync () {
     uri: `${env.ETH_TNT_TX_CONNECT_URI}/balance/wallet`,
     json: true,
     gzip: true,
-    timeout: 10000,
+    timeout: 30000,
     resolveWithFullResponse: true
   }
 
