@@ -216,9 +216,9 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
       configResultsBody = await getNodeConfigObjectAsync(publicUri, nodeDataPackage)
       configResultTime = Date.now()
     }, {
-      retries: 3,    // The maximum amount of times to retry the operation. Default is 10
-      factor: 2,       // The exponential factor to use. Default is 2
-      minTimeout: 500,   // The number of milliseconds before starting the first retry. Default is 1000
+      retries: 3, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 5000,
       randomize: false
     })
@@ -346,9 +346,9 @@ async function writeAuditLogItemsAsync (auditDataJSON) {
     await retry(async bail => {
       await NodeAuditLog.bulkCreate(auditDataItems)
     }, {
-      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
-      factor: 1,       // The exponential factor to use. Default is 2
-      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+      retries: 5, // The maximum amount of times to retry the operation. Default is 10
+      factor: 1, // The exponential factor to use. Default is 2
+      minTimeout: 200, // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 400,
       randomize: true
     })
@@ -388,9 +388,9 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
       CASE WHEN EXCLUDED.consecutive_fails > 0 THEN chainpoint_registered_nodes.consecutive_fails + EXCLUDED.consecutive_fails ELSE 0 END)`
       await registeredNodeSequelize.query(sqlCmd, { type: registeredNodeSequelize.QueryTypes.UPDATE })
     }, {
-      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
-      factor: 1,       // The exponential factor to use. Default is 2
-      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+      retries: 5, // The maximum amount of times to retry the operation. Default is 10
+      factor: 1, // The exponential factor to use. Default is 2
+      minTimeout: 200, // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 400,
       randomize: true
     })
@@ -410,9 +410,9 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
     await retry(async bail => {
       await proofProxyPostAsync(hashIdCore, proofBase64)
     }, {
-      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
-      factor: 1,       // The exponential factor to use. Default is 2
-      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+      retries: 5, // The maximum amount of times to retry the operation. Default is 10
+      factor: 1, // The exponential factor to use. Default is 2
+      minTimeout: 200, // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 400,
       randomize: true
     })
@@ -673,7 +673,7 @@ async function initResqueWorkerAsync () {
       multiWorker.on('failure', (workerId, queue, job, failure) => { console.error(`worker[${workerId}] : failure : ${queue} : ${failure}`) })
       multiWorker.on('error', (workerId, queue, job, error) => { console.error(`worker[${workerId}] : error : ${queue} : ${error}`) })
       // multiWorker.on('pause', (workerId) => { debug.worker(`worker[${workerId}] : paused`) })
-      multiWorker.on('internalError', (error) => { console.error(`multiWorker : intneral error : ${error}`) })
+      multiWorker.on('internalError', (error) => { console.error(`multiWorker : internal error : ${error}`) })
       // multiWorker.on('multiWorkerAction', (verb, delay) => { debug.multiworker(`*** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
     },
     debug
