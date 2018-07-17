@@ -404,9 +404,9 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
 // ******************************************************
 // tasks from the proof gen service
 // ******************************************************
-function chainpointMonitorCoreProofPoller (hashIdCore) {
+function chainpointMonitorCoreProofPoller (hashIdCore, opts = {}) {
   try {
-    let options = {
+    let options = Object.assign({
       headers: {},
       method: 'POST',
       uri: `https://us-east1-chainpoint-services.cloudfunctions.net/chainpoint-monitor-coreproof-poller`,
@@ -414,7 +414,7 @@ function chainpointMonitorCoreProofPoller (hashIdCore) {
       json: true,
       gzip: true,
       timeout: 300000
-    }
+    }, opts)
     // Fire and forget the POST to Cloud Function - chainpoint-monitor-coreproof-poller
     // If the core proof was not persisted to Google Storage, a log entry will be created, and its associated Log Sink
     // will write to a bucket which will then invoke an ETL Cloud Function
@@ -439,6 +439,7 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
 
     return `Core proof sent to proof proxy : ${hashIdCore}`
   } catch (error) {
+    chainpointMonitorCoreProofPoller(hashIdCore, { timeout: 2000 })
     let errorMessage = `sendToProofProxyAsync : send error : ${error.message}`
     throw errorMessage
   }
