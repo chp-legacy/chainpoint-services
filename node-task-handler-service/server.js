@@ -404,18 +404,39 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
 // ******************************************************
 // tasks from the proof gen service
 // ******************************************************
+function chainpointMonitorCoreProofPoller (hashIdCore) {
+  try {
+    let options = {
+      headers: {},
+      method: 'POST',
+      uri: `https://us-east1-chainpoint-services.cloudfunctions.net/chainpoint-monitor-coreproof-poller`,
+      body: { hash_id_core: hashIdCore },
+      json: true,
+      gzip: true,
+      timeout: 300000
+    }
+    // Fire and forget the POST to Cloud Function - chainpoint-monitor-coreproof-poller
+    // If the core proof was not persisted to Google Storage, a log entry will be created, and its associated Log Sink
+    // will write to a bucket which will then invoke an ETL Cloud Function
+    rp(options)
+  } catch (_) {} // Supress any errors thrown by the fire-and-forget call to chainpoint-monitor-coreproof-poller cloud function
+}
 
 async function sendToProofProxyAsync (hashIdCore, proofBase64) {
   try {
     await retry(async bail => {
       await proofProxyPostAsync(hashIdCore, proofBase64)
     }, {
-      retries: 5, // The maximum amount of times to retry the operation. Default is 10
+      retries: 20, // The maximum amount of times to retry the operation. Default is 10
       factor: 1, // The exponential factor to use. Default is 2
       minTimeout: 200, // The number of milliseconds before starting the first retry. Default is 1000
-      maxTimeout: 400,
+      maxTimeout: 800,
       randomize: true
     })
+
+    // Submit hash_id_core to Google Cloud Function to verfiy that the core proof has been persisted to Google Storage
+    chainpointMonitorCoreProofPoller(hashIdCore)
+
     return `Core proof sent to proof proxy : ${hashIdCore}`
   } catch (error) {
     let errorMessage = `sendToProofProxyAsync : send error : ${error.message}`
@@ -563,7 +584,7 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
     body: [[hashIdCore, proofBase64]],
     json: true,
     gzip: true,
-    timeout: 10000,
+    timeout: 30 * 1000, // 30sec
     resolveWithFullResponse: true
   }
 
