@@ -404,7 +404,7 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
 // ******************************************************
 // tasks from the proof gen service
 // ******************************************************
-function chainpointMonitorCoreProofPoller (hashIdCore, opts = {}) {
+async function chainpointMonitorCoreProofPollerAsync (hashIdCore, opts = {}) {
   try {
     let options = Object.assign({
       headers: {},
@@ -418,8 +418,8 @@ function chainpointMonitorCoreProofPoller (hashIdCore, opts = {}) {
     // Fire and forget the POST to Cloud Function - chainpoint-monitor-coreproof-poller
     // If the core proof was not persisted to Google Storage, a log entry will be created, and its associated Log Sink
     // will write to a bucket which will then invoke an ETL Cloud Function
-    rp(options)
-  } catch (_) {} // Supress any errors thrown by the fire-and-forget call to chainpoint-monitor-coreproof-poller cloud function
+    await rp(options)
+  } catch (_) { } // Supress any errors thrown by the fire-and-forget call to chainpoint-monitor-coreproof-poller cloud function
 }
 
 async function sendToProofProxyAsync (hashIdCore, proofBase64) {
@@ -433,11 +433,11 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
 
     // Submit hashIdCore to Google Cloud Function to verify that
     // the core proof has been persisted to Google Storage
-    chainpointMonitorCoreProofPoller(hashIdCore)
+    chainpointMonitorCoreProofPollerAsync(hashIdCore)
 
     return `Core proof sent to proof proxy : ${hashIdCore}`
   } catch (error) {
-    chainpointMonitorCoreProofPoller(hashIdCore, { timeout: 2000 })
+    await chainpointMonitorCoreProofPollerAsync(hashIdCore, { timeout: 2000 })
     let errorMessage = `sendToProofProxyAsync : send error : ${error.message}`
     throw errorMessage
   }
