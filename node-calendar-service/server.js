@@ -853,7 +853,7 @@ async function getTNTGrainsBalanceForWalletAsync () {
     uri: `${env.ETH_TNT_TX_CONNECT_URI}/balance/wallet`,
     json: true,
     gzip: true,
-    timeout: 30000,
+    timeout: 60000,
     resolveWithFullResponse: true
   }
 

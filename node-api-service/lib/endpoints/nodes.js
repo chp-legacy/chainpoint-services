@@ -419,7 +419,7 @@ let getTNTGrainsBalanceForAddressAsync = async (tntAddress) => {
     uri: `${env.ETH_TNT_TX_CONNECT_URI}/balance/${tntAddress}`,
     json: true,
     gzip: true,
-    timeout: 30000,
+    timeout: 60000,
     resolveWithFullResponse: true
   }
 
