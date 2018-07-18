@@ -206,6 +206,7 @@ module.exports = (service) => {
       break
     case 'task-handler':
       envDefinitions.SIGNING_SECRET_KEY = envalid.str({ desc: 'A Base64 encoded NaCl secret signing key' })
+      envDefinitions.CORE_PROOF_POLLER_URL = envalid.str({ default: 'https://us-east1-chainpoint-services.cloudfunctions.net/chainpoint-monitor-coreproof-poller', desc: 'Endpoint to core proof poller that is part of Chainpoint-monitor service' })
       break
     case 'tnt-reward':
       envDefinitions.CHAINPOINT_CORE_BASE_URI = envalid.url({ desc: 'Base URI for this Chainpoint Core stack of services' })

@@ -216,9 +216,9 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
       configResultsBody = await getNodeConfigObjectAsync(publicUri, nodeDataPackage)
       configResultTime = Date.now()
     }, {
-      retries: 3,    // The maximum amount of times to retry the operation. Default is 10
-      factor: 2,       // The exponential factor to use. Default is 2
-      minTimeout: 500,   // The number of milliseconds before starting the first retry. Default is 1000
+      retries: 3, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 5000,
       randomize: false
     })
@@ -346,9 +346,9 @@ async function writeAuditLogItemsAsync (auditDataJSON) {
     await retry(async bail => {
       await NodeAuditLog.bulkCreate(auditDataItems)
     }, {
-      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
-      factor: 1,       // The exponential factor to use. Default is 2
-      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+      retries: 5, // The maximum amount of times to retry the operation. Default is 10
+      factor: 1, // The exponential factor to use. Default is 2
+      minTimeout: 200, // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 400,
       randomize: true
     })
@@ -388,9 +388,9 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
       CASE WHEN EXCLUDED.consecutive_fails > 0 THEN chainpoint_registered_nodes.consecutive_fails + EXCLUDED.consecutive_fails ELSE 0 END)`
       await registeredNodeSequelize.query(sqlCmd, { type: registeredNodeSequelize.QueryTypes.UPDATE })
     }, {
-      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
-      factor: 1,       // The exponential factor to use. Default is 2
-      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
+      retries: 5, // The maximum amount of times to retry the operation. Default is 10
+      factor: 1, // The exponential factor to use. Default is 2
+      minTimeout: 200, // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 400,
       randomize: true
     })
@@ -404,20 +404,40 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
 // ******************************************************
 // tasks from the proof gen service
 // ******************************************************
+function chainpointMonitorCoreProofPoller (hashIdCore, opts = {}) {
+  try {
+    let options = Object.assign({
+      headers: {},
+      method: 'POST',
+      uri: env.CORE_PROOF_POLLER_URL,
+      body: { hash_id_core: hashIdCore },
+      json: true,
+      gzip: true,
+      timeout: 300000
+    }, opts)
+    // Fire and forget the POST to Cloud Function - chainpoint-monitor-coreproof-poller
+    // If the core proof was not persisted to Google Storage, a log entry will be created, and its associated Log Sink
+    // will write to a bucket which will then invoke an ETL Cloud Function
+    rp(options)
+  } catch (_) {} // Supress any errors thrown by the fire-and-forget call to chainpoint-monitor-coreproof-poller cloud function
+}
 
 async function sendToProofProxyAsync (hashIdCore, proofBase64) {
   try {
     await retry(async bail => {
       await proofProxyPostAsync(hashIdCore, proofBase64)
     }, {
-      retries: 5,    // The maximum amount of times to retry the operation. Default is 10
-      factor: 1,       // The exponential factor to use. Default is 2
-      minTimeout: 200,   // The number of milliseconds before starting the first retry. Default is 1000
-      maxTimeout: 400,
-      randomize: true
+      retries: 12, // max retries with default exponential factor of 2
+      randomize: true // Randomizes the timeouts by multiplying with a factor between 1 to 2.
     })
+
+    // Submit hashIdCore to Google Cloud Function to verify that
+    // the core proof has been persisted to Google Storage
+    chainpointMonitorCoreProofPoller(hashIdCore)
+
     return `Core proof sent to proof proxy : ${hashIdCore}`
   } catch (error) {
+    chainpointMonitorCoreProofPoller(hashIdCore, { timeout: 2000 })
     let errorMessage = `sendToProofProxyAsync : send error : ${error.message}`
     throw errorMessage
   }
@@ -563,7 +583,7 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
     body: [[hashIdCore, proofBase64]],
     json: true,
     gzip: true,
-    timeout: 10000,
+    timeout: 30 * 1000, // 30sec
     resolveWithFullResponse: true
   }
 
@@ -581,7 +601,7 @@ async function getTNTBalance (tntAddress) {
     uri: `${env.ETH_TNT_TX_CONNECT_URI}/balance/${tntAddress}`,
     json: true,
     gzip: true,
-    timeout: 30000,
+    timeout: 60000,
     resolveWithFullResponse: true
   }
 
@@ -673,7 +693,7 @@ async function initResqueWorkerAsync () {
       multiWorker.on('failure', (workerId, queue, job, failure) => { console.error(`worker[${workerId}] : failure : ${queue} : ${failure}`) })
       multiWorker.on('error', (workerId, queue, job, error) => { console.error(`worker[${workerId}] : error : ${queue} : ${error}`) })
       // multiWorker.on('pause', (workerId) => { debug.worker(`worker[${workerId}] : paused`) })
-      multiWorker.on('internalError', (error) => { console.error(`multiWorker : intneral error : ${error}`) })
+      multiWorker.on('internalError', (error) => { console.error(`multiWorker : internal error : ${error}`) })
       // multiWorker.on('multiWorkerAction', (verb, delay) => { debug.multiworker(`*** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
     },
     debug
