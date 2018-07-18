@@ -427,11 +427,8 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
     await retry(async bail => {
       await proofProxyPostAsync(hashIdCore, proofBase64)
     }, {
-      retries: 12, // The maximum amount of times to retry the operation. Default is 10
-      factor: 2, // The exponential factor to use. Default is 2
-      minTimeout: 200, // The number of milliseconds before starting the first retry. Default is 1000
-      maxTimeout: 400,
-      randomize: true
+      retries: 12, // max retries with default exponential factor of 2
+      randomize: true // Randomizes the timeouts by multiplying with a factor between 1 to 2.
     })
 
     // Submit hash_id_core to Google Cloud Function to verfiy that the core proof has been persisted to Google Storage
