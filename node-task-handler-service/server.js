@@ -431,7 +431,8 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
       randomize: true // Randomizes the timeouts by multiplying with a factor between 1 to 2.
     })
 
-    // Submit hash_id_core to Google Cloud Function to verfiy that the core proof has been persisted to Google Storage
+    // Submit hashIdCore to Google Cloud Function to verify that
+    // the core proof has been persisted to Google Storage
     chainpointMonitorCoreProofPoller(hashIdCore)
 
     return `Core proof sent to proof proxy : ${hashIdCore}`
