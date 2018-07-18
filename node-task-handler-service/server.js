@@ -409,7 +409,7 @@ function chainpointMonitorCoreProofPoller (hashIdCore, opts = {}) {
     let options = Object.assign({
       headers: {},
       method: 'POST',
-      uri: `https://us-east1-chainpoint-services.cloudfunctions.net/chainpoint-monitor-coreproof-poller`,
+      uri: env.CORE_PROOF_POLLER_URL,
       body: { hash_id_core: hashIdCore },
       json: true,
       gzip: true,
@@ -427,10 +427,10 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
     await retry(async bail => {
       await proofProxyPostAsync(hashIdCore, proofBase64)
     }, {
-      retries: 20, // The maximum amount of times to retry the operation. Default is 10
-      factor: 1, // The exponential factor to use. Default is 2
+      retries: 12, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
       minTimeout: 200, // The number of milliseconds before starting the first retry. Default is 1000
-      maxTimeout: 800,
+      maxTimeout: 400,
       randomize: true
     })
 
