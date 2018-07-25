@@ -157,7 +157,14 @@ async function postNodeV1Async (req, res, next) {
     lowerCasedTntAddrParam = req.params.tnt_addr.toLowerCase()
   }
 
-  let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toString().toLowerCase() : null
+  // Return formatted Public URI, omit port number as nodes are only allowed to run on default: Port 80
+  let lowerCasedPublicUri = (() => {
+    if (!req.params.public_uri) return null
+
+    let parsedURI = url.parse(req.params.public_uri)
+
+    return `${protocol}//${parsedURI.hostname}`
+  })()
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
     if (!validUrl.isHttpUri(lowerCasedPublicUri)) {
@@ -283,7 +290,14 @@ async function putNodeV1Async (req, res, next) {
     return next(new restify.InvalidArgumentError('invalid JSON body, invalid hmac'))
   }
 
-  let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toString().toLowerCase() : null
+  // Return formatted Public URI, omit port number as nodes are only allowed to run on default: Port 80
+  let lowerCasedPublicUri = (() => {
+    if (!req.params.public_uri) return null
+
+    let parsedURI = url.parse(req.params.public_uri)
+
+    return `${protocol}//${parsedURI.hostname}`
+  })()
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
     if (!validUrl.isHttpUri(lowerCasedPublicUri)) {
