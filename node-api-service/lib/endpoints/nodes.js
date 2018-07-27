@@ -163,7 +163,7 @@ async function postNodeV1Async (req, res, next) {
 
     let parsedURI = url.parse(req.params.public_uri)
 
-    return `${protocol}//${parsedURI.hostname}`
+    return `${parsedURI.protocol}//${parsedURI.hostname}`
   })()
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
@@ -296,7 +296,7 @@ async function putNodeV1Async (req, res, next) {
 
     let parsedURI = url.parse(req.params.public_uri)
 
-    return `${protocol}//${parsedURI.hostname}`
+    return `${parsedURI.protocol}//${parsedURI.hostname}`
   })()
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
