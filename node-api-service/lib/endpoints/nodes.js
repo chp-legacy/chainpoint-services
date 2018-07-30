@@ -157,7 +157,15 @@ async function postNodeV1Async (req, res, next) {
     lowerCasedTntAddrParam = req.params.tnt_addr.toLowerCase()
   }
 
-  let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toString().toLowerCase() : null
+  // Return formatted Public URI, omit port number as nodes are only allowed to run on default: Port 80
+  // using url.parse() will implicitly lowercase the uri provided
+  let lowerCasedPublicUri = (() => {
+    if (!req.params.public_uri) return null
+
+    let parsedURI = url.parse(req.params.public_uri)
+
+    return `${parsedURI.protocol}//${parsedURI.hostname}`
+  })()
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
     if (!validUrl.isHttpUri(lowerCasedPublicUri)) {
@@ -171,6 +179,8 @@ async function postNodeV1Async (req, res, next) {
     if (ip.isPrivate(parsedPublicUri.hostname)) return next(new restify.InvalidArgumentError('public_uri hostname must not be a private IP'))
     // disallow 0.0.0.0
     if (parsedPublicUri.hostname === '0.0.0.0') return next(new restify.InvalidArgumentError('0.0.0.0 not allowed in public_uri'))
+    // disallow any port that is not 80
+    if (url.parse(req.params.public_uri).port && url.parse(req.params.public_uri).port !== '80') return next(new restify.InvalidArgumentError('public_uri hostname must specify port 80 or omit the port number to have it be implicitly set to 80'))
   }
 
   try {
@@ -283,7 +293,14 @@ async function putNodeV1Async (req, res, next) {
     return next(new restify.InvalidArgumentError('invalid JSON body, invalid hmac'))
   }
 
-  let lowerCasedPublicUri = req.params.public_uri ? req.params.public_uri.toString().toLowerCase() : null
+  // Return formatted Public URI, omit port number as nodes are only allowed to run on default: Port 80
+  let lowerCasedPublicUri = (() => {
+    if (!req.params.public_uri) return null
+
+    let parsedURI = url.parse(req.params.public_uri)
+
+    return `${parsedURI.protocol}//${parsedURI.hostname}`
+  })()
   // if an public_uri is provided, it must be valid
   if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
     if (!validUrl.isHttpUri(lowerCasedPublicUri)) {
