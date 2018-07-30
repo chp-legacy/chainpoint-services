@@ -180,7 +180,7 @@ async function postNodeV1Async (req, res, next) {
     // disallow 0.0.0.0
     if (parsedPublicUri.hostname === '0.0.0.0') return next(new restify.InvalidArgumentError('0.0.0.0 not allowed in public_uri'))
     // disallow any port that is not 80
-    if (url.parse(req.params.public_uri).port && url.parse(req.params.public_uri).port !== '80') return next(new restify.InvalidArgumentError('public_uri hostname must specify port 80 or omit the port number to have it be implicitly set to 80'))
+    if (req.params.public_uri && url.parse(req.params.public_uri).port && url.parse(req.params.public_uri).port !== '80') return next(new restify.InvalidArgumentError('public_uri hostname must specify port 80 or omit the port number to have it be implicitly set to 80'))
   }
 
   try {
@@ -313,6 +313,8 @@ async function putNodeV1Async (req, res, next) {
     if (ip.isPrivate(parsedPublicUri.hostname)) return next(new restify.InvalidArgumentError('public_uri hostname must not be a private IP'))
     // disallow 0.0.0.0
     if (parsedPublicUri.hostname === '0.0.0.0') return next(new restify.InvalidArgumentError('0.0.0.0 not allowed in public_uri'))
+    // disallow any port that is not 80
+    if (req.params.public_uri && url.parse(req.params.public_uri).port && url.parse(req.params.public_uri).port !== '80') return next(new restify.InvalidArgumentError('public_uri hostname must specify port 80 or omit the port number to have it be implicitly set to 80'))
   }
 
   let regNode
