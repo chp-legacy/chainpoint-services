@@ -10,7 +10,7 @@
     "test": "./node_modules/mocha/bin/mocha test/*.js"
   },
   "dependencies": {
-    "amqplib": "^0.5.1",
+    "amqplib": "^0.5.2",
     "bignumber.js": "^4.1.0",
     "blake2s-js": "^1.2.2",
     "bunyan": "^1.8.12",
