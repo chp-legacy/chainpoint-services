@@ -156,6 +156,11 @@ async function openStandardRMQConnectionAsync (amqpClient, connectURI, queues, p
         onClose()
         console.error('Connection to RabbitMQ closed.  Reconnecting in 5 seconds...')
       })
+      // if the channel closes for any reason, attempt to reconnect
+      conn.on('error', async (error) => {
+        console.error(`Connection to RabbitMQ caughat an error : ${error}`)
+        conn.close()
+      })
       logMessage('RabbitMQ connection established', debug, 'general')
       rmqConnected = true
     } catch (error) {
