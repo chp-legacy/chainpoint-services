@@ -404,13 +404,16 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
 // ******************************************************
 // tasks from the proof gen service
 // ******************************************************
-async function chainpointMonitorCoreProofPollerAsync (hashIdCore, opts = {}) {
+async function chainpointMonitorCoreProofPollerAsync ({hashIdCore, failed}, opts = {}) {
   try {
     let options = Object.assign({
       headers: {},
       method: 'POST',
       uri: env.CORE_PROOF_POLLER_URL,
-      body: { hash_id_core: hashIdCore },
+      body: Object.assign({},
+        { hash_id_core: hashIdCore },
+        ...(failed) ? {failed} : {}
+      ),
       json: true,
       gzip: true,
       timeout: 300000
@@ -435,11 +438,11 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
 
     // Submit hashIdCore to Google Cloud Function to verify that
     // the core proof has been persisted to Google Storage
-    chainpointMonitorCoreProofPollerAsync(hashIdCore)
+    // chainpointMonitorCoreProofPollerAsync({hashIdCore})
 
     return `Core proof sent to proof proxy : ${hashIdCore}`
   } catch (error) {
-    await chainpointMonitorCoreProofPollerAsync(hashIdCore, { timeout: 2000 })
+    // chainpointMonitorCoreProofPollerAsync({ hashIdCore, failed: true }, { timeout: 5000 })
     let errorMessage = `sendToProofProxyAsync : send error : ${error.message}`
     throw errorMessage
   }
