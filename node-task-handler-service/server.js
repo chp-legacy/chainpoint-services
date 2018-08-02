@@ -474,36 +474,36 @@ function buildNodeDataPackage (nodeData, activeNodeCount) {
   let updatedAt = isNaN(Date.parse(nodeData.updated_at)) ? null : Date.parse(nodeData.updated_at)
 
   let result =
-    {
-      data: {
-        audits: [{
-          audit_at: auditAt,
-          audit_passed: auditPassed,
-          public_ip_pass: nodeData.public_ip_pass,
-          public_uri: nodeData.audit_uri,
-          node_ms_delta: nodeMSDelta,
-          time_pass: nodeData.time_pass,
-          cal_state_pass: nodeData.cal_state_pass,
-          min_credits_pass: nodeData.min_credits_pass,
-          node_version: nodeData.node_version,
-          node_version_pass: nodeData.node_version_pass,
-          tnt_balance_grains: tntBalanceGrains,
-          tnt_balance_pass: nodeData.tnt_balance_pass
-        }],
-        core: {
-          total_active_nodes: activeNodeCount
-        },
-        node: {
-          tnt_addr: nodeData.tnt_addr,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          pass_count: passCount,
-          fail_count: failCount,
-          consecutive_passes: consecutivePassCount,
-          consecutive_fails: consecutiveFailCount
-        }
+  {
+    data: {
+      audits: [{
+        audit_at: auditAt,
+        audit_passed: auditPassed,
+        public_ip_pass: nodeData.public_ip_pass,
+        public_uri: nodeData.audit_uri,
+        node_ms_delta: nodeMSDelta,
+        time_pass: nodeData.time_pass,
+        cal_state_pass: nodeData.cal_state_pass,
+        min_credits_pass: nodeData.min_credits_pass,
+        node_version: nodeData.node_version,
+        node_version_pass: nodeData.node_version_pass,
+        tnt_balance_grains: tntBalanceGrains,
+        tnt_balance_pass: nodeData.tnt_balance_pass
+      }],
+      core: {
+        total_active_nodes: activeNodeCount
+      },
+      node: {
+        tnt_addr: nodeData.tnt_addr,
+        created_at: createdAt,
+        updated_at: updatedAt,
+        pass_count: passCount,
+        fail_count: failCount,
+        consecutive_passes: consecutivePassCount,
+        consecutive_fails: consecutiveFailCount
       }
     }
+  }
 
   let dataHashHex = objectHash(result.data)
   let signingPubKeyHashHex = crypto.createHash('sha256').update(signingKeypair.publicKey).digest('hex')
@@ -650,6 +650,7 @@ function openRedisConnection (redisURIs) {
     (newRedis) => {
       redis = newRedis
       cachedAuditChallenge.setRedis(redis)
+      // init Resque worker
       initResqueWorkerAsync()
     }, () => {
       redis = null
@@ -731,8 +732,6 @@ async function start () {
     openRedisConnection(env.REDIS_CONNECT_URIS)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    // init Resque worker
-    await initResqueWorkerAsync()
     // init consul watches
     startConsulWatches()
     debug.general('startup completed successfully')
