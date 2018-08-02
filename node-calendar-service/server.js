@@ -171,7 +171,7 @@ async function createNistBlockAsync (nistDataObj) {
   debug.nist(`createNistBlockAsync : begin`)
   try {
     let dataId = nistDataObj.split(':')[0].toString() // the epoch timestamp for this NIST entry
-    let dataVal = nistDataObj.split(':')[1].toString()  // the hex value for this NIST entry
+    let dataVal = nistDataObj.split(':')[1].toString() // the hex value for this NIST entry
     let block = await executeRetryableBlockWriteTransactionAsync('nist', dataId, dataVal, debug.nist)
     debug.nist(`createNistBlockAsync : end`)
     return block
@@ -299,9 +299,9 @@ async function executeRetryableBlockWriteTransactionAsync (blockType, dataId, da
     let newBlock = await writeTransactionAsync(blockType, dataId, dataVal, debuglogger)
     return newBlock
   }, {
-    retries: 25,        // The maximum amount of times to retry the operation. Default is 10
-    factor: 1,        // The exponential factor to use. Default is 2
-    minTimeout: 5,   // The number of milliseconds before starting the first retry. Default is 1000
+    retries: 25, // The maximum amount of times to retry the operation. Default is 10
+    factor: 1, // The exponential factor to use. Default is 2
+    minTimeout: 5, // The number of milliseconds before starting the first retry. Default is 1000
     maxTimeout: 100,
     onRetry: (error) => { debuglogger(`executeRetryableBlockWriteTransactionAsync : retrying : writing block : ${blockType} : ${error.message}`) }
   })

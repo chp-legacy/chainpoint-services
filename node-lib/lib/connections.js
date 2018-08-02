@@ -20,8 +20,8 @@ function openRedisConnection (redisURIs, onReady, onError, debug) {
     // this is a single Redis host URI
     let redisURL = new URL(redisURIList[0])
     redisConfigObj = {
-      port: redisURL.port,          // Redis port
-      host: redisURL.hostname,   // Redis host
+      port: redisURL.port, // Redis port
+      host: redisURL.hostname, // Redis host
       password: redisURL.password
     }
   } else {
@@ -34,8 +34,8 @@ function openRedisConnection (redisURIs, onReady, onError, debug) {
         // store this value in 'password' for use in redisConfigObj
         if (!password) password = redisURL.password
         return {
-          port: redisURL.port,          // Redis port
-          host: redisURL.hostname  // Redis host
+          port: redisURL.port, // Redis port
+          host: redisURL.hostname // Redis host
         }
       }),
       name: 'mymaster',
