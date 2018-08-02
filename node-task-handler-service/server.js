@@ -419,7 +419,9 @@ async function chainpointMonitorCoreProofPollerAsync (hashIdCore, opts = {}) {
     // If the core proof was not persisted to Google Storage, a log entry will be created, and its associated Log Sink
     // will write to a bucket which will then invoke an ETL Cloud Function
     await rp(options)
-  } catch (_) { } // Supress any errors thrown by the fire-and-forget call to chainpoint-monitor-coreproof-poller cloud function
+  } catch (error) {
+    console.error(`sendToProofProxyAsync : chainpointMonitorCoreProofPollerAsync : core proof poller error : ${error.message}`)
+  }
 }
 
 async function sendToProofProxyAsync (hashIdCore, proofBase64) {
