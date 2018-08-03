@@ -119,9 +119,9 @@ async function getBalanceByTNTAddrV1Async (req, res, next) {
 
       return next()
     }, {
-      retries: 20,        // The maximum amount of times to retry the operation. Default is 10
-      factor: 1,        // The exponential factor to use. Default is 2
-      minTimeout: 500,   // The number of milliseconds before starting the first retry. Default is 1000
+      retries: 20, // The maximum amount of times to retry the operation. Default is 10
+      factor: 1, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 1000,
       onRetry: (error) => { console.log(`Retrying balance check for ${tntTargetAddress} : Previous attempt did not succeed : ${error.message}`) }
     })
@@ -175,9 +175,9 @@ async function postTransferV1Async (req, res, next) {
 
       return next()
     }, {
-      retries: 10,        // The maximum amount of times to retry the operation. Default is 10
-      factor: 1,        // The exponential factor to use. Default is 2
-      minTimeout: 100,   // The number of milliseconds before starting the first retry. Default is 1000
+      retries: 10, // The maximum amount of times to retry the operation. Default is 10
+      factor: 1, // The exponential factor to use. Default is 2
+      minTimeout: 100, // The number of milliseconds before starting the first retry. Default is 1000
       maxTimeout: 1000,
       onRetry: (error) => { console.log(`Retrying TNT transfer to ${req.params.to_addr} : Previous attempt did not succeed : ${error.message}`) }
     })
