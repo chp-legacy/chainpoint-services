@@ -279,9 +279,9 @@ ms@2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/ms/-/ms-2.0.0.tgz#5608aeadfc00be6c2901df5f9861788de0d597c8"
 
-node-resque@^5.2.0:
-  version "5.2.0"
-  resolved "https://registry.yarnpkg.com/node-resque/-/node-resque-5.2.0.tgz#432c1ba60c702230b5ad47455f150a0dc4ce2686"
+node-resque@^5.4.1:
+  version "5.4.1"
+  resolved "https://registry.yarnpkg.com/node-resque/-/node-resque-5.4.1.tgz#284e57a30162f59c8942bc3919d35eb5696d3a7a"
   dependencies:
     ioredis "^3.2.2"
 
