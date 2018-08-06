@@ -77,6 +77,7 @@ let envDefinitions = {
   MIN_NODE_VERSION_NEW_KEY: envalid.str({ default: 'service/api/minnodeversionnew', desc: 'Key used for the minimum acceptable Node version for new registrations' }),
   ENFORCE_PRIVATE_STAKE_KEY: envalid.str({ default: 'service/api/enforceprivatestake', desc: 'Key used to toggle enforcment of the requirement that private Nodes have the minimum acceptable TNT balance' }),
   NODE_AGGREGATION_INTERVAL_SECONDS_KEY: envalid.str({ default: 'service/api/nodeaggintervalseconds', desc: 'The Node Aggregation interval consul key used by nodes to determin how often they submit constructed merkle tree root to core' }),
+  WRITE_PROOF_GCP_DIRECT: envalid.str({ default: 'service/proofgen/writeproofsgcpdirect', desc: 'Key used to optionally write proofs directy to GCP from proof-gen' }),
 
   NODE_AGGREGATION_INTERVAL_SECONDS_DEFAULT: envalid.num({ default: 5, desc: 'The Node Aggregation interval default value used by nodes to determin how often they submit constructed merkle tree root to core' }),
 

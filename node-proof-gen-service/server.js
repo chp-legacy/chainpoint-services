@@ -22,9 +22,16 @@ const chainpointProofSchema = require('chainpoint-proof-json-schema')
 const uuidTime = require('uuid-time')
 const chpBinary = require('chainpoint-binary')
 const utils = require('./lib/utils.js')
+const cnsl = require('consul')
 const connections = require('./lib/connections.js')
 
+let consul = null
+
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
+
+// Boolean flag indicating whether or not to skip Proof-Proxy flow
+// and write generated proofs to Google Cloud Storage directly
+let writeProofsToGCPEnabled = false
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -227,11 +234,30 @@ async function storeProofsAsync (proofs) {
   // save proof to proof proxy
   for (let proof of proofs) {
     try {
-      await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
+      if (writeProofsToGCPEnabled) {
+
+      } else {
+        await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
+      }
     } catch (error) {
       console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
     }
   }
+}
+
+// This initalizes all the consul watches
+function startConsulWatches () {
+  let watches = [{
+    key: env.WRITE_PROOF_GCP_DIRECT,
+    onChange: (data, res) => {
+      // process only if a value has been returned
+      if (data && data.Value) {
+        writeProofsToGCPEnabled = (data.Value === 'true')
+      }
+    },
+    onError: null
+  }]
+  connections.startConsulWatches(consul, watches, null)
 }
 
 /**
@@ -290,12 +316,16 @@ async function initResqueQueueAsync () {
 async function start () {
   if (env.NODE_ENV === 'test') return
   try {
+    // init consul
+    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT)
     // init DB
     await openStorageConnectionAsync()
     // init Redis
     openRedisConnection(env.REDIS_CONNECT_URIS)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
+    // init consul watches
+    startConsulWatches()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)
