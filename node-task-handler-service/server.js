@@ -404,13 +404,16 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
 // ******************************************************
 // tasks from the proof gen service
 // ******************************************************
-async function chainpointMonitorCoreProofPollerAsync (hashIdCore, opts = {}) {
+async function chainpointMonitorCoreProofPollerAsync ({hashIdCore, failed}, opts = {}) {
   try {
     let options = Object.assign({
       headers: {},
       method: 'POST',
       uri: env.CORE_PROOF_POLLER_URL,
-      body: { hash_id_core: hashIdCore },
+      body: Object.assign({},
+        { hash_id_core: hashIdCore },
+        ...(failed) ? {failed} : {}
+      ),
       json: true,
       gzip: true,
       timeout: 300000
@@ -419,7 +422,9 @@ async function chainpointMonitorCoreProofPollerAsync (hashIdCore, opts = {}) {
     // If the core proof was not persisted to Google Storage, a log entry will be created, and its associated Log Sink
     // will write to a bucket which will then invoke an ETL Cloud Function
     await rp(options)
-  } catch (_) { } // Supress any errors thrown by the fire-and-forget call to chainpoint-monitor-coreproof-poller cloud function
+  } catch (error) {
+    console.error(`sendToProofProxyAsync : chainpointMonitorCoreProofPollerAsync : core proof poller error : ${error.message}`)
+  }
 }
 
 async function sendToProofProxyAsync (hashIdCore, proofBase64) {
@@ -433,11 +438,11 @@ async function sendToProofProxyAsync (hashIdCore, proofBase64) {
 
     // Submit hashIdCore to Google Cloud Function to verify that
     // the core proof has been persisted to Google Storage
-    chainpointMonitorCoreProofPollerAsync(hashIdCore)
+    // chainpointMonitorCoreProofPollerAsync({hashIdCore})
 
     return `Core proof sent to proof proxy : ${hashIdCore}`
   } catch (error) {
-    await chainpointMonitorCoreProofPollerAsync(hashIdCore, { timeout: 2000 })
+    // chainpointMonitorCoreProofPollerAsync({ hashIdCore, failed: true }, { timeout: 5000 })
     let errorMessage = `sendToProofProxyAsync : send error : ${error.message}`
     throw errorMessage
   }
@@ -469,36 +474,36 @@ function buildNodeDataPackage (nodeData, activeNodeCount) {
   let updatedAt = isNaN(Date.parse(nodeData.updated_at)) ? null : Date.parse(nodeData.updated_at)
 
   let result =
-    {
-      data: {
-        audits: [{
-          audit_at: auditAt,
-          audit_passed: auditPassed,
-          public_ip_pass: nodeData.public_ip_pass,
-          public_uri: nodeData.audit_uri,
-          node_ms_delta: nodeMSDelta,
-          time_pass: nodeData.time_pass,
-          cal_state_pass: nodeData.cal_state_pass,
-          min_credits_pass: nodeData.min_credits_pass,
-          node_version: nodeData.node_version,
-          node_version_pass: nodeData.node_version_pass,
-          tnt_balance_grains: tntBalanceGrains,
-          tnt_balance_pass: nodeData.tnt_balance_pass
-        }],
-        core: {
-          total_active_nodes: activeNodeCount
-        },
-        node: {
-          tnt_addr: nodeData.tnt_addr,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          pass_count: passCount,
-          fail_count: failCount,
-          consecutive_passes: consecutivePassCount,
-          consecutive_fails: consecutiveFailCount
-        }
+  {
+    data: {
+      audits: [{
+        audit_at: auditAt,
+        audit_passed: auditPassed,
+        public_ip_pass: nodeData.public_ip_pass,
+        public_uri: nodeData.audit_uri,
+        node_ms_delta: nodeMSDelta,
+        time_pass: nodeData.time_pass,
+        cal_state_pass: nodeData.cal_state_pass,
+        min_credits_pass: nodeData.min_credits_pass,
+        node_version: nodeData.node_version,
+        node_version_pass: nodeData.node_version_pass,
+        tnt_balance_grains: tntBalanceGrains,
+        tnt_balance_pass: nodeData.tnt_balance_pass
+      }],
+      core: {
+        total_active_nodes: activeNodeCount
+      },
+      node: {
+        tnt_addr: nodeData.tnt_addr,
+        created_at: createdAt,
+        updated_at: updatedAt,
+        pass_count: passCount,
+        fail_count: failCount,
+        consecutive_passes: consecutivePassCount,
+        consecutive_fails: consecutiveFailCount
       }
     }
+  }
 
   let dataHashHex = objectHash(result.data)
   let signingPubKeyHashHex = crypto.createHash('sha256').update(signingKeypair.publicKey).digest('hex')
@@ -645,6 +650,7 @@ function openRedisConnection (redisURIs) {
     (newRedis) => {
       redis = newRedis
       cachedAuditChallenge.setRedis(redis)
+      // init Resque worker
       initResqueWorkerAsync()
     }, () => {
       redis = null
@@ -726,8 +732,6 @@ async function start () {
     openRedisConnection(env.REDIS_CONNECT_URIS)
     // init RabbitMQ
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    // init Resque worker
-    await initResqueWorkerAsync()
     // init consul watches
     startConsulWatches()
     debug.general('startup completed successfully')

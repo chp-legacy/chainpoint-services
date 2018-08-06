@@ -14,6 +14,6 @@
     "envalid": "^4.1.4",
     "exit-hook": "^1.1.1",
     "ioredis": "^3.2.2",
-    "node-resque": "^5.2.0"
+    "node-resque": "^5.4.1"
   }
 }

@@ -16,7 +16,7 @@
     "envalid": "^4.1.4",
     "exit-hook": "^1.1.1",
     "ioredis": "^3.2.2",
-    "node-resque": "^5.2.0",
+    "node-resque": "^5.4.1",
     "object-hash": "^1.3.0",
     "request": "^2.85.0",
     "request-promise-native": "^1.0.5",

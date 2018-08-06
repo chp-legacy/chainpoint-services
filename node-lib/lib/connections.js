@@ -20,8 +20,8 @@ function openRedisConnection (redisURIs, onReady, onError, debug) {
     // this is a single Redis host URI
     let redisURL = new URL(redisURIList[0])
     redisConfigObj = {
-      port: redisURL.port,          // Redis port
-      host: redisURL.hostname,   // Redis host
+      port: redisURL.port, // Redis port
+      host: redisURL.hostname, // Redis host
       password: redisURL.password
     }
   } else {
@@ -34,8 +34,8 @@ function openRedisConnection (redisURIs, onReady, onError, debug) {
         // store this value in 'password' for use in redisConfigObj
         if (!password) password = redisURL.password
         return {
-          port: redisURL.port,          // Redis port
-          host: redisURL.hostname  // Redis host
+          port: redisURL.port, // Redis port
+          host: redisURL.hostname // Redis host
         }
       }),
       name: 'mymaster',
@@ -155,6 +155,11 @@ async function openStandardRMQConnectionAsync (amqpClient, connectURI, queues, p
       conn.on('close', async () => {
         onClose()
         console.error('Connection to RabbitMQ closed.  Reconnecting in 5 seconds...')
+      })
+      // if the channel closes for any reason, attempt to reconnect
+      conn.on('error', async (error) => {
+        console.error(`Connection to RabbitMQ caughat an error : ${error}`)
+        conn.close()
       })
       logMessage('RabbitMQ connection established', debug, 'general')
       rmqConnected = true
