@@ -274,6 +274,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.proof-gen
+    volumes:
+      - ./data/gcp:/gcp
     depends_on:
       - base
       - rabbitmq
@@ -282,6 +284,7 @@ services:
       - chainpoint
     environment:
       NODE_ENV: development
+      GOOGLE_APPLICATION_CREDENTIALS: /gcp/proof-proxy-544fdab72f21.json
 
   audit-producer:
     restart: always

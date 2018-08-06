@@ -23,15 +23,21 @@ const uuidTime = require('uuid-time')
 const chpBinary = require('chainpoint-binary')
 const utils = require('./lib/utils.js')
 const cnsl = require('consul')
+const GCPStorage = require('@google-cloud/storage')
+const retry = require('async-retry')
 const connections = require('./lib/connections.js')
 
 let consul = null
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 
-// Boolean flag indicating whether or not to skip Proof-Proxy flow
-// and write generated proofs to Google Cloud Storage directly
-let writeProofsToGCPEnabled = false
+// Variable indicating what proof storage flow to use
+// Acceptable values are:
+// 'resque' for the Resque queue to proof proxy flow
+// 'direct' to write directly to GCP from proof-gen
+// 'both' to do both
+// Any other value will default to 'resque'
+let proofStorageMethod = 'resque'
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -43,6 +49,10 @@ let redis = null
 
 // This value is set once the connection has been established
 let taskQueue = null
+
+// Google Cloud Storage client
+const gcpStorage = new GCPStorage({ projectId: env.GCP_STORAGE_PROJECTID })
+const gcpBucket = gcpStorage.bucket(env.GCP_STORAGE_BUCKET)
 
 function addChainpointHeader (proof, hash, hashId) {
   proof['@context'] = 'https://w3id.org/chainpoint/v3'
@@ -232,41 +242,72 @@ async function consumeProofReadyMessageAsync (msg) {
 
 async function storeProofsAsync (proofs) {
   for (let proof of proofs) {
-    if (writeProofsToGCPEnabled) {
-      // save proof directly to GCP
-      try {
-        await saveProofToGCPAsync(proof)
-      } catch (error) {
-        console.error(`Could not save proof to GCP : ${error.message}`)
-      }
-    } else {
-      // save proof to proof proxy
-      try {
-        await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
-      } catch (error) {
-        console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
-      }
+    switch (proofStorageMethod) {
+      case 'direct':
+        // save proof directly to GCP
+        try {
+          await saveProofToGCPAsync(proof)
+        } catch (error) {
+          console.error(`Could not save proof to GCP : ${error.message}`)
+        }
+        break
+      case 'both':
+        // save proof directly to GCP
+        try {
+          await saveProofToGCPAsync(proof)
+        } catch (error) {
+          console.error(`Could not save proof to GCP : ${error.message}`)
+        }
+        // save proof to proof proxy
+        try {
+          await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
+        } catch (error) {
+          console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
+        }
+        break
+      case 'resque':
+      default:
+        // save proof to proof proxy
+        try {
+          await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
+        } catch (error) {
+          console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
+        }
     }
   }
 }
 
 async function saveProofToGCPAsync (proof) {
+  let proofFilename = `${proof.hash_id_core}.chp`
+  let proofGCPFile = gcpBucket.file(proofFilename)
 
+  await retry(async () => {
+    await proofGCPFile.save(chpBinary.objectToBinarySync(proof), { resumable: false })
+  }, {
+    retries: 3,
+    minTimeout: 50,
+    maxTimeout: 300,
+    factor: 1,
+    onRetry: (error) => { console.log(`saveProofToGCPAsync : retrying : ${proofFilename} : ${error.message}`) }
+  })
 }
 
 // This initalizes all the consul watches
 function startConsulWatches () {
   let watches = [{
-    key: env.WRITE_PROOF_GCP_DIRECT,
+    key: env.PROOF_STORAGE_METHOD_KEY,
     onChange: (data, res) => {
       // process only if a value has been returned
       if (data && data.Value) {
-        writeProofsToGCPEnabled = (data.Value === 'true')
+        proofStorageMethod = data.Value
       }
     },
     onError: null
   }]
-  connections.startConsulWatches(consul, watches, null)
+  let defaults = [
+    { key: env.PROOF_STORAGE_METHOD_KEY, value: 'resque' }
+  ]
+  connections.startConsulWatches(consul, watches, defaults)
 }
 
 /**
