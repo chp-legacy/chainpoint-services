@@ -231,18 +231,27 @@ async function consumeProofReadyMessageAsync (msg) {
 }
 
 async function storeProofsAsync (proofs) {
-  // save proof to proof proxy
   for (let proof of proofs) {
-    try {
-      if (writeProofsToGCPEnabled) {
-
-      } else {
-        await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
+    if (writeProofsToGCPEnabled) {
+      // save proof directly to GCP
+      try {
+        await saveProofToGCPAsync(proof)
+      } catch (error) {
+        console.error(`Could not save proof to GCP : ${error.message}`)
       }
-    } catch (error) {
-      console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
+    } else {
+      // save proof to proof proxy
+      try {
+        await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
+      } catch (error) {
+        console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
+      }
     }
   }
+}
+
+async function saveProofToGCPAsync (proof) {
+
 }
 
 // This initalizes all the consul watches
