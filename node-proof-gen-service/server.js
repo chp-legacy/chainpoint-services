@@ -245,6 +245,7 @@ async function consumeProofReadyMessageAsync (msg) {
 
 async function storeProofsAsync (proofs, batchType) {
   if (proofs.length === 0) return
+  let batchStartTimestamp = Date.now()
   let batchId = crypto.randomBytes(4).toString('hex')
   // log information about the first item in the batch
   logGenerationEvent(proofs[0].hash_submitted_node_at, batchType, batchId, 1, proofs.length)
@@ -289,8 +290,10 @@ async function storeProofsAsync (proofs, batchType) {
       }, env.SAVE_CONCURRENCY_COUNT)
   }
   if (proofs.length > 1) {
+    let batchEndTimestamp = Date.now()
+    let batchTotalProcessingMS = batchEndTimestamp - batchStartTimestamp
     // log information about the last item in the batch
-    logGenerationEvent(proofs[proofs.length - 1].hash_submitted_node_at, batchType, batchId, proofs.length, proofs.length)
+    logGenerationEvent(proofs[proofs.length - 1].hash_submitted_node_at, batchType, batchId, proofs.length, proofs.length, batchTotalProcessingMS)
   }
 }
 
@@ -311,7 +314,7 @@ async function saveProofToGCPAsync (proof) {
 
 // use the time difference between now and the time embedded in the hash_id_node UUID
 // to log a generation event and total duration
-function logGenerationEvent (submitDateString, batchType, batchId, proofIndex, batchSize) {
+function logGenerationEvent (submitDateString, batchType, batchId, proofIndex, batchSize, batchTotalProcessingMS) {
   let nowTimestamp = Date.now()
   let submitTimestamp = new Date(submitDateString).getTime()
   let generateDuration = moment.duration(nowTimestamp - submitTimestamp)
@@ -319,7 +322,8 @@ function logGenerationEvent (submitDateString, batchType, batchId, proofIndex, b
   let mins = generateDuration.get('m')
   let secs = generateDuration.get('s')
   let durationString = `${hours} hour${hours !== 1 ? 's' : ''}, ${generateDuration.get('m')} minute${mins !== 1 ? 's' : ''}, and ${generateDuration.get('s')} second${secs !== 1 ? 's' : ''}`
-  console.log(`Generation ${proofIndex === 1 ? 'starting' : 'complete'} for ${batchType} ${batchId} proof ${proofIndex} of ${batchSize} - ${durationString} after submission`)
+  let totalProcessingString = batchTotalProcessingMS > 1000 ? `[${Math.round(batchTotalProcessingMS / 1000)}s total ]` : (batchTotalProcessingMS > 0 ? `[${batchTotalProcessingMS || 0}ms]` : ``)
+  console.log(`Generation ${proofIndex === 1 ? 'starting' : 'complete'} for ${batchType} ${batchId} proof ${proofIndex} of ${batchSize} - ${durationString} after submission ${totalProcessingString}`)
 }
 
 // This initalizes all the consul watches
