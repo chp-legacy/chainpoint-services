@@ -104,6 +104,10 @@ assert-plus@1.0.0, assert-plus@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/assert-plus/-/assert-plus-1.0.0.tgz#f12e0f3c5d77b0b1cdd9146942e4e96c1e4dd525"
 
+async-parallel@^1.2.3:
+  version "1.2.3"
+  resolved "https://registry.yarnpkg.com/async-parallel/-/async-parallel-1.2.3.tgz#0b90550aeffb7a365d8cee881eb0618f656a3450"
+
 async-retry@^1.2.1:
   version "1.2.1"
   resolved "https://registry.yarnpkg.com/async-retry/-/async-retry-1.2.1.tgz#308c6c4e1d91e63397a4676290334ae9bda7bcb1"

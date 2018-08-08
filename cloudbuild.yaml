@@ -92,3 +92,5 @@ images:
 - 'gcr.io/chainpoint-registry/$REPO_NAME/node-task-handler-service:$COMMIT_SHA'
 - 'gcr.io/chainpoint-registry/$REPO_NAME/node-tnt-reward-service:latest'
 - 'gcr.io/chainpoint-registry/$REPO_NAME/node-tnt-reward-service:$COMMIT_SHA'
+options:
+ machineType: 'N1_HIGHCPU_8'
