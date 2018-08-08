@@ -28,6 +28,7 @@ const retry = require('async-retry')
 const crypto = require('crypto')
 const moment = require('moment')
 const connections = require('./lib/connections.js')
+const parallel = require('async-parallel')
 
 let consul = null
 
@@ -243,46 +244,49 @@ async function consumeProofReadyMessageAsync (msg) {
 }
 
 async function storeProofsAsync (proofs, batchType) {
+  if (proofs.length === 0) return
   let batchId = crypto.randomBytes(4).toString('hex')
-  let firstItemLogged = false
-  for (let proof of proofs) {
-    switch (proofStorageMethod) {
-      case 'direct':
-        // save proof directly to GCP
-        try {
+  // log information about the first item in the batch
+  logGenerationEvent(proofs[0].hash_submitted_node_at, batchType, batchId, 1, proofs.length)
+  switch (proofStorageMethod) {
+    case 'direct':
+      // save proof directly to GCP
+      try {
+        await parallel.each(proofs, async (proof) => {
           await saveProofToGCPAsync(proof)
-        } catch (error) {
-          console.error(`Could not save proof to GCP : ${error.message}`)
-        }
-        break
-      case 'both':
-        // save proof directly to GCP
-        try {
+        }, env.SAVE_CONCURRENCY_COUNT)
+      } catch (error) {
+        console.error(`Could not save proof to GCP : ${error.message}`)
+      }
+      break
+    case 'both':
+      // save proof directly to GCP
+      try {
+        await parallel.each(proofs, async (proof) => {
           await saveProofToGCPAsync(proof)
-        } catch (error) {
-          console.error(`Could not save proof to GCP : ${error.message}`)
-        }
-        // save proof to proof proxy
-        try {
+        }, env.SAVE_CONCURRENCY_COUNT)
+      } catch (error) {
+        console.error(`Could not save proof to GCP : ${error.message}`)
+      }
+      // save proof to proof proxy
+      try {
+        await parallel.each(proofs, async (proof) => {
           await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
-        } catch (error) {
-          console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
-        }
-        break
-      case 'resque':
-      default:
-        // save proof to proof proxy
-        try {
+        }, env.SAVE_CONCURRENCY_COUNT)
+      } catch (error) {
+        console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
+      }
+      break
+    case 'resque':
+    default:
+      // save proof to proof proxy
+      try {
+        await parallel.each(proofs, async (proof) => {
           await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
-        } catch (error) {
-          console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
-        }
-    }
-    if (!firstItemLogged) {
-      // log information about the first item in the batch
-      logGenerationEvent(proof.hash_submitted_node_at, batchType, batchId, 1, proofs.length)
-      firstItemLogged = true
-    }
+        }, env.SAVE_CONCURRENCY_COUNT)
+      } catch (error) {
+        console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
+      }
   }
   if (proofs.length > 1) {
     // log information about the last item in the batch
@@ -315,7 +319,7 @@ function logGenerationEvent (submitDateString, batchType, batchId, proofIndex, b
   let mins = generateDuration.get('m')
   let secs = generateDuration.get('s')
   let durationString = `${hours} hour${hours !== 1 ? 's' : ''}, ${generateDuration.get('m')} minute${mins !== 1 ? 's' : ''}, and ${generateDuration.get('s')} second${secs !== 1 ? 's' : ''}`
-  console.log(`Generated ${batchType} ${batchId} proof ${proofIndex} of ${batchSize} - ${durationString} after submission`)
+  console.log(`Generation ${proofIndex === 1 ? 'starting' : 'complete'} for ${batchType} ${batchId} proof ${proofIndex} of ${batchSize} - ${durationString} after submission`)
 }
 
 // This initalizes all the consul watches

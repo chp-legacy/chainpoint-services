@@ -139,6 +139,7 @@ let envDefinitions = {
   RMQ_WORK_IN_GEN_QUEUE: envalid.str({ default: 'work.gen', desc: 'The queue name for message consumption originating from the proof state service' }),
   GCP_STORAGE_PROJECTID: envalid.str({ default: 'proof-proxy', desc: 'The project Id for GCP storage' }),
   GCP_STORAGE_BUCKET: envalid.str({ default: 'proof-proxy-core-proofs', desc: 'Name of the Google Cloud Storage Bucket for Core proofs (short term ephemeral).' }),
+  SAVE_CONCURRENCY_COUNT: envalid.num({ default: 100, desc: 'The number of concurrent requests made when saving proofs' }),
 
   // Proof State service specific variables
   RMQ_PREFETCH_COUNT_STATE: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
