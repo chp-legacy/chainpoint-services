@@ -251,42 +251,42 @@ async function storeProofsAsync (proofs, batchType) {
   switch (proofStorageMethod) {
     case 'direct':
       // save proof directly to GCP
-      try {
-        await parallel.each(proofs, async (proof) => {
+      await parallel.each(proofs, async (proof) => {
+        try {
           await saveProofToGCPAsync(proof)
-        }, env.SAVE_CONCURRENCY_COUNT)
-      } catch (error) {
-        console.error(`Could not save proof to GCP : ${error.message}`)
-      }
+        } catch (error) {
+          console.error(`Could not save proof to GCP : ${error.message}`)
+        }
+      }, env.SAVE_CONCURRENCY_COUNT)
       break
     case 'both':
       // save proof directly to GCP
-      try {
-        await parallel.each(proofs, async (proof) => {
+      await parallel.each(proofs, async (proof) => {
+        try {
           await saveProofToGCPAsync(proof)
-        }, env.SAVE_CONCURRENCY_COUNT)
-      } catch (error) {
-        console.error(`Could not save proof to GCP : ${error.message}`)
-      }
+        } catch (error) {
+          console.error(`Could not save proof to GCP : ${error.message}`)
+        }
+      }, env.SAVE_CONCURRENCY_COUNT)
       // save proof to proof proxy
-      try {
-        await parallel.each(proofs, async (proof) => {
+      await parallel.each(proofs, async (proof) => {
+        try {
           await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
-        }, env.SAVE_CONCURRENCY_COUNT)
-      } catch (error) {
-        console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
-      }
+        } catch (error) {
+          console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
+        }
+      }, env.SAVE_CONCURRENCY_COUNT)
       break
     case 'resque':
     default:
       // save proof to proof proxy
-      try {
-        await parallel.each(proofs, async (proof) => {
+      await parallel.each(proofs, async (proof) => {
+        try {
           await taskQueue.enqueue('task-handler-queue', `send_to_proof_proxy`, [proof.hash_id_core, chpBinary.objectToBase64Sync(proof)])
-        }, env.SAVE_CONCURRENCY_COUNT)
-      } catch (error) {
-        console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
-      }
+        } catch (error) {
+          console.error(`Could not enqueue send_to_proof_proxy task : ${error.message}`)
+        }
+      }, env.SAVE_CONCURRENCY_COUNT)
   }
   if (proofs.length > 1) {
     // log information about the last item in the batch
