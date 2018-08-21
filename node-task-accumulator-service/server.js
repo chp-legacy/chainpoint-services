@@ -30,15 +30,8 @@ var debug = {
 // direct debug to output over STDOUT
 debugPkg.log = console.info.bind(console)
 
-let PRUNE_AGG_STATES_POOL = []
 let AUDIT_LOG_WRITE_POOL = []
 let AUDIT_SCORE_UPDATE_POOL = []
-
-// Variable indicating if prune agg states accumulation pool is currently being drained
-let PRUNE_AGG_STATES_POOL_DRAINING = false
-
-// The number of items to include in a single batch delete command
-let pruneAggStatesBatchSize = 500
 
 // Variable indicating if audit log write accumulation pool is currently being drained
 let AUDIT_LOG_WRITE_POOL_DRAINING = false
@@ -71,11 +64,6 @@ function processMessage (msg) {
   if (msg !== null) {
     // determine the source of the message and handle appropriately
     switch (msg.properties.type) {
-      case 'prune_agg':
-        // Consumes a prune message from the proof gen
-        // accumulates prune tasks and issues batch to task handler
-        consumePruneAggMessageAsync(msg)
-        break
       case 'write_audit_log':
         // Consumes an audit log write message from the task handler
         // accumulates audit log write tasks and issues batch to task handler
@@ -92,19 +80,6 @@ function processMessage (msg) {
         // cannot handle unknown type messages, ack message and do nothing
         amqpChannel.ack(msg)
     }
-  }
-}
-
-async function consumePruneAggMessageAsync (msg) {
-  if (msg !== null) {
-    let hashId = msg.content.toString()
-
-    // add msg to the hash object so that we can ack it later
-    let hashObj = {
-      hashId: hashId,
-      msg: msg
-    }
-    PRUNE_AGG_STATES_POOL.push(hashObj)
   }
 }
 
@@ -131,43 +106,6 @@ async function consumeUpdateAuditScoreMessageAsync (msg) {
       msg: msg
     }
     AUDIT_SCORE_UPDATE_POOL.push(scoreUpdateObj)
-  }
-}
-
-async function drainPruneAggStatesPoolAsync () {
-  if (!PRUNE_AGG_STATES_POOL_DRAINING && amqpChannel != null) {
-    PRUNE_AGG_STATES_POOL_DRAINING = true
-
-    let currentHashCount = PRUNE_AGG_STATES_POOL.length
-    let pruneBatchesNeeded = Math.ceil(currentHashCount / pruneAggStatesBatchSize)
-    if (currentHashCount > 0) debug.pruneAgg(`${currentHashCount} hash_ids currently in pool`)
-    for (let x = 0; x < pruneBatchesNeeded; x++) {
-      let pruneAggStatesObjs = PRUNE_AGG_STATES_POOL.splice(0, pruneAggStatesBatchSize)
-      let hashIds = pruneAggStatesObjs.map((item) => item.hashId)
-      // delete the agg_states proof state rows for these hash_ids
-      try {
-        await taskQueue.enqueue('task-handler-queue', `prune_agg_states_ids`, [hashIds])
-        debug.pruneAgg(`${hashIds.length} hash_ids queued for deletion`)
-
-        // This batch has been submitted to task handler successfully
-        // ack consumption of all original messages part of this batch
-        pruneAggStatesObjs.forEach((item) => {
-          if (item.msg !== null) {
-            amqpChannel.ack(item.msg)
-          }
-        })
-      } catch (error) {
-        console.error(`Could not enqueue prune task : ${error.message}`)
-        // nack consumption of all original messages part of this batch
-        pruneAggStatesObjs.forEach((item) => {
-          if (item.msg !== null) {
-            amqpChannel.nack(item.msg)
-          }
-        })
-      }
-    }
-
-    PRUNE_AGG_STATES_POOL_DRAINING = false
   }
 }
 
@@ -258,7 +196,6 @@ function openRedisConnection (redisURIs) {
     }, () => {
       redis = null
       taskQueue = null
-      PRUNE_AGG_STATES_POOL_DRAINING = false
       AUDIT_LOG_WRITE_POOL_DRAINING = false
       setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     }, debug)
@@ -279,7 +216,6 @@ async function openRMQConnectionAsync (connectURI) {
     () => {
       amqpChannel = null
       // un-acked messaged will be requeued, so clear all work in progress
-      PRUNE_AGG_STATES_POOL = []
       AUDIT_LOG_WRITE_POOL = []
       setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
     },
@@ -297,7 +233,6 @@ async function initResqueQueueAsync () {
 // This initalizes all the JS intervals that fire all aggregator events
 function startIntervals () {
   let intervals = [
-    { function: drainPruneAggStatesPoolAsync, ms: 1000 },
     { function: drainAuditLogWritePoolAsync, ms: 1000 },
     { function: drainAuditScoreUpdatePoolAsync, ms: 1000 }
   ]
