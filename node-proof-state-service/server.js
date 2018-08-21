@@ -259,6 +259,7 @@ async function PruneStateDataAsync () {
 async function queueProofStatePruningTasks (modelName) {
   // determine the primary key ids for each batch
   let primaryKeyValues = await cachedProofState.getExpiredPKValuesForModel(modelName)
+  let totalCount = primaryKeyValues.length
   let pruneBatchTasks = []
   let pruneBatchSize = 500
 
@@ -279,7 +280,7 @@ async function queueProofStatePruningTasks (modelName) {
   }
 
   let results = {
-    rowCount: primaryKeyValues.length,
+    rowCount: totalCount,
     batchCount: pruneBatchTasks.length
   }
 
