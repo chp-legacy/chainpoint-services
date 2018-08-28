@@ -273,9 +273,9 @@ async function queueProofStatePruningTasks (modelName) {
   // create and issue individual delete tasks for each batch
   for (let pruneBatchTask of pruneBatchTasks) {
     try {
-      await taskQueue.enqueue('task-handler-queue', `prune_${modelName}_ids`, [pruneBatchTask])
+      await taskQueue.enqueue('state-pruning-queue', `prune_${modelName}_ids`, [pruneBatchTask])
     } catch (error) {
-      console.error(`Could not enqueue prune task : ${error.message}`)
+      console.error(`Could not enqueue state pruning task : ${error.message}`)
     }
   }
 

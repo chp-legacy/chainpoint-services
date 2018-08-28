@@ -106,7 +106,7 @@ async function initResqueWorkerAsync (redisClient, namespace, queues, minTasks, 
     await multiWorker.end()
   })
 
-  logMessage('Resque worker connection established', debug, 'general')
+  logMessage(`Resque worker connection established for queues ${JSON.stringify(queues)}`, debug, 'general')
 }
 
 /**
