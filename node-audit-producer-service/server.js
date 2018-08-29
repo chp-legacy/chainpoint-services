@@ -93,7 +93,7 @@ async function auditNodesAsync () {
   }
 
   // get the total active node count, needed to deliver to Nodes during audit process
-  let activePublicNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 } } })
+  let activePublicNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 }, consecutive_fails: { [Op.lt]: 144 } } })
 
   // iterate through each public Registered Node, queue up an audit task for task handler
   for (let publicNodeReadyForAudit of publicNodesReadyForAudit) {

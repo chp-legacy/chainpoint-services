@@ -28,10 +28,12 @@ const objectHash = require('object-hash')
 const crypto = require('crypto')
 const connections = require('./lib/connections.js')
 
-// Set the max number of concurrent workers for the multiworker
+// Set the max number of concurrent workers for the primary multiworker
+const MAX_TASK_PROCESSORS_PRIMARY = 150
+// Set the max number of concurrent workers for the state prune multiworker
+const MAX_TASK_PROCESSORS_STATE_PRUNING = 5
 // and adjust defaultMaxListeners to allow for at least that amount
-const MAX_TASK_PROCESSORS = 150
-events.EventEmitter.defaultMaxListeners = events.EventEmitter.defaultMaxListeners + MAX_TASK_PROCESSORS
+events.EventEmitter.defaultMaxListeners = events.EventEmitter.defaultMaxListeners + MAX_TASK_PROCESSORS_PRIMARY + MAX_TASK_PROCESSORS_STATE_PRUNING
 
 // TweetNaCl.js
 // see: http://ed25519.cr.yp.to
@@ -53,7 +55,8 @@ const TASK_TIMEOUT_MS = 60000 // 1 minute timeout
 
 var debug = {
   general: debugPkg('task-handler:general'),
-  worker: debugPkg('task-handler:worker'),
+  primaryWorker: debugPkg('task-handler:primary-worker'),
+  statePruningWorker: debugPkg('task-handler:state-pruning-worker'),
   multiworker: debugPkg('task-handler:multiworker')
 }
 // direct debug to output over STDOUT
@@ -99,13 +102,7 @@ const pluginOptions = {
     QueueLock: {}
   }
 }
-const jobs = {
-  // tasks from proof-state service (and task accumulator), bulk deletion of old proof state data
-  'prune_agg_states_ids': Object.assign({ perform: pruneAggStatesByIdsAsync }, pluginOptions),
-  'prune_cal_states_ids': Object.assign({ perform: pruneCalStatesByIdsAsync }, pluginOptions),
-  'prune_anchor_btc_agg_states_ids': Object.assign({ perform: pruneAnchorBTCAggStatesByIdsAsync }, pluginOptions),
-  'prune_btctx_states_ids': Object.assign({ perform: pruneBTCTxStatesByIdsAsync }, pluginOptions),
-  'prune_btchead_states_ids': Object.assign({ perform: pruneBTCHeadStatesByIdsAsync }, pluginOptions),
+const primaryTaskJobs = {
   // tasks from the audit producer service
   'audit_public_node': Object.assign({ perform: performAuditPublicAsync }, pluginOptions),
   'audit_private_node': Object.assign({ perform: performAuditPrivateAsync }, pluginOptions),
@@ -114,6 +111,14 @@ const jobs = {
   'update_audit_score_items': Object.assign({ perform: updateAuditScoreItemsAsync }, pluginOptions),
   // tasks from proof-gen
   'send_to_proof_proxy': Object.assign({ perform: sendToProofProxyAsync }, pluginOptions)
+}
+const statePruningJobs = {
+  // tasks from proof-state service (and task accumulator), bulk deletion of old proof state data
+  'prune_agg_states_ids': Object.assign({ perform: pruneAggStatesByIdsAsync }, pluginOptions),
+  'prune_cal_states_ids': Object.assign({ perform: pruneCalStatesByIdsAsync }, pluginOptions),
+  'prune_anchor_btc_agg_states_ids': Object.assign({ perform: pruneAnchorBTCAggStatesByIdsAsync }, pluginOptions),
+  'prune_btctx_states_ids': Object.assign({ perform: pruneBTCTxStatesByIdsAsync }, pluginOptions),
+  'prune_btchead_states_ids': Object.assign({ perform: pruneBTCHeadStatesByIdsAsync }, pluginOptions)
 }
 
 // ******************************************************
@@ -404,6 +409,7 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
 // ******************************************************
 // tasks from the proof gen service
 // ******************************************************
+/*
 async function chainpointMonitorCoreProofPollerAsync ({hashIdCore, failed}, opts = {}) {
   try {
     let options = Object.assign({
@@ -426,6 +432,7 @@ async function chainpointMonitorCoreProofPollerAsync ({hashIdCore, failed}, opts
     console.error(`sendToProofProxyAsync : chainpointMonitorCoreProofPollerAsync : core proof poller error : ${error.message}`)
   }
 }
+*/
 
 async function sendToProofProxyAsync (hashIdCore, proofBase64) {
   try {
@@ -650,8 +657,8 @@ function openRedisConnection (redisURIs) {
     (newRedis) => {
       redis = newRedis
       cachedAuditChallenge.setRedis(redis)
-      // init Resque worker
-      initResqueWorkerAsync()
+      // init Resque workers
+      initResqueWorkersAsync()
     }, () => {
       redis = null
       cachedAuditChallenge.setRedis(null)
@@ -679,28 +686,54 @@ async function openRMQConnectionAsync (connectURI) {
   )
 }
 
-async function initResqueWorkerAsync () {
+async function initResqueWorkersAsync () {
+  // initialize primary multi worker
   await connections.initResqueWorkerAsync(
     redis,
     'resque',
     ['task-handler-queue'],
     10,
-    MAX_TASK_PROCESSORS,
+    MAX_TASK_PROCESSORS_PRIMARY,
     TASK_TIMEOUT_MS,
-    jobs,
+    primaryTaskJobs,
     (multiWorker) => {
-      multiWorker.on('start', (workerId) => { debug.worker(`worker[${workerId}] : started`) })
-      multiWorker.on('end', (workerId) => { debug.worker(`worker[${workerId}] : ended`) })
-      multiWorker.on('cleaning_worker', (workerId, worker, pid) => { debug.worker(`worker[${workerId}] : cleaning old worker : ${worker}`) })
-      // multiWorker.on('poll', (workerId, queue) => { debug.worker(`worker[${workerId}] : polling : ${queue}`) })
-      // multiWorker.on('job', (workerId, queue, job) => { debug.worker(`worker[${workerId}] : working job : ${queue} : ${JSON.stringify(job)}`) })
-      multiWorker.on('reEnqueue', (workerId, queue, job, plugin) => { debug.worker(`worker[${workerId}] : re-enqueuing job : ${queue} : ${JSON.stringify(job)}`) })
-      multiWorker.on('success', (workerId, queue, job, result) => { debug.worker(`worker[${workerId}] : success : ${queue} : ${result}`) })
-      multiWorker.on('failure', (workerId, queue, job, failure) => { console.error(`worker[${workerId}] : failure : ${queue} : ${failure}`) })
-      multiWorker.on('error', (workerId, queue, job, error) => { console.error(`worker[${workerId}] : error : ${queue} : ${error}`) })
-      // multiWorker.on('pause', (workerId) => { debug.worker(`worker[${workerId}] : paused`) })
-      multiWorker.on('internalError', (error) => { console.error(`multiWorker : internal error : ${error}`) })
-      // multiWorker.on('multiWorkerAction', (verb, delay) => { debug.multiworker(`*** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
+      multiWorker.on('start', (workerId) => { debug.primaryWorker(`worker[${workerId}] : started`) })
+      multiWorker.on('end', (workerId) => { debug.primaryWorker(`worker[${workerId}] : ended`) })
+      multiWorker.on('cleaning_worker', (workerId, worker, pid) => { debug.primaryWorker(`worker[${workerId}] : cleaning old worker : ${worker}`) })
+      // multiWorker.on('poll', (workerId, queue) => { debug.primaryWorker(`worker[${workerId}] : polling : ${queue}`) })
+      // multiWorker.on('job', (workerId, queue, job) => { debug.primaryWorker(`worker[${workerId}] : working job : ${queue} : ${JSON.stringify(job)}`) })
+      multiWorker.on('reEnqueue', (workerId, queue, job, plugin) => { debug.primaryWorker(`worker[${workerId}] : re-enqueuing job : ${queue} : ${JSON.stringify(job)}`) })
+      multiWorker.on('success', (workerId, queue, job, result) => { debug.primaryWorker(`worker[${workerId}] : success : ${queue} : ${result}`) })
+      multiWorker.on('failure', (workerId, queue, job, failure) => { console.error(`primary worker[${workerId}] : failure : ${queue} : ${failure}`) })
+      multiWorker.on('error', (workerId, queue, job, error) => { console.error(`primary worker[${workerId}] : error : ${queue} : ${error}`) })
+      // multiWorker.on('pause', (workerId) => { debug.primaryWorker(`worker[${workerId}] : paused`) })
+      multiWorker.on('internalError', (error) => { console.error(`primary multiWorker : internal error : ${error}`) })
+      // multiWorker.on('multiWorkerAction', (verb, delay) => { debug.multiworker(`primary *** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
+    },
+    debug
+  )
+  // initialize pruning multi worker
+  await connections.initResqueWorkerAsync(
+    redis,
+    'resque',
+    ['state-pruning-queue'],
+    2,
+    MAX_TASK_PROCESSORS_STATE_PRUNING,
+    TASK_TIMEOUT_MS,
+    statePruningJobs,
+    (multiWorker) => {
+      multiWorker.on('start', (workerId) => { debug.statePruningWorker(`worker[${workerId}] : started`) })
+      multiWorker.on('end', (workerId) => { debug.statePruningWorker(`worker[${workerId}] : ended`) })
+      multiWorker.on('cleaning_worker', (workerId, worker, pid) => { debug.statePruningWorker(`worker[${workerId}] : cleaning old worker : ${worker}`) })
+      // multiWorker.on('poll', (workerId, queue) => { debug.statePruningWorker(`worker[${workerId}] : polling : ${queue}`) })
+      // multiWorker.on('job', (workerId, queue, job) => { debug.statePruningWorker(`worker[${workerId}] : working job : ${queue} : ${JSON.stringify(job)}`) })
+      multiWorker.on('reEnqueue', (workerId, queue, job, plugin) => { debug.statePruningWorker(`worker[${workerId}] : re-enqueuing job : ${queue} : ${JSON.stringify(job)}`) })
+      multiWorker.on('success', (workerId, queue, job, result) => { debug.statePruningWorker(`worker[${workerId}] : success : ${queue} : ${result}`) })
+      multiWorker.on('failure', (workerId, queue, job, failure) => { console.error(`state pruning worker[${workerId}] : failure : ${queue} : ${failure}`) })
+      multiWorker.on('error', (workerId, queue, job, error) => { console.error(`state pruning worker[${workerId}] : error : ${queue} : ${error}`) })
+      // multiWorker.on('pause', (workerId) => { debug.statePruningWorker(`worker[${workerId}] : paused`) })
+      multiWorker.on('internalError', (error) => { console.error(`state pruning multiWorker : internal error : ${error}`) })
+      // multiWorker.on('multiWorkerAction', (verb, delay) => { debug.multiworker(`state pruning *** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
     },
     debug
   )
