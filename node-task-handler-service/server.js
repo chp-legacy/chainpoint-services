@@ -717,7 +717,7 @@ async function initResqueWorkersAsync () {
     redis,
     'resque',
     ['state-pruning-queue'],
-    1,
+    2,
     MAX_TASK_PROCESSORS_STATE_PRUNING,
     TASK_TIMEOUT_MS,
     statePruningJobs,
