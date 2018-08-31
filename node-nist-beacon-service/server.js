@@ -26,7 +26,7 @@ let consul = null
 async function getNistLatestAsync () {
   try {
     let result = await BEACON.getMostRecentPulse()
-    
+
     // A pulse object being returned without error implies
     // a well formatted, content and signature verified pulse
     let timestampMS = new Date(result.pulse.timeStamp).getTime()
