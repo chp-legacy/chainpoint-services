@@ -57,9 +57,9 @@ async function getNistLatestAsync () {
 
 function startIntervals () {
   let intervals = [{
-    function: () => {
+    function: async () => {
       try {
-        getNistLatestAsync()
+        await getNistLatestAsync()
       } catch (error) {
         console.error(`getNistLatest : caught err : ${error.message}`)
       }
