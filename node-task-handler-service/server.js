@@ -599,9 +599,10 @@ async function proofProxyPostAsync (hashIdCore, proofBase64) {
     resolveWithFullResponse: true
   }
 
-  // send 'core' header to ensure that the proof is stored in the
-  // short lifetime core proofs bucket.
+  // send 'core' header to ensure that the proof is stored in the short lifetime core proofs bucket.
+  // send 'beta' header as part of the migration to Proof-proxy-core
   options.headers['core'] = 'true'
+  options.headers['beta'] = 'true'
 
   nodeResponse = await rp(options)
   return nodeResponse.body
