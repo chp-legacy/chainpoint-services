@@ -314,8 +314,11 @@ async function postHashV1Async (req, res, next) {
 function updateNistVars (nistValue) {
   try {
     let nistTimestampString = nistValue.split(':')[0].toString()
-    let nistTimestampInt = parseInt(nistTimestampString) // epoch in seconds
+    // parse epoch as seconds or milliseconds
+    let nistTimestampInt = parseInt(nistTimestampString)
     if (!nistTimestampInt) throw new Error('Bad NIST time encountered, skipping NTP/UUID > NIST validation')
+    // ensure final value represents seconds
+    if (nistTimestampInt > 1000000000000) nistTimestampInt = Math.floor(nistTimestampInt / 1000)
     nistLatest = nistValue
     nistLatestEpoch = nistTimestampInt
   } catch (error) {

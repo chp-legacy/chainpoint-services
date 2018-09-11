@@ -23,43 +23,43 @@ const connections = require('./lib/connections.js')
 
 let consul = null
 
-let getNistLatest = () => {
-  BEACON.last((err, res) => {
-    if (err) {
-      console.error(err)
-    } else {
-      // Only collect beacon with valid signature!
-      if (res && res.timeStamp && res.seedValue && res.validSignature) {
-        let timeAndSeed = `${res.timeStamp.toString()}:${res.seedValue}`.toLowerCase()
+async function getNistLatestAsync () {
+  try {
+    let result = await BEACON.getMostRecentPulse()
 
-        // The latest NIST value will always be stored under
-        // a known key which can always be used if present.
-        // It will be updated every minute if the service API
-        // is available. Clients that are watching this key
-        // should gracefully handle null values for this key.
-        consul.kv.get(env.NIST_KEY, function (err, result) {
-          if (err) {
-            console.error(err)
-          } else {
-            // Only write to the key if the value changed.
-            if (!result || result.Value !== timeAndSeed) {
-              console.log(`New NIST value received: ${timeAndSeed}`)
-              consul.kv.set(env.NIST_KEY, timeAndSeed, function (err, result) {
-                if (err) throw err
-              })
-            }
-          }
-        })
+    // A pulse object being returned without error implies
+    // a well formatted, content and signature verified pulse
+    let timestampMS = new Date(result.pulse.timeStamp).getTime()
+    let timeAndSeed = `${timestampMS}:${result.pulse.localRandomValue}`.toLowerCase()
+
+    // The latest NIST value will always be stored under
+    // a known key which can always be used if present.
+    // It will be updated every minute if the service API
+    // is available. Clients that are watching this key
+    // should gracefully handle null values for this key.
+    consul.kv.get(env.NIST_KEY, function (err, result) {
+      if (err) {
+        console.error(err)
+      } else {
+        // Only write to the key if the value changed.
+        if (!result || result.Value !== timeAndSeed) {
+          console.log(`New NIST value received: ${timeAndSeed}`)
+          consul.kv.set(env.NIST_KEY, timeAndSeed, function (err, result) {
+            if (err) throw err
+          })
+        }
       }
-    }
-  })
+    })
+  } catch (error) {
+    console.error(error)
+  }
 }
 
 function startIntervals () {
   let intervals = [{
-    function: () => {
+    function: async () => {
       try {
-        getNistLatest()
+        await getNistLatestAsync()
       } catch (error) {
         console.error(`getNistLatest : caught err : ${error.message}`)
       }

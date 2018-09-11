@@ -11,6 +11,6 @@
   "dependencies": {
     "consul": "^0.30.0",
     "envalid": "^3.1.1",
-    "nist-randomness-beacon": "^1.2.2"
+    "nist-randomness-beacon": "^2.0.4"
   }
 }
