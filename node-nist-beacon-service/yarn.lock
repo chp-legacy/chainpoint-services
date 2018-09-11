@@ -227,9 +227,9 @@ mime-types@^2.1.12, mime-types@~2.1.19:
   dependencies:
     mime-db "~1.36.0"
 
-nist-randomness-beacon@grempe/nist-randomness-beacon#c1f8f6e2cd6ac78bb9bb3955adc4663f427866f3:
-  version "2.0.2"
-  resolved "https://codeload.github.com/grempe/nist-randomness-beacon/tar.gz/c1f8f6e2cd6ac78bb9bb3955adc4663f427866f3"
+nist-randomness-beacon@^2.0.4:
+  version "2.0.4"
+  resolved "https://registry.yarnpkg.com/nist-randomness-beacon/-/nist-randomness-beacon-2.0.4.tgz#0380d932e909e3f2bc19abc729dfbe01dd33700d"
   dependencies:
     int64-buffer "^0.1.10"
     request "^2.88.0"
