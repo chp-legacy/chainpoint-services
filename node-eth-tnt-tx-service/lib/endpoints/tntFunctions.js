@@ -39,11 +39,12 @@ const tntContractAddr = tntDefinition.networks[env.isProduction ? '1' : '3'].add
 // balanceCheckProvider will use infura with json-rpc as a fallback measure (etherscan will not handle balance check volume)
 // tntTransactionProvider will use infura with etherscan and json-rpc as fallback measures for less frequest request
 const etherscanProvider = new ethers.providers.EtherscanProvider(network, env.ETH_ETHERSCAN_API_KEY)
-const infuraProvider = new ethers.providers.InfuraProvider(network, env.ETH_INFURA_API_KEY)
+let infuraHost = env.isProduction ? 'mainnet.infura.io' : 'ropsten.infura.io'
+const infuraJsonRpcProvider = new ethers.providers.JsonRpcProvider(`https://${infuraHost}/v3/${env.ETH_INFURA_API_KEY}`, network)
 const parityJsonRpcProvider = new ethers.providers.JsonRpcProvider(env.ETH_JSON_RPC_URI, network)
 
-const balanceCheckProvider = new ethers.providers.FallbackProvider([infuraProvider, parityJsonRpcProvider])
-const tntTransactionProvider = new ethers.providers.FallbackProvider([infuraProvider, etherscanProvider, parityJsonRpcProvider])
+const balanceCheckProvider = new ethers.providers.FallbackProvider([infuraJsonRpcProvider, parityJsonRpcProvider])
+const tntTransactionProvider = new ethers.providers.FallbackProvider([infuraJsonRpcProvider, etherscanProvider, parityJsonRpcProvider])
 
 const readContract = new ethers.Contract(tntContractAddr, tntDefinition.abi, balanceCheckProvider)
 const wallet = new ethers.Wallet(tntSourceWalletPK, tntTransactionProvider)
