@@ -467,11 +467,17 @@ let getTNTGrainsBalanceForAddressAsync = async (tntAddress) => {
 
 function getSourceIp (req) {
   let reqIp = null
-  if (req.headers['x-forwarded-for']) {
+  if (req.headers['CF-Connecting-IP']) {
+    // Cloudflare
+    reqIp = req.headers['CF-Connecting-IP']
+    console.log(`getSourceIp : extracted source IP from CF-Connecting-IP : ${reqIp}`)
+  } else if (req.headers['x-forwarded-for']) {
     let fwdIPs = req.headers['x-forwarded-for'].split(',')
     reqIp = fwdIPs[0]
+    console.log(`getSourceIp : extracted source IP from x-forwarded-for : ${req.headers['x-forwarded-for']} : ${reqIp}`)
   } else {
     reqIp = req.connection.remoteAddress || null
+    console.log(`getSourceIp : extracted source IP from remoteAddress : ${reqIp}`)
   }
   if (reqIp) reqIp = reqIp.replace(/^.*:/, '')
 
