@@ -119,6 +119,12 @@ var RegisteredNode = sequelize.define(env.COCKROACH_REG_NODE_TABLE_NAME,
       type: Sequelize.INTEGER,
       field: 'consecutive_fails',
       defaultValue: 0
+    },
+    createdFromIp: {
+      comment: 'The IP origin of the request to register this Node',
+      type: Sequelize.STRING,
+      field: 'created_from_ip',
+      allowNull: true
     }
   },
   {
@@ -143,6 +149,10 @@ var RegisteredNode = sequelize.define(env.COCKROACH_REG_NODE_TABLE_NAME,
       {
         unique: false,
         fields: ['consecutive_passes', 'public_uri']
+      },
+      {
+        unique: false,
+        fields: ['created_from_ip', 'created_at']
       }
     ]
   }
