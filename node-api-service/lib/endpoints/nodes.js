@@ -206,6 +206,14 @@ async function postNodeV1Async (req, res, next) {
     return next(new restify.InternalServerError('Unable to query registered Nodes'))
   }
 
+  // ensure a unique source ip
+  let createdFromIp = getSourceIp(req)
+  if (createdFromIp) {
+    let thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    let matches = await RegisteredNode.count({ where: { createdFromIp: createdFromIp, created_at: { [Op.gte]: thirtyDaysAgo } } })
+    if (matches > 0) return next(new restify.ConflictError('a Node has already been registered from this IP'))
+  }
+
   // check to see if the Node has the min balance required for Node operation
   try {
     let nodeBalance = await getTNTGrainsBalanceForAddressAsync(lowerCasedTntAddrParam)
@@ -228,7 +236,8 @@ async function postNodeV1Async (req, res, next) {
       tntAddr: lowerCasedTntAddrParam,
       publicUri: lowerCasedPublicUri,
       hmacKey: randHMACKey,
-      tntCredit: 86400
+      tntCredit: 86400,
+      createdFromIp: createdFromIp
     })
   } catch (error) {
     console.error(`Could not create RegisteredNode for ${lowerCasedTntAddrParam} at ${lowerCasedPublicUri}: ${error.message}`)
@@ -454,6 +463,25 @@ let getTNTGrainsBalanceForAddressAsync = async (tntAddress) => {
   } catch (error) {
     throw new Error(`TNT balance read error: ${error.message}`)
   }
+}
+
+function getSourceIp (req) {
+  let reqIp = null
+  if (req.headers['CF-Connecting-IP']) {
+    // Cloudflare
+    reqIp = req.headers['CF-Connecting-IP']
+    console.log(`getSourceIp : extracted source IP from CF-Connecting-IP : ${reqIp}`)
+  } else if (req.headers['x-forwarded-for']) {
+    let fwdIPs = req.headers['x-forwarded-for'].split(',')
+    reqIp = fwdIPs[0]
+    console.log(`getSourceIp : extracted source IP from x-forwarded-for : ${req.headers['x-forwarded-for']} : ${reqIp}`)
+  } else {
+    reqIp = req.connection.remoteAddress || null
+    console.log(`getSourceIp : extracted source IP from remoteAddress : ${reqIp}`)
+  }
+  if (reqIp) reqIp = reqIp.replace(/^.*:/, '')
+
+  return reqIp
 }
 
 module.exports = {
