@@ -109,7 +109,7 @@ async function getNodesRandomV1Async (req, res, next) {
  * GET /nodes/blacklist retrieve handler
  *
  * Retrieve an IP blacklist that can be pulled by Nodes to
- * block connnections from abusive IPs
+ * block connections from abusive IPs
  */
 async function getNodesBlacklistV1Async (req, res, next) {
   let list = { blacklist: [] }

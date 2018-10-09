@@ -96,11 +96,11 @@ server.use(restify.bodyParser({
 server.post({ path: '/hashes', version: '1.0.0' }, hashes.postHashV1Async)
 // get the block objects for the calendar in the specified block range
 server.get({ path: '/calendar/blockrange/:index', version: '1.0.0' }, calendar.getCalBlockRangeV2Async)
-// get the block hash for the calendar at the specified hieght
+// get the block hash for the calendar at the specified height
 server.get({ path: '/calendar/:height/hash', version: '1.0.0' }, calendar.getCalBlockHashByHeightV1Async)
-// get the dataVal item for the calendar at the specified hieght
+// get the dataVal item for the calendar at the specified height
 server.get({ path: '/calendar/:height/data', version: '1.0.0' }, calendar.getCalBlockDataByHeightV1Async)
-// get the block object for the calendar at the specified hieght
+// get the block object for the calendar at the specified height
 server.get({ path: '/calendar/:height', version: '1.0.0' }, calendar.getCalBlockByHeightV1Async)
 // get random subset of nodes list
 server.get({ path: '/nodes/random', version: '1.0.0' }, nodes.getNodesRandomV1Async)
@@ -170,7 +170,7 @@ function openRedisConnection (redisURIs) {
     })
 }
 
-// This initalizes all the consul watches
+// This initializes all the consul watches
 function startConsulWatches () {
   let watches = [{
     key: env.NIST_KEY,

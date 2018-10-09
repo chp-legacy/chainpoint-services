@@ -1,7 +1,7 @@
 # chainpoint-node-proof-state-service
 
 ## Configuration
-Configuration parameters will be stored in environment variables. Environment variables can be overridden throught the use of a .env file. 
+Configuration parameters will be stored in environment variables. Environment variables can be overridden through the use of a .env file. 
 
 The following are the descriptions of the configuration parameters:
 

@@ -1,7 +1,7 @@
 # chainpoint-node-btc-mon-service
 
 ## Configuration
-Configuration parameters will be stored in environment variables. Environment variables can be overridden throught the use of a .env file. 
+Configuration parameters will be stored in environment variables. Environment variables can be overridden through the use of a .env file. 
 
 The following are the descriptions of the configuration parameters:
 
@@ -67,7 +67,7 @@ The following is an example of a block object message sent to both service:
 | btchead_root | The merkle root of the block containing the transaction |
 | path | left and right operations connecting the transaction hash to the block merkle root, double sha256 tree implied |
 
-When a transation has achieved minimum confirmations, the original transaction message is acked.
+When a transaction has achieved minimum confirmations, the original transaction message is acked.
 
 ## Service Failure
 In the event of any error occurring, the service will log that error to STDERR and kill itself with a process.exit(). RabbitMQ will be configured so that upon service exit, unacknowledged messages will be requeued to ensure than unfinished work lost due to failure will be processed again in full.

@@ -117,7 +117,7 @@ let aggregateAsync = async () => {
       return
     }
 
-    // The aggregation for this interval has completed sucessfully
+    // The aggregation for this interval has completed successfully
     // ack consumption of all original hash messages part of this aggregation event
     _.forEach(hashesForTree, (hashObj) => {
       if (hashObj.msg !== null) {
@@ -127,7 +127,7 @@ let aggregateAsync = async () => {
   }
 }
 
-// This initalizes all the JS intervals that fire all aggregator events
+// This initializes all the JS intervals that fire all aggregator events
 function startIntervals () {
   let intervals = [{ function: aggregateAsync, ms: env.AGGREGATION_INTERVAL }]
   connections.startIntervals(intervals)

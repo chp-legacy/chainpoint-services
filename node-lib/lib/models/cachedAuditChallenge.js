@@ -37,7 +37,7 @@ let AuditChallenge = auditChallenge.AuditChallenge
 
 async function getMostRecentChallengeDataAsync () {
   let mostRecentChallengeText = (redis && MostRecentChallengeKey) ? await redis.get(MostRecentChallengeKey) : null
-  // if nothing was found, it is not cached, retrieve from the database and add to cache for future reqeusts
+  // if nothing was found, it is not cached, retrieve from the database and add to cache for future requests
   if (mostRecentChallengeText === null) {
     // get the most recent challenge record
     let mostRecentChallenge = await AuditChallenge.findOne({ order: [['time', 'DESC']] })
@@ -64,7 +64,7 @@ async function getMostRecentChallengeDataSolutionRemovedAsync () {
 async function getChallengeDataByTimeAsync (challengeTime) {
   let challengeKey = `${AUDIT_CHALLENGE_KEY_PREFIX}:${challengeTime}`
   let challengeText = (redis) ? await redis.get(challengeKey) : null
-  // if nothing was found, it is not cached, retrieve from the database and add to cache for future reqeusts
+  // if nothing was found, it is not cached, retrieve from the database and add to cache for future requests
   if (challengeText === null) {
     // get the challenge record by time
     let challengeByTime = await AuditChallenge.findOne({ where: { time: challengeTime } })

@@ -212,7 +212,7 @@ function performLeaderElection(electorClient, leaderKey, host, port, id, onElect
     })
 }
 
-// This initalizes all the consul watches
+// This initializes all the consul watches
 function startConsulWatches(consul, watches, defaults, debug) {
   logMessage('starting watches', debug, 'general')
 
