@@ -12,7 +12,7 @@
     "amqplib": "^0.5.2",
     "envalid": "^3.1.1",
     "exit-hook": "^1.1.1",
-    "exp-leader-election": "https://github.com/Tierion/exp-leader-election.git#258e6d8ea3644a9910dd9b78bc01563dfe19bc5b",
+    "exp-leader-election": "https://github.com/Tierion/exp-leader-election.git#edae0334d25d8318c47e32245b68c721ae1f59f0",
     "ioredis": "^3.2.2",
     "node-resque": "^5.4.1",
     "sequelize": "^4.33.3",

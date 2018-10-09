@@ -135,9 +135,9 @@ exit-hook@^1.1.1:
   version "1.1.1"
   resolved "https://registry.yarnpkg.com/exit-hook/-/exit-hook-1.1.1.tgz#f05ca233b48c05d54fff07765df8507e95c02ff8"
 
-"exp-leader-election@https://github.com/Tierion/exp-leader-election.git#258e6d8ea3644a9910dd9b78bc01563dfe19bc5b":
+"exp-leader-election@https://github.com/Tierion/exp-leader-election.git#edae0334d25d8318c47e32245b68c721ae1f59f0":
   version "0.2.1"
-  resolved "https://github.com/Tierion/exp-leader-election.git#258e6d8ea3644a9910dd9b78bc01563dfe19bc5b"
+  resolved "https://github.com/Tierion/exp-leader-election.git#edae0334d25d8318c47e32245b68c721ae1f59f0"
   dependencies:
     consul "^0.30.0"
     lodash "^4.5.1"
