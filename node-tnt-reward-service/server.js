@@ -70,10 +70,10 @@ async function performRewardAsync () {
     // retrieve a list of the top REWARD_SELECTION_PC public Nodes
     candidateNodeAddresses = await RegisteredNode.findAll({ where: { publicUri: { [Op.ne]: null }, tntAddr: { [Op.notIn]: NODE_REWARD_TNT_ADDR_BLACKLIST } }, attributes: ['tntAddr'], order: [['auditScore', 'DESC'], ['created_at', 'ASC']], limit: REWARD_SELECTION_COUNT })
     if (!candidateNodeAddresses || candidateNodeAddresses.length < 1) {
-      console.log('No reward candidiate Nodes were found')
+      console.log('No reward candidate Nodes were found')
       return
     } else {
-      console.log(`${candidateNodeAddresses.length} reward candidiate Nodes were retrieved`)
+      console.log(`${candidateNodeAddresses.length} reward candidate Nodes were retrieved`)
     }
   } catch (error) {
     let message = `Could not retrieve top scoring Nodes : ${error.message}`

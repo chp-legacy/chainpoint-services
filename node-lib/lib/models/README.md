@@ -33,7 +33,7 @@ The following is a description of methods that must be defined in a storage adap
 
 
 ## Proof State Models Configuration
-Configuration parameters will be stored in environment variables. Environment variables can be overridden throught the use of a .env file. 
+Configuration parameters will be stored in environment variables. Environment variables can be overridden through the use of a .env file. 
 
 The following are the descriptions of the configuration parameters:
 

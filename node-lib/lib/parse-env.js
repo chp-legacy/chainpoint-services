@@ -75,11 +75,11 @@ let envDefinitions = {
   AUDIT_CHALLENGE_RECENT_KEY: envalid.str({ default: 'service/audit/mostrecentrediskey', desc: 'Key used for acquiring most recent audit challenge redis key' }),
   MIN_NODE_VERSION_EXISTING_KEY: envalid.str({ default: 'service/api/minnodeversionexisting', desc: 'Key used for the minimum acceptable Node version for existing registrations and to pass audits' }),
   MIN_NODE_VERSION_NEW_KEY: envalid.str({ default: 'service/api/minnodeversionnew', desc: 'Key used for the minimum acceptable Node version for new registrations' }),
-  ENFORCE_PRIVATE_STAKE_KEY: envalid.str({ default: 'service/api/enforceprivatestake', desc: 'Key used to toggle enforcment of the requirement that private Nodes have the minimum acceptable TNT balance' }),
-  NODE_AGGREGATION_INTERVAL_SECONDS_KEY: envalid.str({ default: 'service/api/nodeaggintervalseconds', desc: 'The Node Aggregation interval consul key used by nodes to determin how often they submit constructed merkle tree root to core' }),
+  ENFORCE_PRIVATE_STAKE_KEY: envalid.str({ default: 'service/api/enforceprivatestake', desc: 'Key used to toggle enforcement of the requirement that private Nodes have the minimum acceptable TNT balance' }),
+  NODE_AGGREGATION_INTERVAL_SECONDS_KEY: envalid.str({ default: 'service/api/nodeaggintervalseconds', desc: 'The Node Aggregation interval consul key used by nodes to determine how often they submit constructed merkle tree root to core' }),
   PROOF_STORAGE_METHOD_KEY: envalid.str({ default: 'service/proofgen/proofstoragemethod', desc: 'Key used to determine method of proof storage' }),
 
-  NODE_AGGREGATION_INTERVAL_SECONDS_DEFAULT: envalid.num({ default: 5, desc: 'The Node Aggregation interval default value used by nodes to determin how often they submit constructed merkle tree root to core' }),
+  NODE_AGGREGATION_INTERVAL_SECONDS_DEFAULT: envalid.num({ default: 5, desc: 'The Node Aggregation interval default value used by nodes to determine how often they submit constructed merkle tree root to core' }),
 
   // RabbitMQ related variables
   RABBITMQ_CONNECT_URI: envalid.url({ default: 'amqp://chainpoint:chainpoint@rabbitmq', desc: 'Connection string w/ credentials for RabbitMQ' }),
@@ -93,7 +93,7 @@ let envDefinitions = {
   RMQ_WORK_OUT_TASK_ACC_QUEUE: envalid.str({ default: 'work.taskacc', desc: 'The queue name for outgoing message to the task accumulator service' }),
 
   // Redis related variables
-  REDIS_CONNECT_URIS: envalid.str({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI, or a comma seperated list of Sentinel URIs' }),
+  REDIS_CONNECT_URIS: envalid.str({ devDefault: 'redis://redis:6379', desc: 'The Redis server connection URI, or a comma separated list of Sentinel URIs' }),
   BALANCE_CHECK_KEY_PREFIX: envalid.str({ default: 'API:NodeBalance', desc: 'The prefix for the Redis key containing Node balance information' }),
 
   // Service Specific Variables

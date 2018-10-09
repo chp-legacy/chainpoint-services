@@ -308,7 +308,7 @@ function processMessage (msg) {
         break
       case 'anchor_btc_agg_batch':
         // Consumes a anchor BTC aggregation state message from the Calendar service
-        // Stores state information for anchor agregation events
+        // Stores state information for anchor aggregation events
         ConsumeAnchorBTCAggBatchMessageAsync(msg)
         break
       case 'btctx':

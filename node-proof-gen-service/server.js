@@ -174,7 +174,7 @@ async function consumeProofReadyMessageAsync (msg) {
           // in this case, we log an error message and ack the message since it will never be able to process successfully
           //
           // all the anchorBTCAggIds should be the same, all being the event id for this btc transaction
-          // use the first one as the identifier to retrive the remaining 1-to-1 state
+          // use the first one as the identifier to retrieve the remaining 1-to-1 state
           let anchorBTCAggId = anchorBTCAggIds[0]
           btcTxStateRow = await cachedProofState.getBTCTxStateObjectByAnchorBTCAggIdAsync(anchorBTCAggId)
           btcHeadStateRow = await cachedProofState.getBTCHeadStateObjectByBTCTxIdAsync(btcTxStateRow.btctx_id)
@@ -326,7 +326,7 @@ function logGenerationEvent (submitDateString, batchType, batchId, proofIndex, b
   console.log(`Generation ${proofIndex === 1 ? 'starting' : 'complete'} for ${batchType} ${batchId} proof ${proofIndex} of ${batchSize} - ${durationString} after submission ${totalProcessingString}`)
 }
 
-// This initalizes all the consul watches
+// This initializes all the consul watches
 function startConsulWatches () {
   let watches = [{
     key: env.PROOF_STORAGE_METHOD_KEY,

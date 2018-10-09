@@ -343,7 +343,7 @@ async function initResqueQueueAsync () {
   taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
-// This initalizes the JS intervals that checks for new audit data
+// This initializes the JS intervals that checks for new audit data
 function startIntervals () {
   let intervals = [{ function: pollForNewAuditDataAsync, ms: 60000 }]
   connections.startIntervals(intervals)

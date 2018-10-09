@@ -51,7 +51,7 @@ async function getLastKnownEventInfoAsync () {
     order: [['created_at', 'DESC']]
   })
 
-  // Check to make sure one was found or we are in developement mode
+  // Check to make sure one was found or we are in development mode
   if (!lastTransfer || env.NODE_ENV === 'development') {
     // Not found, so set to 0s
     return {
@@ -100,7 +100,7 @@ async function processNewTxAsync (params) {
     // Find the node that sent in the balance
     nodeToCredit = await RegisteredNode.findOne({ where: { tntAddr: tx.fromAddress } })
     if (!nodeToCredit) {
-      // TODO - Store unkowns for later processing if node registers after sending in for some reason
+      // TODO - Store unknowns for later processing if node registers after sending in for some reason
       // NOTE - If a node sends in TNT before it registers... it will not get counted.
       console.error('Incoming TNT from address not recognized as a registered Node: ' + tx.fromAddress)
       return

@@ -47,8 +47,8 @@ const signingKeypair = nacl.sign.keyPair.fromSecretKey(signingSecretKeyBytes)
 
 let consul = null
 
-// The age of a running job, in miliseconds, for it to be considered stuck/timed out
-// This is neccesary to allow resque to determine what is a valid running job, and what
+// The age of a running job, in milliseconds, for it to be considered stuck/timed out
+// This is necessary to allow resque to determine what is a valid running job, and what
 // has been 'stuck' due to service crash/restart. Jobs found in the state are added to the fail queue.
 // Workers found with jobs in this state are deleted.
 const TASK_TIMEOUT_MS = 60000 // 1 minute timeout
@@ -254,7 +254,7 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
   // We've gotten this far, so at least auditedPublicIPAt has passed
   publicIPPass = true
 
-  // check if the Node timestamp is withing the acceptable range
+  // check if the Node timestamp is within the acceptable range
   let nodeAuditTimestamp = Date.parse(configResultsBody.time)
   nodeMSDelta = (nodeAuditTimestamp - configResultTime)
   if (Math.abs(nodeMSDelta) <= ACCEPTABLE_DELTA_MS) {
@@ -270,7 +270,7 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
     let nodeAuditResponseTimestamp = parseInt(nodeAuditResponse[0])
     let nodeAuditResponseSolution = nodeAuditResponse[1]
 
-    // make sure the audit reponse is newer than MAX_CHALLENGE_AGE_MINUTES
+    // make sure the audit response is newer than MAX_CHALLENGE_AGE_MINUTES
     let coreAuditChallenge = null
     let minTimestamp = configResultTime - (MAX_NODE_RESPONSE_CHALLENGE_AGE_MIN * 60 * 1000)
     if (nodeAuditResponseTimestamp >= minTimestamp) {
@@ -738,7 +738,7 @@ async function initResqueWorkersAsync () {
   )
 }
 
-// This initalizes all the consul watches
+// This initializes all the consul watches
 function startConsulWatches () {
   let watches = [{
     key: env.MIN_NODE_VERSION_EXISTING_KEY,

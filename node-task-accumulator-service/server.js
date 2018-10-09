@@ -230,7 +230,7 @@ async function initResqueQueueAsync () {
   taskQueue = await connections.initResqueQueueAsync(redis, 'resque', debug)
 }
 
-// This initalizes all the JS intervals that fire all aggregator events
+// This initializes all the JS intervals that fire all aggregator events
 function startIntervals () {
   let intervals = [
     { function: drainAuditLogWritePoolAsync, ms: 1000 },

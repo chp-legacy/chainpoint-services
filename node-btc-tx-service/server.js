@@ -106,7 +106,7 @@ async function processIncomingAnchorBTCJobAsync (msg) {
     // the value to be anchored, likely a merkle root hex string
     let anchorData = messageObj.anchor_btc_agg_root
 
-    // if amqpChannel is null for any reason, dont bother sending transaction until that is resolved, return error
+    // if amqpChannel is null for any reason, don't bother sending transaction until that is resolved, return error
     if (!amqpChannel) throw new Error('no amqpConnection available')
 
     try {
