@@ -100,13 +100,18 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
   // iterate through each public Registered Node, queue up an audit task for task handler
   for (let publicNodeReadyForAudit of publicNodesReadyForAudit) {
     try {
+      let taskHandlerArgs = (function () {
+        let defaultRetryCount = 0
+
+        if (opts.e2eAudit === true) return [publicNodeReadyForAudit.public_uri, defaultRetryCount]
+        else return [ publicNodeReadyForAudit, activePublicNodeCount ]
+      })()
+
       await taskQueue.enqueue(
         'task-handler-queue',
         (opts.e2eAudit === true) ? 'e2e_audit_public_node' : `audit_public_node`,
-        [
-          publicNodeReadyForAudit,
-          activePublicNodeCount
-        ])
+        taskHandlerArgs
+      )
     } catch (error) {
       console.error(`Could not enqueue ${(opts.e2eAudit === true) ? 'e2e_' : ''}audit_public_node task : ${error.message}`)
     }
@@ -418,17 +423,13 @@ function setPerformNodeAuditTrigger () {
 }
 
 function setPerformE2ENodeAuditTrigger () {
-  // Specify one hour in milliseconds
-  let oneHourMS = (1000 * 60) * 60
+  let currentDay = new Date().getUTCDate()
 
-  // Calculate the beatInterval - Every nth beat specified by beatInterval will execute the supplied function
-  let beatInterval = (oneHourMS) / (HEARTBEAT_INTERVAL_MS / 1000)
-
-  heart.createEvent(beatInterval, async function (count, last) {
-    let currentHour = new Date().getUTCHours()
-
-    // Every day at midnight (UTC - Hour #0) go ahead and execute e2eAuditNodesAsync()
-    if ((currentHour === 0) && IS_LEADER) {
+  heart.createEvent(5, async function (count, last) {
+    let now = new Date()
+    // Run e2eAuditNodesAsync() once a day, and only if we are on a new day
+    if (now.getUTCDate() !== currentDay && IS_LEADER) {
+      currentDay = now.getUTCDate()
       try {
         await auditNodesAsync({ e2eAudit: true })
       } catch (error) {
@@ -464,6 +465,7 @@ async function setTimedTriggeredEventsAsync () {
 
   setGenerateNewChallengeTrigger()
   setPerformNodeAuditTrigger()
+  setPerformE2ENodeAuditTrigger()
   setPerformCreditTopoffTrigger()
 }
 

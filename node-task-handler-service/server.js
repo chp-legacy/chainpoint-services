@@ -106,6 +106,7 @@ const primaryTaskJobs = {
   // tasks from the audit producer service
   'audit_public_node': Object.assign({ perform: performAuditPublicAsync }, pluginOptions),
   'audit_private_node': Object.assign({ perform: performAuditPrivateAsync }, pluginOptions),
+  'e2e_audit_public_node': Object.assign({ perform: performE2EAuditPublicAsync }, pluginOptions),
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
   'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
   'update_audit_score_items': Object.assign({ perform: updateAuditScoreItemsAsync }, pluginOptions),
@@ -306,6 +307,13 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
   await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
 
   return `Public Audit complete for ${tntAddr} at ${publicUri} : Pass = ${publicIPPass && timePass && calStatePass && minCreditsPass && nodeVersionPass && tntBalancePass}`
+}
+
+async function performE2EAuditPublicAsync (nodeData, activeNodeCount) {
+  let tntAddr = nodeData.tnt_addr
+  let publicUri = nodeData.public_uri
+
+  // TODO: Hash submission
 }
 
 async function performAuditPrivateAsync (nodeData) {
