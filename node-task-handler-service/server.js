@@ -28,6 +28,9 @@ const objectHash = require('object-hash')
 const crypto = require('crypto')
 const connections = require('./lib/connections.js')
 
+// This value is set once the connection has been established
+let taskQueue = null
+
 // Set the max number of concurrent workers for the primary multiworker
 const MAX_TASK_PROCESSORS_PRIMARY = 150
 // Set the max number of concurrent workers for the state prune multiworker
@@ -664,13 +667,22 @@ function openRedisConnection (redisURIs) {
     (newRedis) => {
       redis = newRedis
       cachedAuditChallenge.setRedis(redis)
-      // init Resque workers
+      // init Resque & workers
+      initResqueQueueAsync()
       initResqueWorkersAsync()
     }, () => {
       redis = null
       cachedAuditChallenge.setRedis(null)
+      taskQueue = null
       setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     }, debug)
+}
+
+/**
+ * Initializes the connection to the Resque queue when Redis is ready
+ */
+async function initResqueQueueAsync () {
+  taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
 /**
