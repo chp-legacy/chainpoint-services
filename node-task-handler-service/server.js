@@ -26,6 +26,9 @@ const events = require('events')
 const cnsl = require('consul')
 const objectHash = require('object-hash')
 const crypto = require('crypto')
+const { find, isUndefined } = require('lodash')
+var uuidTime = require('uuid-time')
+var moment = require('moment')
 const connections = require('./lib/connections.js')
 
 // This value is set once the connection has been established
@@ -110,6 +113,7 @@ const primaryTaskJobs = {
   'audit_public_node': Object.assign({ perform: performAuditPublicAsync }, pluginOptions),
   'audit_private_node': Object.assign({ perform: performAuditPrivateAsync }, pluginOptions),
   'e2e_audit_public_node': Object.assign({ perform: performE2EAuditPublicAsync }, pluginOptions),
+  'e2e_audit_public_node_proof_retrieval': Object.assign({ perform: performE2EAuditPublicProofRetrievalAsync }, pluginOptions),
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
   'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
   'update_audit_score_items': Object.assign({ perform: updateAuditScoreItemsAsync }, pluginOptions),
@@ -312,11 +316,82 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
   return `Public Audit complete for ${tntAddr} at ${publicUri} : Pass = ${publicIPPass && timePass && calStatePass && minCreditsPass && nodeVersionPass && tntBalancePass}`
 }
 
-async function performE2EAuditPublicAsync (nodeData, activeNodeCount) {
-  let tntAddr = nodeData.tnt_addr
+async function performE2EAuditPublicAsync (nodeData, retryCount) {
   let publicUri = nodeData.public_uri
+  let randomHash = crypto.createHash('sha256').update(crypto.randomBytes(Math.ceil(4 / 2)).toString('hex').slice(0, 4)).digest('hex')
 
-  // TODO: Hash submission
+  // Hash submission
+  let options = {
+    method: 'POST',
+    uri: `${publicUri}/hashes`,
+    headers: {
+      'Accept': 'application/json'
+    },
+    body: {
+      hashes: [randomHash]
+    },
+    json: true,
+    gzip: true,
+    timeout: 2500
+  }
+
+  try {
+    let result
+    await retry(async bail => {
+      result = await rp(options)
+    }, {
+      retries: 3, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 5000,
+      randomize: false
+    })
+
+    console.log('====================================')
+    console.log(result, 'performE2EAuditPublicAsync')
+    console.log('====================================')
+    // Validate partial proof returned after hash submission
+    // Validations: 1) Valid partial proof is returned 2) Hash === randomHash submitted to the node, 3) The uuid/v1 embedded time is within an appropriate timeframe
+    let partialProof = find(result.hashes, ['hash', randomHash])
+    if (isUndefined(partialProof)) throw new Error(`Hash submitted does not match the hash received - ${publicUri} - ${randomHash}`)
+    else if (isUndefined(partialProof.hash_id_node)) throw new Error(`A valid hash_id_node value corresponding to the hash submitted does not exist - ${publicUri} - ${randomHash}`)
+    else if (!moment.utc(new Date(parseInt(uuidTime.v1(partialProof.hash_id_node)))).isBetween(moment.utc().subtract(1, 'h'), moment.utc().add(1, 'h'), 'hour', '[]')) {
+      throw new Error(`The provided hash_id_node is not valid. It has failed the uuid time validation - ${publicUri} - ${randomHash}`)
+    }
+
+    // Response from hash submission has passed all validations, enqueue the proof-retrieval task
+    // TODO:
+    try {
+      await taskQueue.enqueueIn(
+        (1000 * 60) * 60 * 3, // 3hrs in milliseconds
+        'task-handler-queue',
+        'e2e_audit_public_node_proof_retrieval',
+        [publicUri, partialProof.hash_id_node, randomHash, 0] // [<node_uri>, <hash_id_node>, <randomHash>, <retryCount>]
+      )
+    } catch (error) {
+      console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
+    }
+  } catch (_) {
+    // FAILED Hash submission, if retryCount is >= 2 mark this node as having failed the E2E Audit
+    if (retryCount >= 2) {
+      // TODO: FAILED E2E Audit, make appropriate DB changes
+    } else {
+      try {
+        await taskQueue.enqueueIn(
+          (1000 * 60) * 60 * 3, // 3hrs in milliseconds
+          'task-handler-queue',
+          'e2e_audit_public_node',
+          [nodeData, (retryCount + 1)]
+        )
+      } catch (error) {
+        console.error(`Could not re-enqueue e2e_audit_public_node task : ${error.message}`)
+      }
+    }
+  }
+}
+
+async function performE2EAuditPublicProofRetrievalAsync (publicUri, hashIdNode, hash, retryCount) {
+  // TODO: implement method
 }
 
 async function performAuditPrivateAsync (nodeData) {

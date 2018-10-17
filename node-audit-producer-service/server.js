@@ -116,7 +116,7 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
       console.error(`Could not enqueue ${(opts.e2eAudit === true) ? 'e2e_' : ''}audit_public_node task : ${error.message}`)
     }
   }
-  console.log(`${(opts.e2eAudit === true) ? 'E2e ' : ''}Audit public tasks queued for task-handler`)
+  console.log(`${(opts.e2eAudit === true) ? 'E2E ' : ''}Audit public tasks queued for task-handler`)
 
   // Short circuit this function if this is an E2E Audit. At this point, we have queued all Public nodes that will be
   // processed by 'e2e_audit_public_node' and have no need to perform an e2e audit of private nodes.
