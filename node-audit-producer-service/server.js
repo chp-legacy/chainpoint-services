@@ -52,7 +52,9 @@ const BALANCE_PASS_EXPIRE_MINUTES = 60 * 24 // 1 day
 // create a heartbeat for every 200ms
 // 1 second heartbeats had a drift that caused occasional skipping of a whole second
 // decreasing the interval of the heartbeat and checking current time resolves this
-let heart = heartbeats.createHeart(200)
+const HEARTBEAT_INTERVAL_MS = 200
+
+let heart = heartbeats.createHeart(HEARTBEAT_INTERVAL_MS)
 
 // The merkle tools object for building trees and generating proof paths
 const merkleTools = new MerkleTools()
@@ -67,7 +69,7 @@ let NodeAuditLog = nodeAuditLog.NodeAuditLog
 let Op = regNodeSequelize.Op
 
 // Retrieve all registered Nodes with public_uris for auditing.
-async function auditNodesAsync () {
+async function auditNodesAsync (opts = { e2eAudit: false }) {
   // get list of all public Registered Nodes to audit
   let publicNodesReadyForAudit = []
   try {
@@ -100,16 +102,22 @@ async function auditNodesAsync () {
     try {
       await taskQueue.enqueue(
         'task-handler-queue',
-        `audit_public_node`,
+        (opts.e2eAudit === true) ? 'e2e_audit_public_node' : `audit_public_node`,
         [
           publicNodeReadyForAudit,
           activePublicNodeCount
         ])
     } catch (error) {
-      console.error(`Could not enqueue audit_public_node task : ${error.message}`)
+      console.error(`Could not enqueue ${(opts.e2eAudit === true) ? 'e2e_' : ''}audit_public_node task : ${error.message}`)
     }
   }
-  console.log(`Audit public tasks queued for task-handler`)
+  console.log(`${(opts.e2eAudit === true) ? 'E2e ' : ''}Audit public tasks queued for task-handler`)
+
+  // Short circuit this function if this is an E2E Audit. At this point, we have queued all Public nodes that will be
+  // processed by 'e2e_audit_public_node' and have no need to perform an e2e audit of private nodes.
+  if (opts.e2eAudit) {
+    return
+  }
 
   // get list of all private Registered Nodes to audit
   let privateNodesReadyForAudit = []
@@ -404,6 +412,27 @@ function setPerformNodeAuditTrigger () {
         } catch (error) {
           console.error(`auditNodesAsync : error : ${error.message}`)
         }
+      }
+    }
+  })
+}
+
+function setPerformE2ENodeAuditTrigger () {
+  // Specify one hour in milliseconds
+  let oneHourMS = (1000 * 60) * 60
+
+  // Calculate the beatInterval - Every nth beat specified by beatInterval will execute the supplied function
+  let beatInterval = (oneHourMS) / (HEARTBEAT_INTERVAL_MS / 1000)
+
+  heart.createEvent(beatInterval, async function (count, last) {
+    let currentHour = new Date().getUTCHours()
+
+    // Every day at midnight (UTC - Hour #0) go ahead and execute e2eAuditNodesAsync()
+    if ((currentHour === 0) && IS_LEADER) {
+      try {
+        await auditNodesAsync({ e2eAudit: true })
+      } catch (error) {
+        console.error(`e2eAuditNodesAsync : error : ${error.message}`)
       }
     }
   })
