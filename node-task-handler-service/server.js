@@ -319,6 +319,7 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
 }
 
 async function performE2EAuditPublicAsync (nodeData, retryCount) {
+  let tntAddr = nodeData.tnt_addr
   let publicUri = nodeData.public_uri
   let randomHash = crypto.createHash('sha256').update(crypto.randomBytes(Math.ceil(4 / 2)).toString('hex').slice(0, 4)).digest('hex')
 
@@ -369,7 +370,7 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
         (1000 * 60) * 60 * 3, // 3hrs in milliseconds
         'task-handler-queue',
         'e2e_audit_public_node_proof_retrieval',
-        [publicUri, partialProof.hash_id_node, randomHash, 0] // [<node_uri>, <hash_id_node>, <randomHash>, <retryCount>]
+        [tntAddr, publicUri, partialProof.hash_id_node, randomHash, 0] // [<node_uri>, <hash_id_node>, <randomHash>, <retryCount>]
       )
     } catch (error) {
       console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
@@ -393,7 +394,7 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
   }
 }
 
-async function performE2EAuditPublicProofRetrievalAsync (publicUri, hashIdNode, hash, retryCount) {
+async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, hashIdNode, hash, retryCount) {
   // Retrieve Proof
   let options = {
     method: 'GET',
@@ -458,7 +459,7 @@ async function performE2EAuditPublicProofRetrievalAsync (publicUri, hashIdNode, 
         await taskQueue.enqueue(
           'task-handler-queue',
           'e2e_audit_public_node_proof_verification',
-          [publicUri, hashIdNode, hash, proof.proof, 0]
+          [tntAddr, publicUri, hashIdNode, hash, proof.proof, 0]
         )
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
@@ -473,7 +474,7 @@ async function performE2EAuditPublicProofRetrievalAsync (publicUri, hashIdNode, 
           (1000 * 60) * 60 * 3, // 3hrs in milliseconds
           'task-handler-queue',
           'e2e_audit_public_node_proof_retrieval',
-          [publicUri, hashIdNode, hash, (retryCount + 1)]
+          [tntAddr, publicUri, hashIdNode, hash, (retryCount + 1)]
         )
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
@@ -482,7 +483,7 @@ async function performE2EAuditPublicProofRetrievalAsync (publicUri, hashIdNode, 
   }
 }
 
-async function performE2EAuditPublicProofVerificationAsync (publicUri, hashIdNode, hash, base64EncodedProof, retryCount) {
+async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, retryCount) {
   // Proof Verification
   let options = {
     method: 'POST',
@@ -521,12 +522,14 @@ async function performE2EAuditPublicProofVerificationAsync (publicUri, hashIdNod
   } catch (_) {
     if (retryCount >= 2) {
       // TODO: FAILED E2E Audit, make appropriate DB changes
+      // First count
     } else {
       try {
-        await taskQueue.enqueue(
+        await taskQueue.enqueueIn(
+          (1000 * 60) * 60 * 3, // 3hrs in milliseconds
           'task-handler-queue',
           'e2e_audit_public_node_proof_verification',
-          [publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
+          [tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
         )
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
