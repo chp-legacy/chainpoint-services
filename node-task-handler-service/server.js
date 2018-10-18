@@ -26,7 +26,8 @@ const events = require('events')
 const cnsl = require('consul')
 const objectHash = require('object-hash')
 const crypto = require('crypto')
-const { find, isUndefined } = require('lodash')
+const chp = require('chainpoint-parse')
+const { find, isUndefined, isPlainObject } = require('lodash')
 var uuidTime = require('uuid-time')
 var moment = require('moment')
 const connections = require('./lib/connections.js')
@@ -114,6 +115,7 @@ const primaryTaskJobs = {
   'audit_private_node': Object.assign({ perform: performAuditPrivateAsync }, pluginOptions),
   'e2e_audit_public_node': Object.assign({ perform: performE2EAuditPublicAsync }, pluginOptions),
   'e2e_audit_public_node_proof_retrieval': Object.assign({ perform: performE2EAuditPublicProofRetrievalAsync }, pluginOptions),
+  'e2e_audit_public_node_proof_verification': Object.assign({ perform: performE2EAuditPublicProofVerificationAsync }, pluginOptions),
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
   'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
   'update_audit_score_items': Object.assign({ perform: updateAuditScoreItemsAsync }, pluginOptions),
@@ -351,7 +353,8 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
     console.log(result, 'performE2EAuditPublicAsync')
     console.log('====================================')
     // Validate partial proof returned after hash submission
-    // Validations: 1) Valid partial proof is returned 2) Hash === randomHash submitted to the node, 3) The uuid/v1 embedded time is within an appropriate timeframe
+    // Validations: 1) Valid partial proof is returned, 2) Hash === randomHash submitted to the node,
+    //              3) The uuid/v1 embedded time is within an appropriate timeframe
     let partialProof = find(result.hashes, ['hash', randomHash])
     if (isUndefined(partialProof)) throw new Error(`Hash submitted does not match the hash received - ${publicUri} - ${randomHash}`)
     else if (isUndefined(partialProof.hash_id_node)) throw new Error(`A valid hash_id_node value corresponding to the hash submitted does not exist - ${publicUri} - ${randomHash}`)
@@ -374,7 +377,7 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
   } catch (_) {
     // FAILED Hash submission, if retryCount is >= 2 mark this node as having failed the E2E Audit
     if (retryCount >= 2) {
-      // TODO: FAILED E2E Audit, make appropriate DB changes
+    // TODO: FAILED E2E Audit, make appropriate DB changes
     } else {
       try {
         await taskQueue.enqueueIn(
@@ -391,7 +394,145 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
 }
 
 async function performE2EAuditPublicProofRetrievalAsync (publicUri, hashIdNode, hash, retryCount) {
-  // TODO: implement method
+  // Retrieve Proof
+  let options = {
+    method: 'GET',
+    uri: `${publicUri}/proofs/${hashIdNode}`,
+    json: true,
+    gzip: true,
+    timeout: 2500
+  }
+
+  try {
+    let result
+    await retry(async bail => {
+      result = await rp(options)
+    }, {
+      retries: 3, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 5000,
+      randomize: false
+    })
+
+    let proof = find(result, ['hash_id_node', hashIdNode])
+    if (isUndefined(proof)) throw new Error(`Proof with a hash_id_node value of: ${hashIdNode} was not found - ${publicUri} - ${hash}`)
+    else if (proof.proof === null) throw new Error(`Proof with a hash_id_node: ${hashIdNode} has an invalid null value - ${publicUri} - ${hash}`)
+
+    let parsedProof = chp.parse(proof.proof)
+    // Validate the parsed partial proof has the correct hash_id_node, and hash values
+    if (parsedProof.hash !== hash) throw new Error(`The retrieved Proof does not have the correct hash value: (${hash}) - ${hashIdNode} - ${publicUri}`)
+    else if (parsedProof.hash_id_node !== hashIdNode) throw new Error(`The retrieved Proof does not have the correct hash_id_node value: (${hashIdNode}) - ${publicUri} - ${hash}`)
+
+    // Validate cal_anchor_branch of the retrieved Proof
+    let calBranch = find(parsedProof.branches, ['label', 'cal_anchor_branch'])
+    // If cal_anchor_branch is not found throw an error
+    if (isUndefined(calBranch)) throw new Error(`The retrieved Proof does not have a valid cal_anchor_branch: ${hashIdNode} - ${publicUri} - ${hash}`)
+
+    let calBranchAnchor = calBranch.anchors[0]
+    let calResult
+
+    await retry(async bail => {
+      calResult = await rp({
+        method: 'GET',
+        uri: `${calBranchAnchor.uris[0]}`,
+        json: true,
+        gzip: true,
+        timeout: 2500
+      })
+    }, {
+      retries: 3, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 5000,
+      randomize: false
+    })
+
+    // Make sure Chainpoint Calendar Hash matches the 'expected_value' retrieved from the parsed Proof
+    if (calResult !== calBranchAnchor.expected_value) {
+      throw new Error(`The retrieved Proof does not have the correct 'expected_value' hash anchored to the Calendar Blockchain: ${hashIdNode} - ${publicUri} - ${hash}`)
+    } else {
+      // Retrieved Proof has passed all validations, queue a job to test /verify endpoint of the node being audited
+      // This job can be queued immediately
+      try {
+        await taskQueue.enqueue(
+          'task-handler-queue',
+          'e2e_audit_public_node_proof_verification',
+          [publicUri, hashIdNode, hash, proof.proof, 0]
+        )
+      } catch (error) {
+        console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
+      }
+    }
+  } catch (_) {
+    if (retryCount >= 2) {
+    // TODO: FAILED E2E Audit, make appropriate DB changes
+    } else {
+      try {
+        await taskQueue.enqueueIn(
+          (1000 * 60) * 60 * 3, // 3hrs in milliseconds
+          'task-handler-queue',
+          'e2e_audit_public_node_proof_retrieval',
+          [publicUri, hashIdNode, hash, (retryCount + 1)]
+        )
+      } catch (error) {
+        console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
+      }
+    }
+  }
+}
+
+async function performE2EAuditPublicProofVerificationAsync (publicUri, hashIdNode, hash, base64EncodedProof, retryCount) {
+  // Proof Verification
+  let options = {
+    method: 'POST',
+    uri: `${publicUri}/verify`,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: {
+      proofs: [base64EncodedProof]
+    },
+    json: true,
+    gzip: true,
+    timeout: 2500
+  }
+
+  try {
+    let result
+    await retry(async bail => {
+      result = await rp(options)
+    }, {
+      retries: 3, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 5000,
+      randomize: false
+    })
+
+    // Validate Proof Retrieval response
+    if (!result.length || !isPlainObject(result[0])) throw new Error(`Proof Verification has failed: ${hashIdNode} - ${publicUri} - ${hash}`)
+    else if (result[0].hash !== hash) throw new Error(`The retrieved Proof for verification does not have the correct hash value: (${hash}) - ${hashIdNode} - ${publicUri}`)
+    else if (result[0].hash_id_node !== hashIdNode) throw new Error(`The retrieved Proof for verification does not have the correct hash_id_node value: (${hashIdNode}) - ${publicUri} - ${hash}`)
+
+    // TODO: E2E Audit PASSED
+    // ...
+    // ...
+  } catch (_) {
+    if (retryCount >= 2) {
+      // TODO: FAILED E2E Audit, make appropriate DB changes
+    } else {
+      try {
+        await taskQueue.enqueue(
+          'task-handler-queue',
+          'e2e_audit_public_node_proof_verification',
+          [publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
+        )
+      } catch (error) {
+        console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
+      }
+    }
+  }
 }
 
 async function performAuditPrivateAsync (nodeData) {
