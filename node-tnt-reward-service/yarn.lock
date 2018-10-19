@@ -122,9 +122,9 @@ escape-string-regexp@^1.0.2:
   version "1.0.5"
   resolved "https://registry.yarnpkg.com/escape-string-regexp/-/escape-string-regexp-1.0.5.tgz#1b61c0562190a8dff6ae3bb2cf0200ca130b86d4"
 
-"exp-leader-election@https://github.com/Tierion/exp-leader-election.git#258e6d8ea3644a9910dd9b78bc01563dfe19bc5b":
+"exp-leader-election@https://github.com/Tierion/exp-leader-election.git#edae0334d25d8318c47e32245b68c721ae1f59f0":
   version "0.2.1"
-  resolved "https://github.com/Tierion/exp-leader-election.git#258e6d8ea3644a9910dd9b78bc01563dfe19bc5b"
+  resolved "https://github.com/Tierion/exp-leader-election.git#edae0334d25d8318c47e32245b68c721ae1f59f0"
   dependencies:
     consul "^0.30.0"
     lodash "^4.5.1"
