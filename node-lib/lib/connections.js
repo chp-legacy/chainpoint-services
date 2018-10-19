@@ -192,7 +192,7 @@ async function listenRestifyAsync(server, port, debug) {
 
 // Performs a leader election across all instances using the given leader key
 function performLeaderElection(electorClient, leaderKey, host, port, id, onElect, onError, debug) {
-  clientToken = uuidv1()
+  let clientToken = uuidv1()
   let leaderElectionConfig = {
     key: leaderKey,
     consul: {
