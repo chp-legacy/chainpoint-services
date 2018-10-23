@@ -1,6 +1,5 @@
 const { URL } = require('url')
 const utils = require('./utils.js')
-const uuidv1 = require('uuid/v1')
 
 /**
  * Opens a Redis connection
@@ -192,6 +191,7 @@ async function listenRestifyAsync(server, port, debug) {
 
 // Performs a leader election across all instances using the given leader key
 function performLeaderElection(electorClient, leaderKey, host, port, id, onElect, onError, debug) {
+  const uuidv1 = require('uuid/v1')
   let clientToken = uuidv1()
   let leaderElectionConfig = {
     key: leaderKey,
