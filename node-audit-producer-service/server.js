@@ -103,7 +103,7 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
       let taskHandlerArgs = (function () {
         let defaultRetryCount = 0
 
-        if (opts.e2eAudit === true) return [publicNodeReadyForAudit.public_uri, defaultRetryCount]
+        if (opts.e2eAudit === true) return [publicNodeReadyForAudit, defaultRetryCount]
         else return [ publicNodeReadyForAudit, activePublicNodeCount ]
       })()
 
@@ -425,10 +425,10 @@ function setPerformNodeAuditTrigger () {
 function setPerformE2ENodeAuditTrigger () {
   let currentDay = new Date().getUTCDate()
 
-  heart.createEvent(5, async function (count, last) {
+  heart.createEvent(5, async function (count, last) { // --> DEVELOPMENT TESTING:(5)
     let now = new Date()
     // Run e2eAuditNodesAsync() once a day, and only if we are on a new day
-    if (now.getUTCDate() !== currentDay && IS_LEADER) {
+    if (now.getUTCDate() !== currentDay && IS_LEADER) { // --> DEVELOPMENT TESTING:(if (IS_LEADER) {)
       currentDay = now.getUTCDate()
       try {
         await auditNodesAsync({ e2eAudit: true })
@@ -465,7 +465,10 @@ async function setTimedTriggeredEventsAsync () {
 
   setGenerateNewChallengeTrigger()
   setPerformNodeAuditTrigger()
-  setPerformE2ENodeAuditTrigger()
+  // Do not invoke E2E Audit trigger if audits are disabled
+  if (env.E2E_AUDIT_ENABLED === 'yes') {
+    setPerformE2ENodeAuditTrigger()
+  }
   setPerformCreditTopoffTrigger()
 }
 

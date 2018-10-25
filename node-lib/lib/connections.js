@@ -8,7 +8,7 @@ const utils = require('./utils.js')
  * @param {function} onReady - Function to call with commands to execute when `ready` event fires
  * @param {function} onError - Function to call with commands to execute  when `error` event fires
  */
-function openRedisConnection(redisURIs, onReady, onError, debug) {
+function openRedisConnection (redisURIs, onReady, onError, debug) {
   const Redis = require('ioredis')
 
   let redisURIList = redisURIs.split(',')
@@ -61,7 +61,7 @@ function openRedisConnection(redisURIs, onReady, onError, debug) {
 /**
  * Initializes the connection to the Resque queue when Redis is ready
  */
-async function initResqueQueueAsync(redisClient, namespace, debug) {
+async function initResqueQueueAsync (redisClient, namespace, debug) {
   const nodeResque = require('node-resque')
   const exitHook = require('exit-hook')
   var connectionDetails = { redis: redisClient }
@@ -82,7 +82,7 @@ async function initResqueQueueAsync(redisClient, namespace, debug) {
 /**
  * Initializes and configures the connection to the Resque worker when Redis is ready
  */
-async function initResqueWorkerAsync(redisClient, namespace, queues, minTasks, maxTasks, taskTimeout, jobs, setMWHandlers, debug) {
+async function initResqueWorkerAsync (redisClient, namespace, queues, minTasks, maxTasks, taskTimeout, jobs, setMWHandlers, debug) {
   const nodeResque = require('node-resque')
   const exitHook = require('exit-hook')
   var connectionDetails = { redis: redisClient }
@@ -109,10 +109,25 @@ async function initResqueWorkerAsync(redisClient, namespace, queues, minTasks, m
   logMessage(`Resque worker connection established for queues ${JSON.stringify(queues)}`, debug, 'general')
 }
 
+async function initResqueSchedulerAsync (redisClient, setSchedulerHandlers, debug) {
+  const nodeResque = require('node-resque')
+  let connectionDetails = { redis: redisClient }
+
+  // Start Resqueue Scheduler for delayed Jobs
+  const scheduler = new nodeResque.Scheduler({connection: connectionDetails})
+  await scheduler.connect()
+
+  setSchedulerHandlers(scheduler)
+
+  scheduler.start()
+
+  logMessage(`Resque Scheduler connection established for queue(s)`, debug, 'general')
+}
+
 /**
  * Opens a storage connection
  **/
-async function openStorageConnectionAsync(modelSqlzArray, debug) {
+async function openStorageConnectionAsync (modelSqlzArray, debug) {
   let dbConnected = false
   while (!dbConnected) {
     try {
@@ -135,7 +150,7 @@ async function openStorageConnectionAsync(modelSqlzArray, debug) {
  *
  * @param {string} connectionString - The connection URI for the RabbitMQ instance
  */
-async function openStandardRMQConnectionAsync(amqpClient, connectURI, queues, prefetchCount, consumeObj, onInit, onClose, debug) {
+async function openStandardRMQConnectionAsync (amqpClient, connectURI, queues, prefetchCount, consumeObj, onInit, onClose, debug) {
   let rmqConnected = false
   while (!rmqConnected) {
     try {
@@ -172,14 +187,14 @@ async function openStandardRMQConnectionAsync(amqpClient, connectURI, queues, pr
 }
 
 // Initializes and returns a consul client object
-function initConsul(consulClient, host, port, debug) {
+function initConsul (consulClient, host, port, debug) {
   let consul = consulClient({ host: host, port: port })
   logMessage('Consul connection established', debug, 'general')
   return consul
 }
 
 // Instruct REST server to begin listening for request
-async function listenRestifyAsync(server, port, debug) {
+async function listenRestifyAsync (server, port, debug) {
   return new Promise((resolve, reject) => {
     server.listen(port, (err) => {
       if (err) return reject(err)
@@ -190,7 +205,7 @@ async function listenRestifyAsync(server, port, debug) {
 }
 
 // Performs a leader election across all instances using the given leader key
-function performLeaderElection(electorClient, leaderKey, host, port, id, onElect, onError, debug) {
+function performLeaderElection (electorClient, leaderKey, host, port, id, onElect, onError, debug) {
   const uuidv1 = require('uuid/v1')
   let clientToken = uuidv1()
   let leaderElectionConfig = {
@@ -216,7 +231,7 @@ function performLeaderElection(electorClient, leaderKey, host, port, id, onElect
 }
 
 // This initializes all the consul watches
-function startConsulWatches(consul, watches, defaults, debug) {
+function startConsulWatches (consul, watches, defaults, debug) {
   logMessage('starting watches', debug, 'general')
 
   // Process any new watches to be initialized
@@ -254,7 +269,7 @@ function startConsulWatches(consul, watches, defaults, debug) {
   }
 }
 
-function startIntervals(intervals, debug) {
+function startIntervals (intervals, debug) {
   logMessage('starting intervals', debug, 'general')
 
   intervals.forEach((interval) => {
@@ -265,7 +280,7 @@ function startIntervals(intervals, debug) {
 
 // SUPPORT FUNCTIONS ****************
 
-async function cleanUpWorkersAndRequequeJobsAsync(nodeResque, connectionDetails, taskTimeout, debug) {
+async function cleanUpWorkersAndRequequeJobsAsync (nodeResque, connectionDetails, taskTimeout, debug) {
   const queue = new nodeResque.Queue({ connection: connectionDetails })
   await queue.connect()
   // Delete stuck workers and move their stuck job to the failed queue
@@ -292,7 +307,7 @@ async function cleanUpWorkersAndRequequeJobsAsync(nodeResque, connectionDetails,
   }
 }
 
-function logMessage(message, debug, msgType) {
+function logMessage (message, debug, msgType) {
   if (debug && debug[msgType]) {
     debug[msgType](message)
   } else {
@@ -304,6 +319,7 @@ module.exports = {
   openRedisConnection: openRedisConnection,
   initResqueQueueAsync: initResqueQueueAsync,
   initResqueWorkerAsync: initResqueWorkerAsync,
+  initResqueSchedulerAsync: initResqueSchedulerAsync,
   openStorageConnectionAsync: openStorageConnectionAsync,
   openStandardRMQConnectionAsync: openStandardRMQConnectionAsync,
   initConsul: initConsul,

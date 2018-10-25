@@ -125,6 +125,24 @@ var RegisteredNode = sequelize.define(env.COCKROACH_REG_NODE_TABLE_NAME,
       type: Sequelize.STRING,
       field: 'created_from_ip',
       allowNull: true
+    },
+    verifyE2EPassedAt: {
+      comment: 'The time the audit was performed, in MS since EPOCH.',
+      type: Sequelize.INTEGER, // is 64 bit in CockroachDB
+      validate: {
+        isInt: true
+      },
+      field: 'verify_e2e_passed_at',
+      allowNull: true
+    },
+    verifyE2EFailedAt: {
+      comment: 'The time the audit was performed, in MS since EPOCH.',
+      type: Sequelize.INTEGER, // is 64 bit in CockroachDB
+      validate: {
+        isInt: true
+      },
+      field: 'verify_e2e_failed_at',
+      allowNull: true
     }
   },
   {

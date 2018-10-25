@@ -119,6 +119,7 @@ const primaryTaskJobs = {
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
   'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
   'update_audit_score_items': Object.assign({ perform: updateAuditScoreItemsAsync }, pluginOptions),
+  'update_e2e_audit_score_items': Object.assign({ perform: updateAuditScoreItemsAsync }, pluginOptions),
   // tasks from proof-gen
   'send_to_proof_proxy': Object.assign({ perform: sendToProofProxyAsync }, pluginOptions)
 }
@@ -350,9 +351,6 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
       randomize: false
     })
 
-    console.log('====================================')
-    console.log(result, 'performE2EAuditPublicAsync')
-    console.log('====================================')
     // Validate partial proof returned after hash submission
     // Validations: 1) Valid partial proof is returned, 2) Hash === randomHash submitted to the node,
     //              3) The uuid/v1 embedded time is within an appropriate timeframe
@@ -364,31 +362,39 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
     }
 
     // Response from hash submission has passed all validations, enqueue the proof-retrieval task
-    // TODO:
     try {
       await taskQueue.enqueueIn(
-        (1000 * 60) * 60 * 3, // 3hrs in milliseconds
+        (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
         'task-handler-queue',
         'e2e_audit_public_node_proof_retrieval',
         [tntAddr, publicUri, partialProof.hash_id_node, randomHash, 0] // [<node_uri>, <hash_id_node>, <randomHash>, <retryCount>]
       )
+
+      return `E2E Audit Hash submission complete for ${tntAddr} at ${publicUri}`
     } catch (error) {
       console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
+      return `Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`
     }
   } catch (_) {
     // FAILED Hash submission, if retryCount is >= 2 mark this node as having failed the E2E Audit
     if (retryCount >= 2) {
-    // TODO: FAILED E2E Audit, make appropriate DB changes
+      // FAILED E2E Audit, queue an update to reflect the failed audit
+      await addE2EAuditToLogAsync(tntAddr, false)
+
+      return `E2E Audit Hash submission FAILED for ${tntAddr} at ${publicUri}`
     } else {
       try {
         await taskQueue.enqueueIn(
-          (1000 * 60) * 60 * 3, // 3hrs in milliseconds
+          (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
           'task-handler-queue',
           'e2e_audit_public_node',
           [nodeData, (retryCount + 1)]
         )
+
+        return `E2E Audit Hash re-queue submission complete for ${tntAddr} at ${publicUri}`
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node task : ${error.message}`)
+        return `Could not re-enqueue e2e_audit_public_node task:  ${tntAddr} at ${publicUri} - ${error.message}`
       }
     }
   }
@@ -461,23 +467,34 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
           'e2e_audit_public_node_proof_verification',
           [tntAddr, publicUri, hashIdNode, hash, proof.proof, 0]
         )
+
+        return `E2E Audit Hash Retrieval complete for ${tntAddr} at ${publicUri} for hash=${hash}`
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
+
+        return `E2E Audit Hash Retrieval FAILED for ${tntAddr} at ${publicUri} for hash=${hash}`
       }
     }
   } catch (_) {
     if (retryCount >= 2) {
-    // TODO: FAILED E2E Audit, make appropriate DB changes
+      // FAILED E2E Audit, make appropriate DB changes
+      await addE2EAuditToLogAsync(tntAddr, false)
+
+      return `E2E Audit Hash Retrieval FAILED for ${tntAddr} at ${publicUri} for hash=${hash}`
     } else {
       try {
         await taskQueue.enqueueIn(
-          (1000 * 60) * 60 * 3, // 3hrs in milliseconds
+          (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
           'task-handler-queue',
           'e2e_audit_public_node_proof_retrieval',
           [tntAddr, publicUri, hashIdNode, hash, (retryCount + 1)]
         )
+
+        return `E2E Audit Hash Retrieval completed for ${tntAddr} at ${publicUri} for hash=${hash}`
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
+
+        return `Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`
       }
     }
   }
@@ -516,23 +533,30 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
     else if (result[0].hash !== hash) throw new Error(`The retrieved Proof for verification does not have the correct hash value: (${hash}) - ${hashIdNode} - ${publicUri}`)
     else if (result[0].hash_id_node !== hashIdNode) throw new Error(`The retrieved Proof for verification does not have the correct hash_id_node value: (${hashIdNode}) - ${publicUri} - ${hash}`)
 
-    // TODO: E2E Audit PASSED
-    // ...
-    // ...
+    // E2E Audit PASSED - queue an update to reflect the PASSED audit
+    await addE2EAuditToLogAsync(tntAddr, true)
+
+    return `E2E Audit Proof Verification completed (1) for ${tntAddr} at ${publicUri} for hash=${hash}`
   } catch (_) {
     if (retryCount >= 2) {
-      // TODO: FAILED E2E Audit, make appropriate DB changes
-      // First count
+      // FAILED E2E Audit, make appropriate DB changes
+      await addE2EAuditToLogAsync(tntAddr, false)
+
+      return `E2E Audit Proof Verification FAILED for ${tntAddr} at ${publicUri} for hash=${hash}`
     } else {
       try {
         await taskQueue.enqueueIn(
-          (1000 * 60) * 60 * 3, // 3hrs in milliseconds
+          (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
           'task-handler-queue',
           'e2e_audit_public_node_proof_verification',
           [tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
         )
+
+        return `E2E Audit Proof Verification queued for ${tntAddr} at ${publicUri} for hash=${hash}`
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
+
+        return `Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`
       }
     }
   }
@@ -594,7 +618,8 @@ async function writeAuditLogItemsAsync (auditDataJSON) {
   }
 }
 
-async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
+async function updateAuditScoreItemsAsync (scoreUpdatesJSON, e2eAudit) {
+  e2eAudit = (e2eAudit === true)
   // scoreUpdatesJSON is an array of JSON strings, convert to array of objects
   let scoreUpdateItems = scoreUpdatesJSON.map((item) => { return JSON.parse(item) })
   try {
@@ -606,21 +631,38 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
     // where an INSERT actually occurs, and the hmac key is known because it is in the code, potentially creating
     // a security risk.
     await retry(async bail => {
-      let sqlCmd = `INSERT INTO chainpoint_registered_nodes (tnt_addr, hmac_key, created_at, updated_at, audit_score, pass_count, fail_count, consecutive_passes, consecutive_fails) VALUES `
+      let sqlCmd = `INSERT INTO chainpoint_registered_nodes (tnt_addr, hmac_key, created_at, updated_at, audit_score, pass_count, fail_count, consecutive_passes, consecutive_fails, verify_e2e_passed_at, verify_e2e_failed_at) VALUES `
       sqlCmd += scoreUpdateItems.map((item) => {
-        let scoreAddend = item.auditPass ? 1 : -1
+        // Calculate valid score based on the type of audit (default|e2eAudit)
+        // Also, if E2E_AUDIT_SCORING_ENABLED='no', always set Audit Score addend to 0 to not effect the node's score
+        const getscoreAddend = (i) => {
+          if (e2eAudit && env.E2E_AUDIT_SCORING_ENABLED === 'no') return 0
+
+          if (e2eAudit) {
+            return i.auditPass ? 0 : -48
+          } else {
+            return i.auditPass ? 1 : -1
+          }
+        }
+
+        let scoreAddend = getscoreAddend(item, e2eAudit)
         let passAddend = item.auditPass ? 1 : 0
         let failAddend = item.auditPass ? 0 : 1
         let consecPassAddend = item.auditPass ? 1 : 0
         let consecFailAddend = item.auditPass ? 0 : 1
-        return `('${item.tntAddr}', sha256(random()::text), now(), now(), ${scoreAddend}, ${passAddend}, ${failAddend}, ${consecPassAddend}, ${consecFailAddend})`
+        let result = `('${item.tntAddr}', sha256(random()::text), now(), now(), ${scoreAddend}, ${passAddend}, ${failAddend}, ${consecPassAddend}, ${consecFailAddend}, ${(item.auditPass && e2eAudit) ? Date.now() : 'NULL'}, ${(!item.auditPass && e2eAudit) ? Date.now() : 'NULL'})`
+
+        return result
       }).join() + ' '
-      sqlCmd += `ON CONFLICT (tnt_addr) DO UPDATE SET (audit_score, pass_count, fail_count, consecutive_passes, consecutive_fails) = 
+      sqlCmd += `ON CONFLICT (tnt_addr) DO UPDATE SET (audit_score, pass_count, fail_count, consecutive_passes, consecutive_fails, verify_e2e_passed_at, verify_e2e_failed_at) =       
       (GREATEST(chainpoint_registered_nodes.audit_score + EXCLUDED.audit_score, 0), 
       chainpoint_registered_nodes.pass_count + EXCLUDED.pass_count, 
       chainpoint_registered_nodes.fail_count + EXCLUDED.fail_count, 
       CASE WHEN EXCLUDED.consecutive_passes > 0 THEN chainpoint_registered_nodes.consecutive_passes + EXCLUDED.consecutive_passes ELSE 0 END,
-      CASE WHEN EXCLUDED.consecutive_fails > 0 THEN chainpoint_registered_nodes.consecutive_fails + EXCLUDED.consecutive_fails ELSE 0 END)`
+      CASE WHEN EXCLUDED.consecutive_fails > 0 THEN chainpoint_registered_nodes.consecutive_fails + EXCLUDED.consecutive_fails ELSE 0 END,
+      CASE WHEN EXCLUDED.verify_e2e_passed_at IS NOT NULL THEN EXCLUDED.verify_e2e_passed_at ELSE chainpoint_registered_nodes.verify_e2e_passed_at END,
+      CASE WHEN EXCLUDED.verify_e2e_failed_at IS NOT NULL THEN EXCLUDED.verify_e2e_failed_at ELSE chainpoint_registered_nodes.verify_e2e_failed_at END)`
+
       await registeredNodeSequelize.query(sqlCmd, { type: registeredNodeSequelize.QueryTypes.UPDATE })
     }, {
       retries: 5, // The maximum amount of times to retry the operation. Default is 10
@@ -815,6 +857,21 @@ async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, 
   }
 }
 
+async function addE2EAuditToLogAsync (tntAddr, auditResult) {
+  try {
+    let scoreUpdate = {
+      tntAddr: tntAddr,
+      auditPass: auditResult
+    }
+
+    // send node audit score value update to accumulator to be updated as part of a node audit score update batch
+    await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(JSON.stringify(scoreUpdate)), { persistent: true, type: 'update_node_e2e_audit_score' })
+  } catch (error) {
+    let errorMessage = `${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} [update_node_e2e_audit_score] publish message nacked`
+    throw errorMessage
+  }
+}
+
 async function proofProxyPostAsync (hashIdCore, proofBase64) {
   let nodeResponse
 
@@ -889,6 +946,7 @@ function openRedisConnection (redisURIs) {
       // init Resque & workers
       initResqueQueueAsync()
       initResqueWorkersAsync()
+      initResqueSchedulerAsync()
     }, () => {
       redis = null
       cachedAuditChallenge.setRedis(null)
@@ -972,6 +1030,23 @@ async function initResqueWorkersAsync () {
       // multiWorker.on('pause', (workerId) => { debug.statePruningWorker(`worker[${workerId}] : paused`) })
       multiWorker.on('internalError', (error) => { console.error(`state pruning multiWorker : internal error : ${error}`) })
       // multiWorker.on('multiWorkerAction', (verb, delay) => { debug.multiworker(`state pruning *** checked for worker status : ${verb} : event loop delay : ${delay}ms)`) })
+    },
+    debug
+  )
+}
+
+async function initResqueSchedulerAsync () {
+  // Start Resqueue Scheduler
+  await connections.initResqueSchedulerAsync(
+    redis,
+    (s) => {
+      s.on('start', () => { console.log('Resqueue Scheduler started') })
+      s.on('end', () => { console.log('Resqueue Scheduler ended') })
+      s.on('master', (state) => { console.log('Resqueue Scheduler became master') })
+      s.on('cleanStuckWorker', (workerName, errorPayload, delta) => { console.log(`failing ${workerName} (stuck for ${delta}s) and failing job ${errorPayload}`) })
+      s.on('error', (error) => { console.log(`Resqueue Scheduler error >> ${error}`) })
+      s.on('workingTimestamp', (timestamp) => { console.log(`Resqueue Scheduler working timestamp ${timestamp}`) })
+      s.on('transferredJob', (timestamp, job) => { console.log(`Resqueue Scheduler enquing job ${timestamp} >> ${JSON.stringify(job)}`) })
     },
     debug
   )
