@@ -425,10 +425,10 @@ function setPerformNodeAuditTrigger () {
 function setPerformE2ENodeAuditTrigger () {
   let currentDay = new Date().getUTCDate()
 
-  heart.createEvent(5, async function (count, last) { // --> DEVELOPMENT TESTING:(5)
+  heart.createEvent(5, async function (count, last) {
     let now = new Date()
     // Run e2eAuditNodesAsync() once a day, and only if we are on a new day
-    if (now.getUTCDate() !== currentDay && IS_LEADER) { // --> DEVELOPMENT TESTING:(if (IS_LEADER) {)
+    if (now.getUTCDate() !== currentDay && IS_LEADER) {
       currentDay = now.getUTCDate()
       try {
         await auditNodesAsync({ e2eAudit: true })
