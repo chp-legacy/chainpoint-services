@@ -490,7 +490,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
           [tntAddr, publicUri, hashIdNode, hash, (retryCount + 1)]
         )
 
-        return `E2E Audit Hash Retrieval completed for ${tntAddr} at ${publicUri} for hash=${hash}`
+        return `E2E Audit Hash Retrieval re-queue completed for ${tntAddr} at ${publicUri} for hash=${hash}`
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
 
@@ -552,7 +552,7 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
           [tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
         )
 
-        return `E2E Audit Proof Verification queued for ${tntAddr} at ${publicUri} for hash=${hash}`
+        return `E2E Audit Proof Verification re-queued for ${tntAddr} at ${publicUri} for hash=${hash}`
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
 
