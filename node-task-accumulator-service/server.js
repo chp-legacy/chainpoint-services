@@ -180,7 +180,7 @@ async function drainAuditScoreUpdatePoolAsync () {
       let scoreUpdateJSON = pendingUpdateObjs.map((item) => item.scoreUpdateJSON)
       // update audit scores in the database
       try {
-        await taskQueue.enqueue('task-handler-queue', `update_audit_score_items`, [scoreUpdateJSON, false])
+        await taskQueue.enqueue('task-handler-queue', `update_audit_score_items`, [scoreUpdateJSON])
         debug.updateAuditScore(`${scoreUpdateJSON.length} audit score items queued for updating`)
 
         // This batch has been submitted to task handler successfully
@@ -218,7 +218,7 @@ async function drainE2EAuditScoreUpdatePoolAsync () {
       let scoreUpdateJSON = pendingUpdateObjs.map((item) => item.scoreUpdateJSON)
       // update audit scores in the database
       try {
-        await taskQueue.enqueue('task-handler-queue', `update_e2e_audit_score_items`, [scoreUpdateJSON, true])
+        await taskQueue.enqueue('task-handler-queue', `update_e2e_audit_score_items`, [scoreUpdateJSON])
         debug.updateAuditScore(`${scoreUpdateJSON.length} E2E audit score items queued for updating`)
 
         // This batch has been submitted to task handler successfully
