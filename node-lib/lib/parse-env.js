@@ -164,6 +164,8 @@ let envDefinitions = {
   NEW_AUDIT_CHALLENGES_PER_HOUR: validateFactorOfSixty({ default: 2, desc: 'The number of times per hour to generate new audit challenges, defaults to 2, must be a factor of 60, no greater than 20' }),
   NODE_AUDIT_ROUNDS_PER_HOUR: validateFactorOfSixtyUpToSixty({ default: 2, desc: 'The number of times per hour to perform Node audit rounds, defaults to 60, must be a factor of 60' }),
   AUDIT_PRODUCER_LEADER_KEY: envalid.str({ default: 'service/audit-producer/leader/lock', desc: 'Key used for acquiring audit producer process leadership locks' }),
+  E2E_AUDIT_ENABLED: envalid.str({ default: 'no', desc: 'E2E Audits enabled. Defaults to "no"' }),
+  E2E_AUDIT_SCORING_ENABLED: envalid.str({ default: 'no', desc: 'Determine whether E2E Audit scoring is enabled. If, set to "yes" E2E Audits will affect a nodes audit score. Defaults to "no"' }),
 
   // Task accumulator specific variables
   RMQ_PREFETCH_COUNT_TASK_ACC: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
