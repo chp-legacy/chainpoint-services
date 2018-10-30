@@ -52,7 +52,9 @@ const BALANCE_PASS_EXPIRE_MINUTES = 60 * 24 // 1 day
 // create a heartbeat for every 200ms
 // 1 second heartbeats had a drift that caused occasional skipping of a whole second
 // decreasing the interval of the heartbeat and checking current time resolves this
-let heart = heartbeats.createHeart(200)
+const HEARTBEAT_INTERVAL_MS = 200
+
+let heart = heartbeats.createHeart(HEARTBEAT_INTERVAL_MS)
 
 // The merkle tools object for building trees and generating proof paths
 const merkleTools = new MerkleTools()
@@ -67,7 +69,7 @@ let NodeAuditLog = nodeAuditLog.NodeAuditLog
 let Op = regNodeSequelize.Op
 
 // Retrieve all registered Nodes with public_uris for auditing.
-async function auditNodesAsync () {
+async function auditNodesAsync (opts = { e2eAudit: false }) {
   // get list of all public Registered Nodes to audit
   let publicNodesReadyForAudit = []
   try {
@@ -98,18 +100,29 @@ async function auditNodesAsync () {
   // iterate through each public Registered Node, queue up an audit task for task handler
   for (let publicNodeReadyForAudit of publicNodesReadyForAudit) {
     try {
+      let taskHandlerArgs = (function () {
+        let defaultRetryCount = 0
+
+        if (opts.e2eAudit === true) return [publicNodeReadyForAudit, defaultRetryCount]
+        else return [ publicNodeReadyForAudit, activePublicNodeCount ]
+      })()
+
       await taskQueue.enqueue(
         'task-handler-queue',
-        `audit_public_node`,
-        [
-          publicNodeReadyForAudit,
-          activePublicNodeCount
-        ])
+        (opts.e2eAudit === true) ? 'e2e_audit_public_node' : `audit_public_node`,
+        taskHandlerArgs
+      )
     } catch (error) {
-      console.error(`Could not enqueue audit_public_node task : ${error.message}`)
+      console.error(`Could not enqueue ${(opts.e2eAudit === true) ? 'e2e_' : ''}audit_public_node task : ${error.message}`)
     }
   }
-  console.log(`Audit public tasks queued for task-handler`)
+  console.log(`${(opts.e2eAudit === true) ? 'E2E ' : ''}Audit public tasks queued for task-handler`)
+
+  // Short circuit this function if this is an E2E Audit. At this point, we have queued all Public nodes that will be
+  // processed by 'e2e_audit_public_node' and have no need to perform an e2e audit of private nodes.
+  if (opts.e2eAudit) {
+    return
+  }
 
   // get list of all private Registered Nodes to audit
   let privateNodesReadyForAudit = []
@@ -343,7 +356,7 @@ async function initResqueQueueAsync () {
   taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
-// This initalizes the JS intervals that checks for new audit data
+// This initializes the JS intervals that checks for new audit data
 function startIntervals () {
   let intervals = [{ function: pollForNewAuditDataAsync, ms: 60000 }]
   connections.startIntervals(intervals)
@@ -409,6 +422,23 @@ function setPerformNodeAuditTrigger () {
   })
 }
 
+function setPerformE2ENodeAuditTrigger () {
+  let currentDay = new Date().getUTCDate()
+
+  heart.createEvent(5, async function (count, last) {
+    let now = new Date()
+    // Run e2eAuditNodesAsync() once a day, and only if we are on a new day
+    if (now.getUTCDate() !== currentDay && IS_LEADER) {
+      currentDay = now.getUTCDate()
+      try {
+        await auditNodesAsync({ e2eAudit: true })
+      } catch (error) {
+        console.error(`e2eAuditNodesAsync : error : ${error.message}`)
+      }
+    }
+  })
+}
+
 function setPerformCreditTopoffTrigger () {
   let currentDay = new Date().getUTCDate()
 
@@ -435,6 +465,10 @@ async function setTimedTriggeredEventsAsync () {
 
   setGenerateNewChallengeTrigger()
   setPerformNodeAuditTrigger()
+  // Do not invoke E2E Audit trigger if audits are disabled
+  if (env.E2E_AUDIT_ENABLED === 'yes') {
+    setPerformE2ENodeAuditTrigger()
+  }
   setPerformCreditTopoffTrigger()
 }
 

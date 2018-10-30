@@ -32,6 +32,7 @@ debugPkg.log = console.info.bind(console)
 
 let AUDIT_LOG_WRITE_POOL = []
 let AUDIT_SCORE_UPDATE_POOL = []
+let E2E_AUDIT_SCORE_UPDATE_POOL = []
 
 // Variable indicating if audit log write accumulation pool is currently being drained
 let AUDIT_LOG_WRITE_POOL_DRAINING = false
@@ -42,8 +43,11 @@ let auditLogWriteBatchSize = 500
 // Variable indicating if update node audit score accumulation pool is currently being drained
 let AUDIT_SCORE_UPDATE_POOL_DRAINING = false
 
+// Variable indicating if update E2E node audit score accumulation pool is currently being drained
+let E2E_AUDIT_SCORE_UPDATE_POOL_DRAINING = false
+
 // The number of items to include in a single batch node audit score update (insert on conflict update) command
-let auditScoreUpdateBatchSize = 1000
+let auditScoreUpdateBatchSize = 1000 // --> DEVELOPMENT TESTING:(1)
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -73,6 +77,11 @@ function processMessage (msg) {
         // Consumes an audit score update message from the task handler
         // accumulates audit score update tasks and issues batch to task handler
         consumeUpdateAuditScoreMessageAsync(msg)
+        break
+      case 'update_node_e2e_audit_score':
+        // Consumes an audit score update message from the task handler
+        // accumulates audit score update tasks and issues batch to task handler
+        consumeUpdateE2EAuditScoreMessageAsync(msg)
         break
       default:
         // This is an unknown state type
@@ -106,6 +115,19 @@ async function consumeUpdateAuditScoreMessageAsync (msg) {
       msg: msg
     }
     AUDIT_SCORE_UPDATE_POOL.push(scoreUpdateObj)
+  }
+}
+
+async function consumeUpdateE2EAuditScoreMessageAsync (msg) {
+  if (msg !== null) {
+    let scoreUpdateJSON = msg.content.toString()
+
+    // add msg to the scoreUpdate object so that we can ack it later
+    let scoreUpdateObj = {
+      scoreUpdateJSON: scoreUpdateJSON,
+      msg: msg
+    }
+    E2E_AUDIT_SCORE_UPDATE_POOL.push(scoreUpdateObj)
   }
 }
 
@@ -183,6 +205,44 @@ async function drainAuditScoreUpdatePoolAsync () {
   }
 }
 
+async function drainE2EAuditScoreUpdatePoolAsync () {
+  if (!E2E_AUDIT_SCORE_UPDATE_POOL_DRAINING && amqpChannel != null) {
+    E2E_AUDIT_SCORE_UPDATE_POOL_DRAINING = true
+
+    let currentPendingUpdateCount = E2E_AUDIT_SCORE_UPDATE_POOL.length
+    let updateBatchesNeeded = Math.ceil(currentPendingUpdateCount / auditScoreUpdateBatchSize)
+
+    if (currentPendingUpdateCount > 0) debug.updateAuditScore(`${currentPendingUpdateCount} pending audit score updates currently in pool`)
+    for (let x = 0; x < updateBatchesNeeded; x++) {
+      let pendingUpdateObjs = E2E_AUDIT_SCORE_UPDATE_POOL.splice(0, auditScoreUpdateBatchSize)
+      let scoreUpdateJSON = pendingUpdateObjs.map((item) => item.scoreUpdateJSON)
+      // update audit scores in the database
+      try {
+        await taskQueue.enqueue('task-handler-queue', `update_e2e_audit_score_items`, [scoreUpdateJSON])
+        debug.updateAuditScore(`${scoreUpdateJSON.length} E2E audit score items queued for updating`)
+
+        // This batch has been submitted to task handler successfully
+        // ack consumption of all original messages part of this batch
+        pendingUpdateObjs.forEach((item) => {
+          if (item.msg !== null) {
+            amqpChannel.ack(item.msg)
+          }
+        })
+      } catch (error) {
+        console.error(`Could not enqueue update task : ${error.message}`)
+        // nack consumption of all original messages part of this batch
+        pendingUpdateObjs.forEach((item) => {
+          if (item.msg !== null) {
+            amqpChannel.nack(item.msg)
+          }
+        })
+      }
+    }
+
+    E2E_AUDIT_SCORE_UPDATE_POOL_DRAINING = false
+  }
+}
+
 /**
  * Opens a Redis connection
  *
@@ -230,11 +290,12 @@ async function initResqueQueueAsync () {
   taskQueue = await connections.initResqueQueueAsync(redis, 'resque', debug)
 }
 
-// This initalizes all the JS intervals that fire all aggregator events
+// This initializes all the JS intervals that fire all aggregator events
 function startIntervals () {
   let intervals = [
     { function: drainAuditLogWritePoolAsync, ms: 1000 },
-    { function: drainAuditScoreUpdatePoolAsync, ms: 1000 }
+    { function: drainAuditScoreUpdatePoolAsync, ms: 1000 },
+    { function: drainE2EAuditScoreUpdatePoolAsync, ms: 1000 }
   ]
   connections.startIntervals(intervals, debug)
 }

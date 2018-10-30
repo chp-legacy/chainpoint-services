@@ -219,7 +219,7 @@ async function postHashV1Async (req, res, next) {
   if (nistLatest) {
     let NTPEpoch = Math.ceil(Date.now() / 1000) + 1 // round up and add 1 second forgiveness in time sync
     if (NTPEpoch < nistLatestEpoch) {
-      // this shoud never occur, log and return error
+      // this should never occur, log and return error
       console.error(`Bad NTP time generated in UUID: NTP ${NTPEpoch} < NIST ${nistLatestEpoch}`)
       return next(new restify.InternalServerError('Bad NTP time'))
     }

@@ -26,7 +26,14 @@ const events = require('events')
 const cnsl = require('consul')
 const objectHash = require('object-hash')
 const crypto = require('crypto')
+const chp = require('chainpoint-parse')
+const { find, isUndefined, isPlainObject } = require('lodash')
+var uuidTime = require('uuid-time')
+var moment = require('moment')
 const connections = require('./lib/connections.js')
+
+// This value is set once the connection has been established
+let taskQueue = null
 
 // Set the max number of concurrent workers for the primary multiworker
 const MAX_TASK_PROCESSORS_PRIMARY = 150
@@ -47,8 +54,8 @@ const signingKeypair = nacl.sign.keyPair.fromSecretKey(signingSecretKeyBytes)
 
 let consul = null
 
-// The age of a running job, in miliseconds, for it to be considered stuck/timed out
-// This is neccesary to allow resque to determine what is a valid running job, and what
+// The age of a running job, in milliseconds, for it to be considered stuck/timed out
+// This is necessary to allow resque to determine what is a valid running job, and what
 // has been 'stuck' due to service crash/restart. Jobs found in the state are added to the fail queue.
 // Workers found with jobs in this state are deleted.
 const TASK_TIMEOUT_MS = 60000 // 1 minute timeout
@@ -106,9 +113,13 @@ const primaryTaskJobs = {
   // tasks from the audit producer service
   'audit_public_node': Object.assign({ perform: performAuditPublicAsync }, pluginOptions),
   'audit_private_node': Object.assign({ perform: performAuditPrivateAsync }, pluginOptions),
+  'e2e_audit_public_node': Object.assign({ perform: performE2EAuditPublicAsync }, pluginOptions),
+  'e2e_audit_public_node_proof_retrieval': Object.assign({ perform: performE2EAuditPublicProofRetrievalAsync }, pluginOptions),
+  'e2e_audit_public_node_proof_verification': Object.assign({ perform: performE2EAuditPublicProofVerificationAsync }, pluginOptions),
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
   'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
   'update_audit_score_items': Object.assign({ perform: updateAuditScoreItemsAsync }, pluginOptions),
+  'update_e2e_audit_score_items': Object.assign({ perform: updateE2EAuditScoreItemsAsync }, pluginOptions),
   // tasks from proof-gen
   'send_to_proof_proxy': Object.assign({ perform: sendToProofProxyAsync }, pluginOptions)
 }
@@ -254,7 +265,7 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
   // We've gotten this far, so at least auditedPublicIPAt has passed
   publicIPPass = true
 
-  // check if the Node timestamp is withing the acceptable range
+  // check if the Node timestamp is within the acceptable range
   let nodeAuditTimestamp = Date.parse(configResultsBody.time)
   nodeMSDelta = (nodeAuditTimestamp - configResultTime)
   if (Math.abs(nodeMSDelta) <= ACCEPTABLE_DELTA_MS) {
@@ -270,7 +281,7 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
     let nodeAuditResponseTimestamp = parseInt(nodeAuditResponse[0])
     let nodeAuditResponseSolution = nodeAuditResponse[1]
 
-    // make sure the audit reponse is newer than MAX_CHALLENGE_AGE_MINUTES
+    // make sure the audit response is newer than MAX_CHALLENGE_AGE_MINUTES
     let coreAuditChallenge = null
     let minTimestamp = configResultTime - (MAX_NODE_RESPONSE_CHALLENGE_AGE_MIN * 60 * 1000)
     if (nodeAuditResponseTimestamp >= minTimestamp) {
@@ -306,6 +317,249 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
   await addAuditToLogAsync(tntAddr, publicUri, configResultTime, publicIPPass, nodeMSDelta, timePass, calStatePass, minCreditsPass, nodeVersion, nodeVersionPass, tntBalanceGrains, tntBalancePass)
 
   return `Public Audit complete for ${tntAddr} at ${publicUri} : Pass = ${publicIPPass && timePass && calStatePass && minCreditsPass && nodeVersionPass && tntBalancePass}`
+}
+
+async function performE2EAuditPublicAsync (nodeData, retryCount) {
+  let tntAddr = nodeData.tnt_addr
+  let publicUri = nodeData.public_uri
+  let randomHash = crypto.createHash('sha256').update(crypto.randomBytes(Math.ceil(4 / 2)).toString('hex').slice(0, 4)).digest('hex')
+
+  // Hash submission
+  let options = {
+    method: 'POST',
+    uri: `${publicUri}/hashes`,
+    headers: {
+      'Accept': 'application/json'
+    },
+    body: {
+      hashes: [randomHash]
+    },
+    json: true,
+    gzip: true,
+    timeout: 2500
+  }
+
+  try {
+    let result
+    await retry(async bail => {
+      result = await rp(options)
+    }, {
+      retries: 3, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 5000,
+      randomize: false
+    })
+
+    // Validate partial proof returned after hash submission
+    // Validations: 1) Valid partial proof is returned, 2) Hash === randomHash submitted to the node,
+    //              3) The uuid/v1 embedded time is within an appropriate timeframe
+    let partialProof = find(result.hashes, ['hash', randomHash])
+    if (isUndefined(partialProof)) throw new Error(`Hash submitted does not match the hash received - ${publicUri} - ${randomHash}`)
+    else if (isUndefined(partialProof.hash_id_node)) throw new Error(`A valid hash_id_node value corresponding to the hash submitted does not exist - ${publicUri} - ${randomHash}`)
+    else if (!moment.utc(new Date(parseInt(uuidTime.v1(partialProof.hash_id_node)))).isBetween(moment.utc().subtract(1, 'h'), moment.utc().add(1, 'h'), 'hour', '[]')) {
+      throw new Error(`The provided hash_id_node is not valid. It has failed the uuid time validation - ${publicUri} - ${randomHash}`)
+    }
+
+    // Response from hash submission has passed all validations, enqueue the proof-retrieval task
+    try {
+      await taskQueue.enqueueIn(
+        (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
+        'task-handler-queue',
+        'e2e_audit_public_node_proof_retrieval',
+        [tntAddr, publicUri, partialProof.hash_id_node, randomHash, 0] // [<node_uri>, <hash_id_node>, <randomHash>, <retryCount>]
+      )
+
+      return `E2E Audit Hash submission complete for ${tntAddr} at ${publicUri}`
+    } catch (error) {
+      console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
+      return `Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`
+    }
+  } catch (_) {
+    // FAILED Hash submission, if retryCount is >= 2 mark this node as having failed the E2E Audit
+    if (retryCount >= 2) {
+      // FAILED E2E Audit, queue an update to reflect the failed audit
+      await addE2EAuditToLogAsync(tntAddr, false)
+
+      return `E2E Audit Hash submission FAILED for ${tntAddr} at ${publicUri}`
+    } else {
+      try {
+        await taskQueue.enqueueIn(
+          (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
+          'task-handler-queue',
+          'e2e_audit_public_node',
+          [nodeData, (retryCount + 1)]
+        )
+
+        return `E2E Audit Hash re-queue submission complete for ${tntAddr} at ${publicUri}`
+      } catch (error) {
+        console.error(`Could not re-enqueue e2e_audit_public_node task : ${error.message}`)
+        return `Could not re-enqueue e2e_audit_public_node task:  ${tntAddr} at ${publicUri} - ${error.message}`
+      }
+    }
+  }
+}
+
+async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, hashIdNode, hash, retryCount) {
+  // Retrieve Proof
+  let options = {
+    method: 'GET',
+    uri: `${publicUri}/proofs/${hashIdNode}`,
+    json: true,
+    gzip: true,
+    timeout: 2500
+  }
+
+  try {
+    let result
+    await retry(async bail => {
+      result = await rp(options)
+    }, {
+      retries: 3, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 5000,
+      randomize: false
+    })
+
+    let proof = find(result, ['hash_id_node', hashIdNode])
+    if (isUndefined(proof)) throw new Error(`Proof with a hash_id_node value of: ${hashIdNode} was not found - ${publicUri} - ${hash}`)
+    else if (proof.proof === null) throw new Error(`Proof with a hash_id_node: ${hashIdNode} has an invalid null value - ${publicUri} - ${hash}`)
+
+    let parsedProof = chp.parse(proof.proof)
+    // Validate the parsed partial proof has the correct hash_id_node, and hash values
+    if (parsedProof.hash !== hash) throw new Error(`The retrieved Proof does not have the correct hash value: (${hash}) - ${hashIdNode} - ${publicUri}`)
+    else if (parsedProof.hash_id_node !== hashIdNode) throw new Error(`The retrieved Proof does not have the correct hash_id_node value: (${hashIdNode}) - ${publicUri} - ${hash}`)
+
+    // Validate cal_anchor_branch of the retrieved Proof
+    let calBranch = find(parsedProof.branches, ['label', 'cal_anchor_branch'])
+    // If cal_anchor_branch is not found throw an error
+    if (isUndefined(calBranch)) throw new Error(`The retrieved Proof does not have a valid cal_anchor_branch: ${hashIdNode} - ${publicUri} - ${hash}`)
+
+    let calBranchAnchor = calBranch.anchors[0]
+    let calResult
+
+    await retry(async bail => {
+      calResult = await rp({
+        method: 'GET',
+        uri: `${calBranchAnchor.uris[0]}`,
+        json: true,
+        gzip: true,
+        timeout: 2500
+      })
+    }, {
+      retries: 3, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 5000,
+      randomize: false
+    })
+
+    // Make sure Chainpoint Calendar Hash matches the 'expected_value' retrieved from the parsed Proof
+    if (calResult !== calBranchAnchor.expected_value) {
+      throw new Error(`The retrieved Proof does not have the correct 'expected_value' hash anchored to the Calendar Blockchain: ${hashIdNode} - ${publicUri} - ${hash}`)
+    } else {
+      // Retrieved Proof has passed all validations, queue a job to test /verify endpoint of the node being audited
+      // This job can be queued immediately
+      try {
+        await taskQueue.enqueue(
+          'task-handler-queue',
+          'e2e_audit_public_node_proof_verification',
+          [tntAddr, publicUri, hashIdNode, hash, proof.proof, 0]
+        )
+
+        return `E2E Audit Hash Retrieval complete for ${tntAddr} at ${publicUri} for hash=${hash}`
+      } catch (error) {
+        console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
+
+        return `E2E Audit Hash Retrieval FAILED for ${tntAddr} at ${publicUri} for hash=${hash}`
+      }
+    }
+  } catch (_) {
+    if (retryCount >= 2) {
+      // FAILED E2E Audit, make appropriate DB changes
+      await addE2EAuditToLogAsync(tntAddr, false)
+
+      return `E2E Audit Hash Retrieval FAILED for ${tntAddr} at ${publicUri} for hash=${hash}`
+    } else {
+      try {
+        await taskQueue.enqueueIn(
+          (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
+          'task-handler-queue',
+          'e2e_audit_public_node_proof_retrieval',
+          [tntAddr, publicUri, hashIdNode, hash, (retryCount + 1)]
+        )
+
+        return `E2E Audit Hash Retrieval re-queue completed for ${tntAddr} at ${publicUri} for hash=${hash}`
+      } catch (error) {
+        console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
+
+        return `Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`
+      }
+    }
+  }
+}
+
+async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, retryCount) {
+  // Proof Verification
+  let options = {
+    method: 'POST',
+    uri: `${publicUri}/verify`,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: {
+      proofs: [base64EncodedProof]
+    },
+    json: true,
+    gzip: true,
+    timeout: 2500
+  }
+
+  try {
+    let result
+    await retry(async bail => {
+      result = await rp(options)
+    }, {
+      retries: 3, // The maximum amount of times to retry the operation. Default is 10
+      factor: 2, // The exponential factor to use. Default is 2
+      minTimeout: 500, // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 5000,
+      randomize: false
+    })
+
+    // Validate Proof Retrieval response
+    if (!result.length || !isPlainObject(result[0])) throw new Error(`Proof Verification has failed: ${hashIdNode} - ${publicUri} - ${hash}`)
+    else if (result[0].hash !== hash) throw new Error(`The retrieved Proof for verification does not have the correct hash value: (${hash}) - ${hashIdNode} - ${publicUri}`)
+    else if (result[0].hash_id_node !== hashIdNode) throw new Error(`The retrieved Proof for verification does not have the correct hash_id_node value: (${hashIdNode}) - ${publicUri} - ${hash}`)
+
+    // E2E Audit PASSED - queue an update to reflect the PASSED audit
+    await addE2EAuditToLogAsync(tntAddr, true)
+
+    return `E2E Audit Proof Verification completed (1) for ${tntAddr} at ${publicUri} for hash=${hash}`
+  } catch (_) {
+    if (retryCount >= 2) {
+      // FAILED E2E Audit, make appropriate DB changes
+      await addE2EAuditToLogAsync(tntAddr, false)
+
+      return `E2E Audit Proof Verification FAILED for ${tntAddr} at ${publicUri} for hash=${hash}`
+    } else {
+      try {
+        await taskQueue.enqueueIn(
+          (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
+          'task-handler-queue',
+          'e2e_audit_public_node_proof_verification',
+          [tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
+        )
+
+        return `E2E Audit Proof Verification re-queued for ${tntAddr} at ${publicUri} for hash=${hash}`
+      } catch (error) {
+        console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
+
+        return `Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`
+      }
+    }
+  }
 }
 
 async function performAuditPrivateAsync (nodeData) {
@@ -402,6 +656,47 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
     return `Updated ${scoreUpdateItems.length} audit scores in chainpoint_registered_nodes with tntAddrs ${scoreUpdateItems[0].tntAddr}...`
   } catch (error) {
     let errorMessage = `updateAuditScoreItemsAsync : bulk update error : ${error.message}`
+    throw errorMessage
+  }
+}
+
+async function updateE2EAuditScoreItemsAsync (scoreUpdatesJSON) {
+  // scoreUpdatesJSON is an array of JSON strings, convert to array of objects
+  let scoreUpdateItems = scoreUpdatesJSON.map((item) => { return JSON.parse(item) })
+  const getScoreAddend = item => {
+    if (env.E2E_AUDIT_SCORING_ENABLED === 'no') return 0
+
+    return item.auditPass ? 0 : -96
+  }
+  try {
+    // This should never actually result in an INSERT operation because the TNT address we intend to update
+    // was retrieved from the database already in order to generate that update. This should only update
+    // existing records. Doing these updates in this manner allows for the efficient batching of update calls.
+    // While an INSERT should never happen, the dummy hmac_key used in the operation is sha256(random()::text)
+    // instead of a static string so that it will not be predictable. This is to prevent the very unlikely scenario
+    // where an INSERT actually occurs, and the hmac key is known because it is in the code, potentially creating
+    // a security risk.
+    await retry(async bail => {
+      let sqlCmd = `INSERT INTO chainpoint_registered_nodes (tnt_addr, hmac_key, created_at, updated_at, audit_score, verify_e2e_passed_at, verify_e2e_failed_at) VALUES `
+      sqlCmd += scoreUpdateItems.map((item) => {
+        let scoreAddend = getScoreAddend(item)
+        return `('${item.tntAddr}', sha256(random()::text), now(), now(), ${scoreAddend}, ${(item.auditPass) ? Date.now() : 'NULL'}, ${(!item.auditPass) ? Date.now() : 'NULL'})`
+      }).join() + ' '
+      sqlCmd += `ON CONFLICT (tnt_addr) DO UPDATE SET (audit_score, verify_e2e_passed_at, verify_e2e_failed_at) = 
+      (GREATEST(chainpoint_registered_nodes.audit_score + EXCLUDED.audit_score, 0), 
+      CASE WHEN EXCLUDED.verify_e2e_passed_at IS NOT NULL THEN EXCLUDED.verify_e2e_passed_at ELSE chainpoint_registered_nodes.verify_e2e_passed_at END,
+      CASE WHEN EXCLUDED.verify_e2e_failed_at IS NOT NULL THEN EXCLUDED.verify_e2e_failed_at ELSE chainpoint_registered_nodes.verify_e2e_failed_at END)`
+      await registeredNodeSequelize.query(sqlCmd, { type: registeredNodeSequelize.QueryTypes.UPDATE })
+    }, {
+      retries: 5, // The maximum amount of times to retry the operation. Default is 10
+      factor: 1, // The exponential factor to use. Default is 2
+      minTimeout: 200, // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 400,
+      randomize: true
+    })
+    return `Updated ${scoreUpdateItems.length} e2e audit scores in chainpoint_registered_nodes with tntAddrs ${scoreUpdateItems[0].tntAddr}...`
+  } catch (error) {
+    let errorMessage = `updateE2EAuditScoreItemsAsync : bulk update error : ${error.message}`
     throw errorMessage
   }
 }
@@ -585,6 +880,21 @@ async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, 
   }
 }
 
+async function addE2EAuditToLogAsync (tntAddr, auditResult) {
+  try {
+    let scoreUpdate = {
+      tntAddr: tntAddr,
+      auditPass: auditResult
+    }
+
+    // send node audit score value update to accumulator to be updated as part of a node audit score update batch
+    await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(JSON.stringify(scoreUpdate)), { persistent: true, type: 'update_node_e2e_audit_score' })
+  } catch (error) {
+    let errorMessage = `${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} [update_node_e2e_audit_score] publish message nacked`
+    throw errorMessage
+  }
+}
+
 async function proofProxyPostAsync (hashIdCore, proofBase64) {
   let nodeResponse
 
@@ -656,13 +966,23 @@ function openRedisConnection (redisURIs) {
     (newRedis) => {
       redis = newRedis
       cachedAuditChallenge.setRedis(redis)
-      // init Resque workers
+      // init Resque & workers
+      initResqueQueueAsync()
       initResqueWorkersAsync()
+      initResqueSchedulerAsync()
     }, () => {
       redis = null
       cachedAuditChallenge.setRedis(null)
+      taskQueue = null
       setTimeout(() => { openRedisConnection(redisURIs) }, 5000)
     }, debug)
+}
+
+/**
+ * Initializes the connection to the Resque queue when Redis is ready
+ */
+async function initResqueQueueAsync () {
+  taskQueue = await connections.initResqueQueueAsync(redis, 'resque')
 }
 
 /**
@@ -738,7 +1058,24 @@ async function initResqueWorkersAsync () {
   )
 }
 
-// This initalizes all the consul watches
+async function initResqueSchedulerAsync () {
+  // Start Resqueue Scheduler
+  await connections.initResqueSchedulerAsync(
+    redis,
+    (s) => {
+      s.on('start', () => { console.log('Resqueue Scheduler started') })
+      s.on('end', () => { console.log('Resqueue Scheduler ended') })
+      s.on('master', (state) => { console.log('Resqueue Scheduler became master') })
+      s.on('cleanStuckWorker', (workerName, errorPayload, delta) => { console.log(`failing ${workerName} (stuck for ${delta}s) and failing job ${errorPayload}`) })
+      s.on('error', (error) => { console.log(`Resqueue Scheduler error >> ${error}`) })
+      s.on('workingTimestamp', (timestamp) => { console.log(`Resqueue Scheduler working timestamp ${timestamp}`) })
+      s.on('transferredJob', (timestamp, job) => { console.log(`Resqueue Scheduler enquing job ${timestamp} >> ${JSON.stringify(job)}`) })
+    },
+    debug
+  )
+}
+
+// This initializes all the consul watches
 function startConsulWatches () {
   let watches = [{
     key: env.MIN_NODE_VERSION_EXISTING_KEY,

@@ -704,7 +704,7 @@ async function processCalendarInterval () {
       throw new Error(`setLastAggStateProcessedForCalBlockTimestamp failed with value ${thisIntervalEndTimestamp}`)
     }
   } catch (error) {
-    // an error has occured
+    // an error has occurred
     console.error(`scheduleJob : processCalendarInterval : ${error.message}`)
   }
 }
@@ -943,7 +943,7 @@ async function performLeaderElection () {
     debug)
 }
 
-// Initalizes all the consul watches
+// Initializes all the consul watches
 function startConsulWatches () {
   let watches = [{
     key: env.NIST_KEY,
