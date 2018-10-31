@@ -73,7 +73,7 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
   // get list of all public Registered Nodes to audit
   let publicNodesReadyForAudit = []
   try {
-    let sqlQuery = `SELECT rn.tnt_addr, rn.public_uri, rn.tnt_credit, rn.pass_count, rn.fail_count, rn.consecutive_passes, 
+    let sqlQuery = `SELECT rn.tnt_addr, rn.public_uri, rn.tnt_credit, rn.audit_score, rn.pass_count, rn.fail_count, rn.consecutive_passes, 
                    rn.consecutive_fails, rn.created_at, rn.updated_at, al.audit_at, al.public_ip_pass, al.public_uri AS audit_uri, 
                    al.node_ms_delta, al.time_pass, al.cal_state_pass, al.min_credits_pass, al.node_version, 
                    al.node_version_pass, al.tnt_balance_grains, al.tnt_balance_pass
@@ -98,6 +98,11 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
   let activePublicNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 }, consecutive_fails: { [Op.lt]: 144 } } })
 
   // iterate through each public Registered Node, queue up an audit task for task handler
+  // If an E2E Audit is being performed, filter OUT any registered nodes that have an audit_score <= 0
+  if (opts.e2eAudit === true) {
+    publicNodesReadyForAudit = publicNodesReadyForAudit.filter(n => (parseInt(n.audit_score, 10) > 0))
+  }
+
   for (let publicNodeReadyForAudit of publicNodesReadyForAudit) {
     try {
       let taskHandlerArgs = (function () {
