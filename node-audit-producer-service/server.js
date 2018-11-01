@@ -28,6 +28,7 @@ const MerkleTools = require('merkle-tools')
 const heartbeats = require('heartbeats')
 const leaderElection = require('exp-leader-election')
 const cnsl = require('consul')
+const moment = require('moment')
 const connections = require('./lib/connections.js')
 
 let consul = null
@@ -95,7 +96,7 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
   }
 
   // get the total active node count, needed to deliver to Nodes during audit process
-  let activePublicNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 }, consecutive_fails: { [Op.lt]: 144 } } })
+  let activePublicNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 }, consecutive_fails: { [Op.lt]: 144 }, verify_e2e_passed_at: { [Op.ne]: null, [Op.gte]: moment().subtract(72, 'hours').valueOf() } } })
 
   // iterate through each public Registered Node, queue up an audit task for task handler
   // If an E2E Audit is being performed, filter OUT any registered nodes that have an audit_score <= 0
