@@ -472,7 +472,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
 
-        return `E2E Audit Hash Retrieval FAILED for ${tntAddr} at ${publicUri} for hash=${hash}`
+        return `E2E Audit Hash Retrieval FAILED for ${tntAddr} at ${publicUri} for hash_id_node=${hashIdNode},hash=${hash}`
       }
     }
   } catch (_) {
@@ -480,7 +480,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
       // FAILED E2E Audit, make appropriate DB changes
       await addE2EAuditToLogAsync(tntAddr, false)
 
-      return `E2E Audit Hash Retrieval FAILED for ${tntAddr} at ${publicUri} for hash=${hash}`
+      return `E2E Audit Hash Retrieval FAILED for ${tntAddr} at ${publicUri} for hash_id_node=${hashIdNode},hash=${hash}`
     } else {
       try {
         await taskQueue.enqueueIn(
@@ -542,7 +542,7 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
       // FAILED E2E Audit, make appropriate DB changes
       await addE2EAuditToLogAsync(tntAddr, false)
 
-      return `E2E Audit Proof Verification FAILED for ${tntAddr} at ${publicUri} for hash=${hash}`
+      return `E2E Audit Proof Verification FAILED for ${tntAddr} at ${publicUri} for hash_id_node=${hashIdNode},hash=${hash}`
     } else {
       try {
         await taskQueue.enqueueIn(
@@ -552,7 +552,7 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
           [tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
         )
 
-        return `E2E Audit Proof Verification re-queued for ${tntAddr} at ${publicUri} for hash=${hash}`
+        return `E2E Audit Proof Verification re-queued for ${tntAddr} at ${publicUri} for hash_id_node=${hashIdNode},hash=${hash}`
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
 
