@@ -113,11 +113,22 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
         else return [ publicNodeReadyForAudit, activePublicNodeCount ]
       })()
 
-      await taskQueue.enqueue(
-        'task-handler-queue',
-        (opts.e2eAudit === true) ? 'e2e_audit_public_node' : `audit_public_node`,
-        taskHandlerArgs
-      )
+      // For E2E Audits, we want to spread out the delivery of messages to the queue to mitigate against DDOS attacks against Chainpoint Nodes,
+      // If an E2E Audit, select a random value between 0-2hrs (in milliseconds) to provide as an argument to taskQueue.enqueueIn()
+      if (opts.e2eAudit === true) {
+        await taskQueue.enqueueIn(
+          (Math.floor(Math.random() * (((1000 * 60) * 60 * 2) - 1000) + 1000)), //  Math.random() * (max - min) + min
+          'task-handler-queue',
+          'e2e_audit_public_node',
+          taskHandlerArgs
+        )
+      } else {
+        await taskQueue.enqueue(
+          'task-handler-queue',
+          `audit_public_node`,
+          taskHandlerArgs
+        )
+      }
     } catch (error) {
       console.error(`Could not enqueue ${(opts.e2eAudit === true) ? 'e2e_' : ''}audit_public_node task : ${error.message}`)
     }
