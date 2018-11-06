@@ -370,7 +370,7 @@ services:
   #
   roach1:
     restart: always
-    image: cockroachdb/cockroach-unstable:v2.0.6-rc.1
+    image: cockroachdb/cockroach:v2.1.0
     container_name: roach1-core
     ports:
       - "26257:26257"
