@@ -113,8 +113,7 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
         else return [ publicNodeReadyForAudit, activePublicNodeCount ]
       })()
 
-      // For E2E Audits, we want to spread out the delivery of messages to the queue to mitigate against DDOS attacks against Chainpoint Nodes,
-      // If an E2E Audit, select a random value between 0-2hrs (in milliseconds) to provide as an argument to taskQueue.enqueueIn()
+      // For E2E audits, spread out the delivery of messages to the queue over time.
       if (opts.e2eAudit === true) {
         await taskQueue.enqueueIn(
           (Math.floor(Math.random() * (((1000 * 60) * 60 * 2) - 1000) + 1000)), //  Math.random() * (max - min) + min
