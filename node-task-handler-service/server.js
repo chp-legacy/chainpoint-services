@@ -369,11 +369,8 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
         'e2e_audit_public_node_proof_retrieval',
         [tntAddr, publicUri, partialProof.hash_id_node, randomHash, 0] // [<node_uri>, <hash_id_node>, <randomHash>, <retryCount>]
       )
-
-      return `E2E Audit Hash submission complete for ${tntAddr} at ${publicUri}`
     } catch (error) {
       console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
-      return `Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`
     }
   } catch (_) {
     // FAILED Hash submission, if retryCount is >= 2 mark this node as having failed the E2E Audit
@@ -390,11 +387,8 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
           'e2e_audit_public_node',
           [nodeData, (retryCount + 1)]
         )
-
-        return `E2E Audit Hash re-queue submission complete for ${tntAddr} at ${publicUri}`
       } catch (error) {
-        console.error(`Could not re-enqueue e2e_audit_public_node task : ${error.message}`)
-        return `Could not re-enqueue e2e_audit_public_node task:  ${tntAddr} at ${publicUri} - ${error.message}`
+        console.error(`Could not re-enqueue e2e_audit_public_node task:  ${tntAddr} at ${publicUri} - ${error.message}`)
       }
     }
   }
@@ -467,12 +461,8 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
           'e2e_audit_public_node_proof_verification',
           [tntAddr, publicUri, hashIdNode, hash, proof.proof, 0]
         )
-
-        return `E2E Audit Hash Retrieval complete for ${tntAddr} at ${publicUri} for hash=${hash}`
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
-
-        return `E2E Audit Hash Retrieval FAILED for ${tntAddr} at ${publicUri} for hash_id_node=${hashIdNode},hash=${hash}`
       }
     }
   } catch (_) {
@@ -489,12 +479,8 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
           'e2e_audit_public_node_proof_retrieval',
           [tntAddr, publicUri, hashIdNode, hash, (retryCount + 1)]
         )
-
-        return `E2E Audit Hash Retrieval re-queue completed for ${tntAddr} at ${publicUri} for hash=${hash}`
       } catch (error) {
-        console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
-
-        return `Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`
+        console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`)
       }
     }
   }
@@ -535,8 +521,6 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
 
     // E2E Audit PASSED - queue an update to reflect the PASSED audit
     await addE2EAuditToLogAsync(tntAddr, true)
-
-    return `E2E Audit Proof Verification completed (1) for ${tntAddr} at ${publicUri} for hash=${hash}`
   } catch (_) {
     if (retryCount >= 2) {
       // FAILED E2E Audit, make appropriate DB changes
@@ -551,12 +535,8 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
           'e2e_audit_public_node_proof_verification',
           [tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
         )
-
-        return `E2E Audit Proof Verification re-queued for ${tntAddr} at ${publicUri} for hash_id_node=${hashIdNode},hash=${hash}`
       } catch (error) {
-        console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
-
-        return `Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`
+        console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`)
       }
     }
   }
