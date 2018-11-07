@@ -27,7 +27,7 @@ const cnsl = require('consul')
 const objectHash = require('object-hash')
 const crypto = require('crypto')
 const chp = require('chainpoint-parse')
-const { find, isUndefined, isPlainObject } = require('lodash')
+const { find, isUndefined, isPlainObject, isNull } = require('lodash')
 var uuidTime = require('uuid-time')
 var moment = require('moment')
 const connections = require('./lib/connections.js')
@@ -74,14 +74,18 @@ let minNodeVersionExisting = null
 
 const cachedProofState = require('./lib/models/cachedProofStateModels.js')
 const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
+const e2eNodeAuditLog = require('./lib/models/E2ENodeAuditLog.js')
 const registeredNode = require('./lib/models/RegisteredNode.js')
 const cachedAuditChallenge = require('./lib/models/cachedAuditChallenge.js')
 
 // pull in variables defined in shared database models
 let nodeAuditSequelize = nodeAuditLog.sequelize
 let NodeAuditLog = nodeAuditLog.NodeAuditLog
+let e2eNodeAuditSequelize = e2eNodeAuditLog.sequelize
+let E2ENodeAuditLog = e2eNodeAuditLog.E2ENodeAuditLog
 let registeredNodeSequelize = registeredNode.sequelize
 let Op = nodeAuditSequelize.Op
+let e2eOp = e2eNodeAuditSequelize.Op // eslint-disable-line
 
 // The acceptable time difference between Node and Core for a timestamp to be considered valid, in milliseconds
 const ACCEPTABLE_DELTA_MS = 5000 // 5 seconds
@@ -118,6 +122,7 @@ const primaryTaskJobs = {
   'e2e_audit_public_node_proof_verification': Object.assign({ perform: performE2EAuditPublicProofVerificationAsync }, pluginOptions),
   'prune_audit_log_ids': Object.assign({ perform: pruneAuditLogsByIdsAsync }, pluginOptions),
   'write_audit_log_items': Object.assign({ perform: writeAuditLogItemsAsync }, pluginOptions),
+  'write_e2e_audit_log_items': Object.assign({ perform: writeE2EAuditLogItemsAsync }, pluginOptions),
   'update_audit_score_items': Object.assign({ perform: updateAuditScoreItemsAsync }, pluginOptions),
   'update_e2e_audit_score_items': Object.assign({ perform: updateE2EAuditScoreItemsAsync }, pluginOptions),
   // tasks from proof-gen
@@ -323,6 +328,12 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
   let tntAddr = nodeData.tnt_addr
   let publicUri = nodeData.public_uri
   let randomHash = crypto.createHash('sha256').update(crypto.randomBytes(Math.ceil(4 / 2)).toString('hex').slice(0, 4)).digest('hex')
+  let auditLogObj = {
+    tnt_addr: tntAddr,
+    public_uri: publicUri,
+    audit_date: moment.utc().format('YYYYMMDD'),
+    stage: 'hash_submission'
+  }
 
   // Hash submission
   let options = {
@@ -355,9 +366,14 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
     // Validations: 1) Valid partial proof is returned, 2) Hash === randomHash submitted to the node,
     //              3) The uuid/v1 embedded time is within an appropriate timeframe
     let partialProof = find(result.hashes, ['hash', randomHash])
-    if (isUndefined(partialProof)) throw new Error(`Hash submitted does not match the hash received - ${publicUri} - ${randomHash}`)
-    else if (isUndefined(partialProof.hash_id_node)) throw new Error(`A valid hash_id_node value corresponding to the hash submitted does not exist - ${publicUri} - ${randomHash}`)
-    else if (!moment.utc(new Date(parseInt(uuidTime.v1(partialProof.hash_id_node)))).isBetween(moment.utc().subtract(1, 'h'), moment.utc().add(1, 'h'), 'hour', '[]')) {
+    if (isUndefined(partialProof)) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'submission_failure', audit_updated_at: Date.now() })
+      throw new Error(`Hash submitted does not match the hash received - ${publicUri} - ${randomHash}`)
+    } else if (isUndefined(partialProof.hash_id_node)) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'hash_mismatch_failure', audit_updated_at: Date.now() })
+      throw new Error(`A valid hash_id_node value corresponding to the hash submitted does not exist - ${publicUri} - ${randomHash}`)
+    } else if (!moment.utc(new Date(parseInt(uuidTime.v1(partialProof.hash_id_node)))).isBetween(moment.utc().subtract(1, 'h'), moment.utc().add(1, 'h'), 'hour', '[]')) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'hash_id_node_validation_failure', audit_updated_at: Date.now() })
       throw new Error(`The provided hash_id_node is not valid. It has failed the uuid time validation - ${publicUri} - ${randomHash}`)
     }
 
@@ -369,6 +385,8 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
         'e2e_audit_public_node_proof_retrieval',
         [tntAddr, publicUri, partialProof.hash_id_node, randomHash, 0] // [<node_uri>, <hash_id_node>, <randomHash>, <retryCount>]
       )
+
+      await addE2EAuditToLogAsync(Object.assign({}, auditLogObj, { status: 'passed', audit_updated_at: Date.now() }))
     } catch (error) {
       console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${error.message}`)
     }
@@ -376,7 +394,7 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
     // FAILED Hash submission, if retryCount is >= 2 mark this node as having failed the E2E Audit
     if (retryCount >= 2) {
       // FAILED E2E Audit, queue an update to reflect the failed audit
-      await addE2EAuditToLogAsync(tntAddr, false)
+      await updateE2EAuditScoreAsync(tntAddr, false, (auditLogObj.status) ? auditLogObj : Object.assign({}, auditLogObj, { status: 'submission_failure', audit_updated_at: Date.now() }))
 
       return `E2E Audit Hash submission FAILED for ${tntAddr} at ${publicUri}`
     } else {
@@ -387,6 +405,8 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
           'e2e_audit_public_node',
           [nodeData, (retryCount + 1)]
         )
+
+        await updateE2EAuditScoreAsync(tntAddr, false, (auditLogObj.status) ? auditLogObj : Object.assign({}, auditLogObj, { status: 'submission_failure', audit_updated_at: Date.now() }))
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node task:  ${tntAddr} at ${publicUri} - ${error.message}`)
       }
@@ -403,6 +423,12 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
     gzip: true,
     timeout: 2500
   }
+  let auditLogObj = {
+    tnt_addr: tntAddr,
+    public_uri: publicUri,
+    audit_date: moment.utc().format('YYYYMMDD'),
+    stage: 'proof_retrieval'
+  }
 
   try {
     let result
@@ -417,18 +443,31 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
     })
 
     let proof = find(result, ['hash_id_node', hashIdNode])
-    if (isUndefined(proof)) throw new Error(`Proof with a hash_id_node value of: ${hashIdNode} was not found - ${publicUri} - ${hash}`)
-    else if (proof.proof === null) throw new Error(`Proof with a hash_id_node: ${hashIdNode} has an invalid null value - ${publicUri} - ${hash}`)
+    if (isUndefined(proof)) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'retrieval_failure', audit_updated_at: Date.now() })
+      throw new Error(`Proof with a hash_id_node value of: ${hashIdNode} was not found - ${publicUri} - ${hash}`)
+    } else if (proof.proof === null) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'null_proof_failure', audit_updated_at: Date.now() })
+      throw new Error(`Proof with a hash_id_node: ${hashIdNode} has an invalid null value - ${publicUri} - ${hash}`)
+    }
 
     let parsedProof = chp.parse(proof.proof)
     // Validate the parsed partial proof has the correct hash_id_node, and hash values
-    if (parsedProof.hash !== hash) throw new Error(`The retrieved Proof does not have the correct hash value: (${hash}) - ${hashIdNode} - ${publicUri}`)
-    else if (parsedProof.hash_id_node !== hashIdNode) throw new Error(`The retrieved Proof does not have the correct hash_id_node value: (${hashIdNode}) - ${publicUri} - ${hash}`)
+    if (parsedProof.hash !== hash) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'hash_mismatch_failure', audit_updated_at: Date.now() })
+      throw new Error(`The retrieved Proof does not have the correct hash value: (${hash}) - ${hashIdNode} - ${publicUri}`)
+    } else if (parsedProof.hash_id_node !== hashIdNode) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'hash_id_node_validation_failure', audit_updated_at: Date.now() })
+      throw new Error(`The retrieved Proof does not have the correct hash_id_node value: (${hashIdNode}) - ${publicUri} - ${hash}`)
+    }
 
     // Validate cal_anchor_branch of the retrieved Proof
     let calBranch = find(parsedProof.branches, ['label', 'cal_anchor_branch'])
     // If cal_anchor_branch is not found throw an error
-    if (isUndefined(calBranch)) throw new Error(`The retrieved Proof does not have a valid cal_anchor_branch: ${hashIdNode} - ${publicUri} - ${hash}`)
+    if (isUndefined(calBranch)) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'invalid_cal_branch_failure', audit_updated_at: Date.now() })
+      throw new Error(`The retrieved Proof does not have a valid cal_anchor_branch: ${hashIdNode} - ${publicUri} - ${hash}`)
+    }
 
     let calBranchAnchor = calBranch.anchors[0]
     let calResult
@@ -451,6 +490,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
 
     // Make sure Chainpoint Calendar Hash matches the 'expected_value' retrieved from the parsed Proof
     if (calResult !== calBranchAnchor.expected_value) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'retrieval_failure', audit_updated_at: Date.now() })
       throw new Error(`The retrieved Proof does not have the correct 'expected_value' hash anchored to the Calendar Blockchain: ${hashIdNode} - ${publicUri} - ${hash}`)
     } else {
       // Retrieved Proof has passed all validations, queue a job to test /verify endpoint of the node being audited
@@ -461,6 +501,8 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
           'e2e_audit_public_node_proof_verification',
           [tntAddr, publicUri, hashIdNode, hash, proof.proof, 0]
         )
+
+        await addE2EAuditToLogAsync(Object.assign({}, auditLogObj, { status: 'passed', audit_updated_at: Date.now() }))
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_verification task : ${error.message}`)
       }
@@ -468,7 +510,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
   } catch (_) {
     if (retryCount >= 2) {
       // FAILED E2E Audit, make appropriate DB changes
-      await addE2EAuditToLogAsync(tntAddr, false)
+      await updateE2EAuditScoreAsync(tntAddr, false, (auditLogObj.status) ? auditLogObj : Object.assign({}, auditLogObj, { status: 'retrieval_failure', audit_updated_at: Date.now() }))
 
       return `E2E Audit Hash Retrieval FAILED for ${tntAddr} at ${publicUri} for hash_id_node=${hashIdNode},hash=${hash}`
     } else {
@@ -479,6 +521,8 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
           'e2e_audit_public_node_proof_retrieval',
           [tntAddr, publicUri, hashIdNode, hash, (retryCount + 1)]
         )
+
+        await updateE2EAuditScoreAsync(tntAddr, false, (auditLogObj.status) ? auditLogObj : Object.assign({}, auditLogObj, { status: 'retrieval_failure', audit_updated_at: Date.now() }))
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`)
       }
@@ -501,6 +545,12 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
     gzip: true,
     timeout: 2500
   }
+  let auditLogObj = {
+    tnt_addr: tntAddr,
+    public_uri: publicUri,
+    audit_date: moment.utc().format('YYYYMMDD'),
+    stage: 'proof_verification'
+  }
 
   try {
     let result
@@ -515,16 +565,23 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
     })
 
     // Validate Proof Retrieval response
-    if (!result.length || !isPlainObject(result[0])) throw new Error(`Proof Verification has failed: ${hashIdNode} - ${publicUri} - ${hash}`)
-    else if (result[0].hash !== hash) throw new Error(`The retrieved Proof for verification does not have the correct hash value: (${hash}) - ${hashIdNode} - ${publicUri}`)
-    else if (result[0].hash_id_node !== hashIdNode) throw new Error(`The retrieved Proof for verification does not have the correct hash_id_node value: (${hashIdNode}) - ${publicUri} - ${hash}`)
+    if (!result.length || !isPlainObject(result[0])) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'verification_failure', audit_updated_at: Date.now() })
+      throw new Error(`Proof Verification has failed: ${hashIdNode} - ${publicUri} - ${hash}`)
+    } else if (result[0].hash !== hash) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'hash_mismatch_failure', audit_updated_at: Date.now() })
+      throw new Error(`The retrieved Proof for verification does not have the correct hash value: (${hash}) - ${hashIdNode} - ${publicUri}`)
+    } else if (result[0].hash_id_node !== hashIdNode) {
+      auditLogObj = Object.assign({}, auditLogObj, { status: 'hash_id_node_validation_failure', audit_updated_at: Date.now() })
+      throw new Error(`The retrieved Proof for verification does not have the correct hash_id_node value: (${hashIdNode}) - ${publicUri} - ${hash}`)
+    }
 
     // E2E Audit PASSED - queue an update to reflect the PASSED audit
-    await addE2EAuditToLogAsync(tntAddr, true)
+    await updateE2EAuditScoreAsync(tntAddr, true, Object.assign({}, auditLogObj, {status: 'passed', audit_updated_at: Date.now()}))
   } catch (_) {
     if (retryCount >= 2) {
       // FAILED E2E Audit, make appropriate DB changes
-      await addE2EAuditToLogAsync(tntAddr, false)
+      await updateE2EAuditScoreAsync(tntAddr, false, (auditLogObj.status) ? auditLogObj : Object.assign({}, auditLogObj, { status: 'verification_failure', audit_updated_at: Date.now() }))
 
       return `E2E Audit Proof Verification FAILED for ${tntAddr} at ${publicUri} for hash_id_node=${hashIdNode},hash=${hash}`
     } else {
@@ -535,6 +592,8 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
           'e2e_audit_public_node_proof_verification',
           [tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
         )
+
+        await updateE2EAuditScoreAsync(tntAddr, false, (auditLogObj.status) ? auditLogObj : Object.assign({}, auditLogObj, { status: 'verification_failure', audit_updated_at: Date.now() }))
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`)
       }
@@ -592,6 +651,26 @@ async function writeAuditLogItemsAsync (auditDataJSON) {
       randomize: true
     })
     return `Inserted ${auditDataItems.length} rows into chainpoint_node_audit_log with tntAddrs ${auditDataItems[0].tntAddr}...`
+  } catch (error) {
+    let errorMessage = `writeAuditLogItemsAsync : bulk write error : ${error.message}`
+    throw errorMessage
+  }
+}
+
+async function writeE2EAuditLogItemsAsync (auditDataJSON) {
+// auditDataJSON is an array of JSON strings, convert to array of objects
+  let auditDataItems = auditDataJSON.map((item) => { return JSON.parse(item) })
+  try {
+    await retry(async bail => {
+      await E2ENodeAuditLog.bulkCreate(auditDataItems)
+    }, {
+      retries: 5, // The maximum amount of times to retry the operation. Default is 10
+      factor: 1, // The exponential factor to use. Default is 2
+      minTimeout: 200, // The number of milliseconds before starting the first retry. Default is 1000
+      maxTimeout: 400,
+      randomize: true
+    })
+    return `Inserted ${auditDataItems.length} rows into chainpoint_node_e2e_audit_log with tntAddrs ${auditDataItems[0].tntAddr}...`
   } catch (error) {
     let errorMessage = `writeAuditLogItemsAsync : bulk write error : ${error.message}`
     throw errorMessage
@@ -860,7 +939,27 @@ async function addAuditToLogAsync (tntAddr, publicUri, auditTime, publicIPPass, 
   }
 }
 
-async function addE2EAuditToLogAsync (tntAddr, auditResult) {
+async function addE2EAuditToLogAsync (auditLogObj) {
+  try {
+    let auditDate = {
+      tntAddr: auditLogObj.tnt_addr,
+      publicUri: auditLogObj.public_uri,
+      auditDate: auditLogObj.audit_date,
+      stage: auditLogObj.stage,
+      status: auditLogObj.status,
+      auditUpdatedAt: auditLogObj.audit_updated_at
+    }
+    // send E2E audit log result to accumulator to be inserted as part of an E2E audit log insert batch
+    await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(JSON.stringify(auditDate)), { persistent: true, type: 'write_e2e_audit_log' })
+  } catch (error) {
+    let errorMessage = `${env.RMQ_WORK_OUT_TASK_ACC_QUEUE} [write_e2e_audit_log] publish message nacked`
+    throw errorMessage
+  }
+}
+
+async function updateE2EAuditScoreAsync (tntAddr, auditResult, auditLogObj = null) {
+  if (!isNull(auditLogObj)) await addE2EAuditToLogAsync(auditLogObj)
+
   try {
     let scoreUpdate = {
       tntAddr: tntAddr,
@@ -931,6 +1030,7 @@ async function openStorageConnectionAsync () {
   let modelSqlzArray = [
     registeredNodeSequelize,
     nodeAuditSequelize,
+    e2eNodeAuditSequelize,
     cachedAuditChallenge.getAuditChallengeSequelize()
   ]
   await connections.openStorageConnectionAsync(modelSqlzArray, debug)
