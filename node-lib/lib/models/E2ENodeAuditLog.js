@@ -95,7 +95,7 @@ var E2ENodeAuditLog = sequelize.define(env.COCKROACH_E2E_AUDIT_TABLE_NAME,
       comment: 'Enum-like field with the following possible values ("pending", "passed", "submission_failure", "hash_mismatch_failure", "hash_id_node_validation_failure", "null_proof_failure", "invalid_cal_branch_failure").',
       type: Sequelize.STRING,
       validate: {
-        is: ['(pending|passed|submission_failure|hash_mismatch_failure|hash_id_node_validation_failure|null_proof_failure|invalid_cal_branch_failure)']
+        is: ['(pending|passed|submission_failure|retrieval_failure|verification_failure|hash_mismatch_failure|hash_id_node_validation_failure|null_proof_failure|invalid_cal_branch_failure)']
       },
       field: 'status',
       allowNull: false
