@@ -444,7 +444,7 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
           [nodeData, (retryCount + 1)]
         )
 
-        await updateE2EAuditScoreAsync(tntAddr, false, (auditLogObj.status) ? auditLogObj : Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.SubmissionFailure, audit_at: Date.now() }))
+        await addE2EAuditToLogAsync(Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.SubmissionFailure, audit_at: Date.now() }))
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node task:  ${tntAddr} at ${publicUri} - ${error.message}`)
       }
@@ -560,7 +560,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
           [tntAddr, publicUri, hashIdNode, hash, (retryCount + 1)]
         )
 
-        await updateE2EAuditScoreAsync(tntAddr, false, (auditLogObj.status) ? auditLogObj : Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.RetrievalFailure, audit_at: Date.now() }))
+        await addE2EAuditToLogAsync(Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.RetrievalFailure, audit_at: Date.now() }))
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`)
       }
@@ -631,7 +631,7 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
           [tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
         )
 
-        await updateE2EAuditScoreAsync(tntAddr, false, (auditLogObj.status) ? auditLogObj : Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.VerificationFailure, audit_at: Date.now() }))
+        await addE2EAuditToLogAsync(Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.VerificationFailure, audit_at: Date.now() }))
       } catch (error) {
         console.error(`Could not re-enqueue e2e_audit_public_node_proof_retrieval task : ${tntAddr} at ${publicUri} for hash=${hash} : ${error.message}`)
       }
@@ -985,7 +985,7 @@ async function addE2EAuditToLogAsync (auditLogObj) {
       auditDate: auditLogObj.audit_date,
       stage: auditLogObj.stage,
       status: auditLogObj.status,
-      auditUpdatedAt: auditLogObj.audit_at
+      auditAt: auditLogObj.audit_at
     }
     // send E2E audit log result to accumulator to be inserted as part of an E2E audit log insert batch
     await amqpChannel.sendToQueue(env.RMQ_WORK_OUT_TASK_ACC_QUEUE, Buffer.from(JSON.stringify(auditDate)), { persistent: true, type: 'write_e2e_audit_log' })

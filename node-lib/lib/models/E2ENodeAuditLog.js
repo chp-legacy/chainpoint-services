@@ -100,7 +100,7 @@ var E2ENodeAuditLog = sequelize.define(env.COCKROACH_E2E_AUDIT_TABLE_NAME,
       field: 'status',
       allowNull: false
     },
-    audit_at: {
+    auditAt: {
       comment: 'The time that a "hash_submission" status was captured, in MS since EPOCH.',
       type: Sequelize.INTEGER,
       field: 'audit_at',
