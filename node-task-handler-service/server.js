@@ -85,7 +85,6 @@ let e2eNodeAuditSequelize = e2eNodeAuditLog.sequelize
 let E2ENodeAuditLog = e2eNodeAuditLog.E2ENodeAuditLog
 let registeredNodeSequelize = registeredNode.sequelize
 let Op = nodeAuditSequelize.Op
-let e2eOp = e2eNodeAuditSequelize.Op // eslint-disable-line
 
 // The acceptable time difference between Node and Core for a timestamp to be considered valid, in milliseconds
 const ACCEPTABLE_DELTA_MS = 5000 // 5 seconds
