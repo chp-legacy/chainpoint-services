@@ -39,11 +39,10 @@ function openRedisConnection (redisURIs, onReady, onError, debug) {
         }
       }),
       name: 'mymaster',
-      password: password,
-      connectTimeout: 10000
+      password: password
     }
   }
-  logMessage('Connecting to redis....', redisConfigObj)
+
   var newRedis = new Redis(redisConfigObj)
 
   newRedis.on('error', (err) => {
