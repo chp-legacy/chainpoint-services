@@ -369,7 +369,7 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
   let auditLogObj = {
     tnt_addr: tntAddr,
     public_uri: publicUri,
-    audit_date: moment.utc().format('YYYYMMDD'),
+    audit_date: moment.utc().format('YYYY-MM-DD'),
     stage: E2EAuditStageEnum.HashSubmission
   }
 
@@ -464,7 +464,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
   let auditLogObj = {
     tnt_addr: tntAddr,
     public_uri: publicUri,
-    audit_date: moment.utc().format('YYYYMMDD'),
+    audit_date: moment.utc().format('YYYY-MM-DD'),
     stage: E2EAuditStageEnum.ProofRetrieval
   }
 
@@ -586,7 +586,7 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
   let auditLogObj = {
     tnt_addr: tntAddr,
     public_uri: publicUri,
-    audit_date: moment.utc().format('YYYYMMDD'),
+    audit_date: moment.utc().format('YYYY-MM-DD'),
     stage: E2EAuditStageEnum.ProofVerification
   }
 
@@ -888,6 +888,11 @@ function buildNodeDataPackage (nodeData, activeNodeCount) {
         node_version_pass: nodeData.node_version_pass,
         tnt_balance_grains: tntBalanceGrains,
         tnt_balance_pass: nodeData.tnt_balance_pass
+      }],
+      e2e_audits: [{
+        audit_date: nodeData.e2e_audit_date,
+        audit_at: nodeData.e2e_audit_at,
+        status: nodeData.last_e2e_audit_status
       }],
       core: {
         total_active_nodes: activeNodeCount

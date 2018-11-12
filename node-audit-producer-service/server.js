@@ -74,20 +74,32 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
   // get list of all public Registered Nodes to audit
   let publicNodesReadyForAudit = []
   try {
-    let sqlQuery = `SELECT rn.tnt_addr, rn.public_uri, rn.tnt_credit, rn.audit_score, rn.pass_count, rn.fail_count, rn.consecutive_passes, 
-                   rn.consecutive_fails, rn.created_at, rn.updated_at, al.audit_at, al.public_ip_pass, al.public_uri AS audit_uri, 
-                   al.node_ms_delta, al.time_pass, al.cal_state_pass, al.min_credits_pass, al.node_version, 
-                   al.node_version_pass, al.tnt_balance_grains, al.tnt_balance_pass
-                   FROM chainpoint_registered_nodes rn
-                   LEFT JOIN (
-                     SELECT DISTINCT ON (al2.tnt_addr) al2.tnt_addr, al2.audit_at, al2.public_ip_pass, al2.public_uri, 
-                     al2.node_ms_delta, al2.time_pass, al2.cal_state_pass, al2.min_credits_pass, al2.node_version, 
-                     al2.node_version_pass, al2.tnt_balance_grains, al2.tnt_balance_pass
-                     FROM chainpoint_node_audit_log AS al2
-                     ORDER BY al2.tnt_addr, al2.audit_at DESC
-                   ) AS al
-                   ON rn.tnt_addr = al.tnt_addr
-                   WHERE rn.public_uri IS NOT NULL`
+    let sqlQuery = `SELECT rn.tnt_addr AS tnt_addr, rn.public_uri, rn.tnt_credit, rn.audit_score, rn.pass_count, rn.fail_count, rn.consecutive_passes, 
+                    rn.consecutive_fails, rn.created_at, rn.updated_at, al.audit_at, al.public_ip_pass, al.public_uri AS audit_uri, 
+                    al.node_ms_delta, al.time_pass, al.cal_state_pass, al.min_credits_pass, al.node_version, 
+                    al.node_version_pass, al.tnt_balance_grains, al.tnt_balance_pass, e2e.audit_date AS e2e_audit_date, e2e.audit_at AS e2e_audit_at, e2e.last_e2e_audit_status
+                    FROM chainpoint_registered_nodes rn
+                    LEFT JOIN (
+                      SELECT DISTINCT ON (al2.tnt_addr) al2.tnt_addr, al2.audit_at, al2.public_ip_pass, al2.public_uri, 
+                      al2.node_ms_delta, al2.time_pass, al2.cal_state_pass, al2.min_credits_pass, al2.node_version, 
+                      al2.node_version_pass, al2.tnt_balance_grains, al2.tnt_balance_pass
+                      FROM chainpoint_node_audit_log AS al2
+                      ORDER BY al2.tnt_addr, al2.audit_at DESC
+                    ) AS al
+                    ON rn.tnt_addr = al.tnt_addr
+                    LEFT JOIN (
+                      SELECT DISTINCT ON (e2e2.tnt_addr) e2e2.tnt_addr, e2e2.audit_date, e2e2.audit_at, 
+                      (CASE 
+                        WHEN (SELECT count(*) FROM chainpoint_node_e2e_audit_log WHERE tnt_addr=tnt_addr AND stage='hash_submission' AND status != 'passed' AND e2e2.audit_date::DATE = current_date() - 1) >= 3 THEN status
+                        WHEN (SELECT count(*) FROM chainpoint_node_e2e_audit_log WHERE tnt_addr=tnt_addr AND stage='proof_retrieval' AND status != 'passed' AND e2e2.audit_date::DATE = current_date() - 1) >= 3 THEN status
+                        WHEN (SELECT count(*) FROM chainpoint_node_e2e_audit_log WHERE tnt_addr=tnt_addr AND stage='proof_verification' AND status != 'passed' AND e2e2.audit_date::DATE = current_date() - 1) >= 3 THEN status
+                        ELSE null 
+                      END) AS last_e2e_audit_status
+                      FROM chainpoint_node_e2e_audit_log AS e2e2
+                      WHERE e2e2.audit_date::DATE = current_date() - 1
+                    ) AS e2e
+                    ON rn.tnt_addr = e2e.tnt_addr
+                    WHERE rn.public_uri IS NOT NULL`
     publicNodesReadyForAudit = await regNodeSequelize.query(sqlQuery, { type: regNodeSequelize.QueryTypes.SELECT })
     console.log(`${publicNodesReadyForAudit.length} public Nodes ready for audit were found`)
   } catch (error) {
