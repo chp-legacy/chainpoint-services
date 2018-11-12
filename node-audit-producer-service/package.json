@@ -14,7 +14,7 @@
     "exit-hook": "^1.1.1",
     "exp-leader-election": "https://github.com/Tierion/exp-leader-election.git#837ac9155f2c2eba89124157880675f6472aa94a",
     "heartbeats": "^5.0.1",
-    "ioredis": "^3.2.2",
+    "ioredis": "^4.2.0",
     "merkle-tools": "^1.3.2",
     "moment": "^2.22.2",
     "node-resque": "^5.4.1",
