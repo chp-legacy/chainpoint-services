@@ -43,7 +43,7 @@ function openRedisConnection (redisURIs, onReady, onError, debug) {
       connectTimeout: 10000
     }
   }
-
+  logMessage('Connecting to redis....', redisConfigObj)
   var newRedis = new Redis(redisConfigObj)
 
   newRedis.on('error', (err) => {
