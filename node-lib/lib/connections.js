@@ -39,7 +39,8 @@ function openRedisConnection (redisURIs, onReady, onError, debug) {
         }
       }),
       name: 'mymaster',
-      password: password
+      password: password,
+      connectTimeout: 10000
     }
   }
 
