@@ -892,7 +892,8 @@ function buildNodeDataPackage (nodeData, activeNodeCount) {
       e2e_audits: [{
         audit_date: nodeData.e2e_audit_date,
         audit_at: nodeData.e2e_audit_at,
-        status: nodeData.last_e2e_audit_status
+        failure: (nodeData.last_e2e_audit_status !== 'passed') ? nodeData.last_e2e_audit_status : null,
+        audit_passed: (nodeData.last_e2e_audit_status === 'passed')
       }],
       core: {
         total_active_nodes: activeNodeCount
