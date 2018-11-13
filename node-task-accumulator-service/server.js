@@ -32,10 +32,14 @@ debugPkg.log = console.info.bind(console)
 
 let AUDIT_LOG_WRITE_POOL = []
 let AUDIT_SCORE_UPDATE_POOL = []
+let E2E_AUDIT_LOG_WRITE_POOL = []
 let E2E_AUDIT_SCORE_UPDATE_POOL = []
 
 // Variable indicating if audit log write accumulation pool is currently being drained
 let AUDIT_LOG_WRITE_POOL_DRAINING = false
+
+// Variable indicating if e2e audit log write accumulation pool is currently being drained
+let E2E_AUDIT_LOG_WRITE_POOL_DRAINING = false
 
 // The number of items to include in a single batch audit log write command
 let auditLogWriteBatchSize = 500
@@ -73,6 +77,11 @@ function processMessage (msg) {
         // accumulates audit log write tasks and issues batch to task handler
         consumeWriteAuditLogMessageAsync(msg)
         break
+      case 'write_e2e_audit_log':
+        // Consumes an audit log write message from the task handler
+        // accumulates audit log write tasks and issues batch to task handler
+        consumeWriteE2EAuditLogMessageAsync(msg)
+        break
       case 'update_node_audit_score':
         // Consumes an audit score update message from the task handler
         // accumulates audit score update tasks and issues batch to task handler
@@ -102,6 +111,19 @@ async function consumeWriteAuditLogMessageAsync (msg) {
       msg: msg
     }
     AUDIT_LOG_WRITE_POOL.push(auditDataObj)
+  }
+}
+
+async function consumeWriteE2EAuditLogMessageAsync (msg) {
+  if (msg !== null) {
+    let auditDataJSON = msg.content.toString()
+
+    // add msg to the auditData object so that we can ack it later
+    let auditDataObj = {
+      auditDataJSON: auditDataJSON,
+      msg: msg
+    }
+    E2E_AUDIT_LOG_WRITE_POOL.push(auditDataObj)
   }
 }
 
@@ -165,6 +187,43 @@ async function drainAuditLogWritePoolAsync () {
     }
 
     AUDIT_LOG_WRITE_POOL_DRAINING = false
+  }
+}
+
+async function drainE2EAuditLogWritePoolAsync () {
+  if (!E2E_AUDIT_LOG_WRITE_POOL_DRAINING && amqpChannel != null) {
+    E2E_AUDIT_LOG_WRITE_POOL_DRAINING = true
+
+    let currentPendingWriteCount = E2E_AUDIT_LOG_WRITE_POOL.length
+    let writeBatchesNeeded = Math.ceil(currentPendingWriteCount / auditLogWriteBatchSize)
+    if (currentPendingWriteCount > 0) debug.writeAuditLog(`${currentPendingWriteCount} pending audit log writes currently in pool`)
+    for (let x = 0; x < writeBatchesNeeded; x++) {
+      let pendingWriteObjs = E2E_AUDIT_LOG_WRITE_POOL.splice(0, auditLogWriteBatchSize)
+      let auditDataJSON = pendingWriteObjs.map((item) => item.auditDataJSON)
+      // write the audit log items to the database
+      try {
+        await taskQueue.enqueue('task-handler-queue', `write_e2e_audit_log_items`, [auditDataJSON])
+        debug.writeAuditLog(`${auditDataJSON.length} e2e audit log items queued for writing`)
+
+        // This batch has been submitted to task handler successfully
+        // ack consumption of all original messages part of this batch
+        pendingWriteObjs.forEach((item) => {
+          if (item.msg !== null) {
+            amqpChannel.ack(item.msg)
+          }
+        })
+      } catch (error) {
+        console.error(`Could not enqueue e2e write task : ${error.message}`)
+        // nack consumption of all original messages part of this batch
+        pendingWriteObjs.forEach((item) => {
+          if (item.msg !== null) {
+            amqpChannel.nack(item.msg)
+          }
+        })
+      }
+    }
+
+    E2E_AUDIT_LOG_WRITE_POOL_DRAINING = false
   }
 }
 
@@ -295,6 +354,7 @@ function startIntervals () {
   let intervals = [
     { function: drainAuditLogWritePoolAsync, ms: 1000 },
     { function: drainAuditScoreUpdatePoolAsync, ms: 1000 },
+    { function: drainE2EAuditLogWritePoolAsync, ms: 1000 },
     { function: drainE2EAuditScoreUpdatePoolAsync, ms: 1000 }
   ]
   connections.startIntervals(intervals, debug)
