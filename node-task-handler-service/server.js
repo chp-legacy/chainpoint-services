@@ -362,14 +362,14 @@ async function performAuditPublicAsync (nodeData, activeNodeCount) {
   return `Public Audit complete for ${tntAddr} at ${publicUri} : Pass = ${publicIPPass && timePass && calStatePass && minCreditsPass && nodeVersionPass && tntBalancePass}`
 }
 
-async function performE2EAuditPublicAsync (nodeData, retryCount) {
+async function performE2EAuditPublicAsync (nodeData, retryCount, auditDate = null) {
   let tntAddr = nodeData.tnt_addr
   let publicUri = nodeData.public_uri
   let randomHash = crypto.createHash('sha256').update(crypto.randomBytes(Math.ceil(4 / 2)).toString('hex').slice(0, 4)).digest('hex')
   let auditLogObj = {
     tnt_addr: tntAddr,
     public_uri: publicUri,
-    audit_date: moment.utc().format('YYYYMMDD'),
+    audit_date: auditDate || moment.utc().format('YYYY-MM-DD'),
     stage: E2EAuditStageEnum.HashSubmission
   }
 
@@ -421,7 +421,7 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
         (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
         'task-handler-queue',
         'e2e_audit_public_node_proof_retrieval',
-        [tntAddr, publicUri, partialProof.hash_id_node, randomHash, 0] // [<node_uri>, <hash_id_node>, <randomHash>, <retryCount>]
+        [tntAddr, publicUri, partialProof.hash_id_node, randomHash, 0, auditLogObj.audit_date] // [<node_uri>, <hash_id_node>, <randomHash>, <retryCount>, audit_date]
       )
 
       await addE2EAuditToLogAsync(Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.Passed, audit_at: Date.now() }))
@@ -441,7 +441,7 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
           (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
           'task-handler-queue',
           'e2e_audit_public_node',
-          [nodeData, (retryCount + 1)]
+          [nodeData, (retryCount + 1), auditLogObj.audit_date]
         )
 
         await addE2EAuditToLogAsync(Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.SubmissionFailure, audit_at: Date.now() }))
@@ -452,7 +452,7 @@ async function performE2EAuditPublicAsync (nodeData, retryCount) {
   }
 }
 
-async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, hashIdNode, hash, retryCount) {
+async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, hashIdNode, hash, retryCount, auditDate) {
   // Retrieve Proof
   let options = {
     method: 'GET',
@@ -464,7 +464,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
   let auditLogObj = {
     tnt_addr: tntAddr,
     public_uri: publicUri,
-    audit_date: moment.utc().format('YYYYMMDD'),
+    audit_date: auditDate,
     stage: E2EAuditStageEnum.ProofRetrieval
   }
 
@@ -537,7 +537,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
         await taskQueue.enqueue(
           'task-handler-queue',
           'e2e_audit_public_node_proof_verification',
-          [tntAddr, publicUri, hashIdNode, hash, proof.proof, 0]
+          [tntAddr, publicUri, hashIdNode, hash, proof.proof, 0, auditLogObj.audit_date]
         )
 
         await addE2EAuditToLogAsync(Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.Passed, audit_at: Date.now() }))
@@ -557,7 +557,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
           (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
           'task-handler-queue',
           'e2e_audit_public_node_proof_retrieval',
-          [tntAddr, publicUri, hashIdNode, hash, (retryCount + 1)]
+          [tntAddr, publicUri, hashIdNode, hash, (retryCount + 1), auditLogObj.audit_date]
         )
 
         await addE2EAuditToLogAsync(Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.RetrievalFailure, audit_at: Date.now() }))
@@ -568,7 +568,7 @@ async function performE2EAuditPublicProofRetrievalAsync (tntAddr, publicUri, has
   }
 }
 
-async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, retryCount) {
+async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, retryCount, auditDate) {
   // Proof Verification
   let options = {
     method: 'POST',
@@ -586,7 +586,7 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
   let auditLogObj = {
     tnt_addr: tntAddr,
     public_uri: publicUri,
-    audit_date: moment.utc().format('YYYYMMDD'),
+    audit_date: auditDate,
     stage: E2EAuditStageEnum.ProofVerification
   }
 
@@ -628,7 +628,7 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
           (1000 * 60) * 60 * 3, // 3hrs in milliseconds --> DEVELOPMENT TESTING:((1000 * 15))
           'task-handler-queue',
           'e2e_audit_public_node_proof_verification',
-          [tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1)]
+          [tntAddr, publicUri, hashIdNode, hash, base64EncodedProof, (retryCount + 1), auditLogObj.audit_date]
         )
 
         await addE2EAuditToLogAsync(Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.VerificationFailure, audit_at: Date.now() }))
@@ -888,6 +888,12 @@ function buildNodeDataPackage (nodeData, activeNodeCount) {
         node_version_pass: nodeData.node_version_pass,
         tnt_balance_grains: tntBalanceGrains,
         tnt_balance_pass: nodeData.tnt_balance_pass
+      }],
+      e2e_audits: [{
+        audit_date: nodeData.e2e_audit_date,
+        audit_at: nodeData.e2e_audit_at,
+        failure: (nodeData.last_e2e_audit_status !== 'passed') ? nodeData.last_e2e_audit_status : null,
+        audit_passed: (nodeData.last_e2e_audit_status === 'passed')
       }],
       core: {
         total_active_nodes: activeNodeCount

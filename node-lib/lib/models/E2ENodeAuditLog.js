@@ -66,10 +66,7 @@ var E2ENodeAuditLog = sequelize.define(env.COCKROACH_E2E_AUDIT_TABLE_NAME,
     },
     auditDate: {
       comment: 'The time the audit was performed, (yyyymmdd).',
-      type: Sequelize.STRING,
-      validate: {
-        is: ['[0-9]{8}']
-      },
+      type: Sequelize.DATE,
       field: 'audit_date',
       allowNull: false
     },
