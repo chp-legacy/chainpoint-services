@@ -31,15 +31,15 @@ let recommendedGasPrice = null
 // entire timeframe will be used
 const GAS_PRICE_HISTORY_KEY = 'ETH_TNT_Tx:GasPriceHistory'
 
-const network = env.isProduction ? ethers.providers.networks.homestead : ethers.providers.networks.ropsten
+const network = env.USE_BTCETH_TESTNET ? ethers.providers.networks.ropsten : ethers.providers.networks.homestead
 const tntSourceWalletPK = env.ETH_TNT_SOURCE_WALLET_PK
-const tntContractAddr = tntDefinition.networks[env.isProduction ? '1' : '3'].address
+const tntContractAddr = tntDefinition.networks[env.USE_BTCETH_TESTNET ? '3' : '1'].address
 
 // configure providers
 // balanceCheckProvider will use infura with json-rpc as a fallback measure (etherscan will not handle balance check volume)
 // tntTransactionProvider will use infura with etherscan and json-rpc as fallback measures for less frequest request
 const etherscanProvider = new ethers.providers.EtherscanProvider(network, env.ETH_ETHERSCAN_API_KEY)
-let infuraHost = env.isProduction ? 'mainnet.infura.io' : 'ropsten.infura.io'
+let infuraHost = env.USE_BTCETH_TESTNET ? 'ropsten.infura.io' : 'mainnet.infura.io'
 const infuraJsonRpcProvider = new ethers.providers.JsonRpcProvider(`https://${infuraHost}/v3/${env.ETH_INFURA_API_KEY}`, network)
 const parityJsonRpcProvider = new ethers.providers.JsonRpcProvider(env.ETH_JSON_RPC_URI, network)
 

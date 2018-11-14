@@ -62,6 +62,7 @@ let envDefinitions = {
 
   // Chainpoint stack related variables
   NODE_ENV: envalid.str({ default: 'production', desc: 'The type of environment in which the service is running' }),
+  USE_BTCETH_TESTNET: envalid.bool({ default: 'true', desc: 'Whether to use BTC/ETH test or main networks' }),
 
   // Anchor to external blockchains toggle variables
   // Using string values in place of a Bool due to issues with storing bool values in K8s secrets
