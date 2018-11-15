@@ -176,7 +176,6 @@ chai@^3.5.0:
 chainpoint-binary@^4.0.2:
   version "4.0.2"
   resolved "https://registry.yarnpkg.com/chainpoint-binary/-/chainpoint-binary-4.0.2.tgz#dd55f18e856552e86650bba95da6c888ee0b835d"
-  integrity sha512-WzZBbzV5yX3i2Dq6+JI6tG5UJ0vM+4dcUhiXcif7kFjz0tbYN2rKLzrLgsk9l2+bw+/rvuZfLVSVDMZzMtfTcQ==
   dependencies:
     chainpoint-proof-json-schema "^1.0.2"
     msgpack-lite "^0.1.26"
@@ -185,7 +184,6 @@ chainpoint-binary@^4.0.2:
 chainpoint-parse@^3.1.4:
   version "3.1.4"
   resolved "https://registry.yarnpkg.com/chainpoint-parse/-/chainpoint-parse-3.1.4.tgz#101ba7c4975962737179ad23896d72afefcfc6f5"
-  integrity sha512-3h1KYyCCPQ4eCWkdOL1lsItvHLRiHVC4tdW/BYJq2OWMIn3iD0jJW9py17GYwgEOQFjLwt1RlRwi83wYCsQEWA==
   dependencies:
     chainpoint-binary "^4.0.2"
     chainpoint-proof-json-schema "^1.0.2"
@@ -194,7 +192,6 @@ chainpoint-parse@^3.1.4:
 chainpoint-proof-json-schema@^1.0.2:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/chainpoint-proof-json-schema/-/chainpoint-proof-json-schema-1.0.2.tgz#4d066b60f0387f07e093e6ac3ac5df2817f9e197"
-  integrity sha512-WTYvsEClYHQITjzbwhfjZo/xFF3GULQG3tI0q8RlMKhebH2mWdJE2BEBsz8DnYHJcBbxLaQEzbYAETxenqEdrQ==
   dependencies:
     is-my-json-valid "^2.16.0"
 
@@ -1432,9 +1429,17 @@ tunnel-agent@^0.6.0:
   dependencies:
     safe-buffer "^5.0.1"
 
+tweetnacl-util@^0.15.0:
+  version "0.15.0"
+  resolved "https://registry.yarnpkg.com/tweetnacl-util/-/tweetnacl-util-0.15.0.tgz#4576c1cee5e2d63d207fee52f1ba02819480bc75"
+
 tweetnacl@^0.14.3, tweetnacl@~0.14.0:
   version "0.14.5"
   resolved "https://registry.yarnpkg.com/tweetnacl/-/tweetnacl-0.14.5.tgz#5ae68177f192d4456269d108afa93ff8743f4f64"
+
+tweetnacl@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/tweetnacl/-/tweetnacl-1.0.0.tgz#713d8b818da42068740bf68386d0479e66fc8a7b"
 
 type-detect@0.1.1:
   version "0.1.1"

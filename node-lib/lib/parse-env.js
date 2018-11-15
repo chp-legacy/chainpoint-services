@@ -179,6 +179,7 @@ module.exports = (service) => {
     case 'api':
       envDefinitions.CHAINPOINT_CORE_BASE_URI = envalid.url({ desc: 'Base URI for this Chainpoint Core stack of services' })
       envDefinitions.ETH_TNT_LISTEN_ADDRS = validateETHAddressesCSV({ desc: 'The addresses used to listen for incoming TNT transfers.  If more that one, separate by commas.' })
+      envDefinitions.SIGNING_SECRET_KEY = envalid.str({ desc: 'A Base64 encoded NaCl secret signing key' })
       break
     case 'audit':
       envDefinitions.CHAINPOINT_CORE_BASE_URI = envalid.url({ desc: 'Base URI for this Chainpoint Core stack of services' })
