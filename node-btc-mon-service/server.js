@@ -39,7 +39,7 @@ let CHECKS_IN_PROGRESS = false
 
 // Initialize BlockchainAnchor object
 let anchor = new BlockchainAnchor({
-  btcUseTestnet: !env.isProduction,
+  btcUseTestnet: env.USE_BTCETH_TESTNET,
   service: 'insightapi',
   insightApiBase: env.INSIGHT_API_BASE_URI,
   insightFallback: true
