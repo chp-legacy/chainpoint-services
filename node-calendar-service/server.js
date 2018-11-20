@@ -723,7 +723,7 @@ async function processBtcAnchorInterval () {
     let lastProcessedCalHeight = await coreNetworkState.getLastCalBlockHeightProcessedForBtcABlock()
     if (lastProcessedCalHeight === null) {
       // there is no entry found, most likely first run, default to most recent btc-a block
-      lastProcessedCalHeight = await lastBtcAnchorBlockIdAsync()
+      lastProcessedCalHeight = await lastBtcAnchorBlockIdAsync() || -1
     }
     let blocks = await CalendarBlock.findAll({ where: { id: { [Op.gt]: lastProcessedCalHeight } }, attributes: ['id', 'type', 'hash'], order: [['id', 'ASC']] })
     debug.btcAnchor('scheduleJob : calendar : processBtcAnchorInterval : btc blocks.length to anchor : %d', blocks.length)
