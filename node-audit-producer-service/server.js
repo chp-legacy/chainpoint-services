@@ -18,6 +18,7 @@
 const env = require('./lib/parse-env.js')('audit')
 
 const registeredNode = require('./lib/models/RegisteredNode.js')
+const e2eNodeAuditLog = require('./lib/models/E2ENodeAuditLog.js')
 const utils = require('./lib/utils.js')
 const calendarBlock = require('./lib/models/CalendarBlock.js')
 const cachedAuditChallenge = require('./lib/models/cachedAuditChallenge.js')
@@ -29,6 +30,7 @@ const heartbeats = require('heartbeats')
 const leaderElection = require('exp-leader-election')
 const cnsl = require('consul')
 const moment = require('moment')
+const _ = require('lodash')
 const connections = require('./lib/connections.js')
 
 let consul = null
@@ -63,6 +65,7 @@ const merkleTools = new MerkleTools()
 // pull in variables defined in shared database models
 let regNodeSequelize = registeredNode.sequelize
 let RegisteredNode = registeredNode.RegisteredNode
+let e2eNodeAuditSequelize = e2eNodeAuditLog.sequelize
 let calBlockSequelize = calendarBlock.sequelize
 let CalendarBlock = calendarBlock.CalendarBlock
 let nodeAuditSequelize = nodeAuditLog.sequelize
@@ -74,10 +77,10 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
   // get list of all public Registered Nodes to audit
   let publicNodesReadyForAudit = []
   try {
-    let sqlQuery = `SELECT rn.tnt_addr AS tnt_addr, rn.public_uri, rn.tnt_credit, rn.audit_score, rn.pass_count, rn.fail_count, rn.consecutive_passes, 
+    let sqlQuery = `SELECT rn.tnt_addr, rn.public_uri, rn.tnt_credit, rn.audit_score, rn.pass_count, rn.fail_count, rn.consecutive_passes, 
                     rn.consecutive_fails, rn.created_at, rn.updated_at, al.audit_at, al.public_ip_pass, al.public_uri AS audit_uri, 
                     al.node_ms_delta, al.time_pass, al.cal_state_pass, al.min_credits_pass, al.node_version, 
-                    al.node_version_pass, al.tnt_balance_grains, al.tnt_balance_pass, e2e.audit_date AS e2e_audit_date, e2e.audit_at AS e2e_audit_at, e2e.last_e2e_audit_status
+                    al.node_version_pass, al.tnt_balance_grains, al.tnt_balance_pass
                     FROM chainpoint_registered_nodes rn
                     LEFT JOIN (
                       SELECT DISTINCT ON (al2.tnt_addr) al2.tnt_addr, al2.audit_at, al2.public_ip_pass, al2.public_uri, 
@@ -87,23 +90,19 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
                       ORDER BY al2.tnt_addr, al2.audit_at DESC
                     ) AS al
                     ON rn.tnt_addr = al.tnt_addr
-                    LEFT JOIN (
-                      SELECT DISTINCT ON (e2e2.tnt_addr) e2e2.tnt_addr, e2e2.audit_date, e2e2.audit_at, 
-                      (CASE 
-                        WHEN (SELECT count(*) FROM chainpoint_node_e2e_audit_log WHERE tnt_addr=tnt_addr AND stage='hash_submission' AND status != 'passed' AND e2e2.audit_date::DATE = current_date() - 1) >= 3 THEN status
-                        WHEN (SELECT count(*) FROM chainpoint_node_e2e_audit_log WHERE tnt_addr=tnt_addr AND stage='proof_retrieval' AND status != 'passed' AND e2e2.audit_date::DATE = current_date() - 1) >= 3 THEN status
-                        WHEN (SELECT count(*) FROM chainpoint_node_e2e_audit_log WHERE tnt_addr=tnt_addr AND stage='proof_verification' AND status != 'passed' AND e2e2.audit_date::DATE = current_date() - 1) >= 3 THEN status
-                        ELSE null 
-                      END) AS last_e2e_audit_status
-                      FROM chainpoint_node_e2e_audit_log AS e2e2
-                      WHERE e2e2.audit_date::DATE = current_date() - 1
-                    ) AS e2e
-                    ON rn.tnt_addr = e2e.tnt_addr
                     WHERE rn.public_uri IS NOT NULL`
     publicNodesReadyForAudit = await regNodeSequelize.query(sqlQuery, { type: regNodeSequelize.QueryTypes.SELECT })
     console.log(`${publicNodesReadyForAudit.length} public Nodes ready for audit were found`)
   } catch (error) {
     let message = `Could not retrieve public Node data : ${error.message}`
+    throw new Error(message)
+  }
+
+  let e2eAuditLogs = []
+  try {
+    e2eAuditLogs = await e2eNodeAuditSequelize.query(`SELECT * FROM chainpoint_node_e2e_audit_log WHERE audit_date::DATE=(current_date() - 1)`, { type: e2eNodeAuditSequelize.QueryTypes.SELECT })
+  } catch (error) {
+    let message = `Could not retrieve E2E Audit Log data : ${error.message}`
     throw new Error(message)
   }
 
@@ -121,8 +120,42 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
       let taskHandlerArgs = (function () {
         let defaultRetryCount = 0
 
-        if (opts.e2eAudit === true) return [publicNodeReadyForAudit, defaultRetryCount]
-        else return [ publicNodeReadyForAudit, activePublicNodeCount ]
+        if (opts.e2eAudit === true) {
+          return [publicNodeReadyForAudit, defaultRetryCount]
+        } else {
+          const nodeE2EAuditResults = _.chain(e2eAuditLogs)
+            .filter(['tnt_addr', publicNodeReadyForAudit.tnt_addr])
+            .groupBy('stage')
+            .map((currVal, key) => {
+              const stage = key
+              const passedResult = _.find(currVal, ['status', 'passed'])
+
+              if (_.isEmpty(passedResult)) {
+                return { e2e_audit_date: currVal[0].audit_date, e2e_audit_at: currVal[0].audit_at, stage: key, last_e2e_audit_status: stage + '_failure' }
+              } else {
+                return { e2e_audit_date: currVal[0].audit_date, e2e_audit_at: currVal[0].audit_at, stage: key, last_e2e_audit_status: 'passed' }
+              }
+            })
+            .reduce((result, currStage) => {
+              if (_.isEmpty(result) || result.last_e2e_audit_status === 'passed') {
+                delete currStage.stage
+                return Object.assign(result, {}, currStage)
+              } else {
+                return result
+              }
+            }, {})
+            .value()
+
+          return [
+            Object.assign(
+              {},
+              publicNodeReadyForAudit,
+              { e2e_audit_date: null, e2e_audit_at: null, last_e2e_audit_status: null },
+              nodeE2EAuditResults
+            ),
+            activePublicNodeCount
+          ]
+        }
       })()
 
       // For E2E audits, spread out the delivery of messages to the queue over time.
@@ -329,6 +362,7 @@ async function openStorageConnectionAsync () {
     nodeAuditSequelize,
     calBlockSequelize,
     regNodeSequelize,
+    e2eNodeAuditSequelize,
     cachedAuditChallenge.getAuditChallengeSequelize()
   ]
   await connections.openStorageConnectionAsync(modelSqlzArray)

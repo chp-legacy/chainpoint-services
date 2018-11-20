@@ -62,6 +62,7 @@ let envDefinitions = {
 
   // Chainpoint stack related variables
   NODE_ENV: envalid.str({ default: 'production', desc: 'The type of environment in which the service is running' }),
+  USE_BTCETH_TESTNET: envalid.bool({ default: 'true', desc: 'Whether to use BTC/ETH test or main networks' }),
 
   // Anchor to external blockchains toggle variables
   // Using string values in place of a Bool due to issues with storing bool values in K8s secrets
@@ -178,6 +179,7 @@ module.exports = (service) => {
     case 'api':
       envDefinitions.CHAINPOINT_CORE_BASE_URI = envalid.url({ desc: 'Base URI for this Chainpoint Core stack of services' })
       envDefinitions.ETH_TNT_LISTEN_ADDRS = validateETHAddressesCSV({ desc: 'The addresses used to listen for incoming TNT transfers.  If more that one, separate by commas.' })
+      envDefinitions.SIGNING_SECRET_KEY = envalid.str({ desc: 'A Base64 encoded NaCl secret signing key' })
       break
     case 'audit':
       envDefinitions.CHAINPOINT_CORE_BASE_URI = envalid.url({ desc: 'Base URI for this Chainpoint Core stack of services' })
