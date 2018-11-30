@@ -114,7 +114,7 @@ async function initResqueSchedulerAsync (redisClient, setSchedulerHandlers, debu
   let connectionDetails = { redis: redisClient }
 
   // Start Resqueue Scheduler for delayed Jobs
-  const scheduler = new nodeResque.Scheduler({connection: connectionDetails})
+  const scheduler = new nodeResque.Scheduler({ connection: connectionDetails })
   await scheduler.connect()
 
   setSchedulerHandlers(scheduler)
