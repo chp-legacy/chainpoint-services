@@ -43,10 +43,6 @@ let amqpChannel = null
 let nistLatest = null
 let nistLatestEpoch = null
 
-// pull in variables defined in shared RegisteredNode module
-let sequelize = registeredNode.sequelize
-let RegisteredNode = registeredNode.RegisteredNode
-
 // The minimium TNT grains required to operate a Node
 const minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
 
@@ -258,7 +254,7 @@ async function postHashV1Async (req, res, next) {
 
     // If Redis cache had no value, retrieve from CRDB instead
     if (_.isEmpty(regNode)) {
-      regNode = await RegisteredNode.findOne({ where: { tntAddr: tntAddrHeaderParam }, attributes: ['tntAddr', 'hmacKey', 'tntCredit'] })
+      regNode = await registeredNode.RegisteredNode.findOne({ where: { tntAddr: tntAddrHeaderParam }, attributes: ['tntAddr', 'hmacKey', 'tntCredit'] })
       if (_.isEmpty(regNode)) {
         return next(new restify.InvalidCredentialsError('authorization denied: unknown tnt-address'))
       }
@@ -330,13 +326,11 @@ function updateNistVars (nistValue) {
 }
 
 module.exports = {
-  getSequelize: () => { return sequelize },
   postHashV1Async: postHashV1Async,
   generatePostHashResponse: generatePostHashResponse,
   setAMQPChannel: (chan) => { amqpChannel = chan },
   getNistLatest: () => { return nistLatest },
   setNistLatest: (val) => { updateNistVars(val) },
-  setHashesRegisteredNode: (regNode) => { RegisteredNode = regNode },
   setRedis: (redisClient) => { redis = redisClient },
   setEnforcePrivateStakeState: (enabled) => { enforcePrivateNodeStake = (enabled === 'true') }
 }
