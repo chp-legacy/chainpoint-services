@@ -1,5 +1,6 @@
 const { URL } = require('url')
 const utils = require('./utils.js')
+const db = require('./sequelize.js')
 
 /**
  * Opens a Redis connection
@@ -132,12 +133,14 @@ async function openStorageConnectionAsync (modelSqlzArray, debug) {
   while (!dbConnected) {
     try {
       for (let model of modelSqlzArray) {
-        await model.sync({ logging: false })
+        model.defineFor(db.sequelize, db.pgClientPool)
       }
+      await db.sequelize.sync({ logging: false })
       logMessage('Sequelize connection established', debug, 'general')
       dbConnected = true
     } catch (error) {
       // catch errors when attempting to establish connection
+      console.log(error)
       console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
       await utils.sleep(5000)
     }

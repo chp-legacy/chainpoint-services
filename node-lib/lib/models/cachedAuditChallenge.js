@@ -32,15 +32,12 @@ let redis = null
 // This value is set once the connection has been established
 let consul = null
 
-// pull in variables defined in shared AuditChallenge module
-let AuditChallenge = auditChallenge.AuditChallenge
-
 async function getMostRecentChallengeDataAsync () {
   let mostRecentChallengeText = (redis && MostRecentChallengeKey) ? await redis.get(MostRecentChallengeKey) : null
   // if nothing was found, it is not cached, retrieve from the database and add to cache for future requests
   if (mostRecentChallengeText === null) {
     // get the most recent challenge record
-    let mostRecentChallenge = await AuditChallenge.findOne({ order: [['time', 'DESC']] })
+    let mostRecentChallenge = await auditChallenge.AuditChallenge.findOne({ order: [['time', 'DESC']] })
     if (!mostRecentChallenge) return null
     // build the most recent challenge string
     mostRecentChallengeText = `${mostRecentChallenge.time}:${mostRecentChallenge.minBlock}:${mostRecentChallenge.maxBlock}:${mostRecentChallenge.nonce}:${mostRecentChallenge.solution}`
@@ -67,7 +64,7 @@ async function getChallengeDataByTimeAsync (challengeTime) {
   // if nothing was found, it is not cached, retrieve from the database and add to cache for future requests
   if (challengeText === null) {
     // get the challenge record by time
-    let challengeByTime = await AuditChallenge.findOne({ where: { time: challengeTime } })
+    let challengeByTime = await auditChallenge.AuditChallenge.findOne({ where: { time: challengeTime } })
     if (!challengeByTime) return null
     // build the challenge string
     challengeText = `${challengeByTime.time}:${challengeByTime.minBlock}:${challengeByTime.maxBlock}:${challengeByTime.nonce}:${challengeByTime.solution}`
@@ -80,7 +77,7 @@ async function getChallengeDataByTimeAsync (challengeTime) {
 
 async function setNewAuditChallengeAsync (challengeTime, challengeMinBlockHeight, challengeMaxBlockHeight, challengeNonce, challengeSolution) {
   // write the new challenge to the database
-  let newChallenge = await AuditChallenge.create({
+  let newChallenge = await auditChallenge.AuditChallenge.create({
     time: challengeTime,
     minBlock: challengeMinBlockHeight,
     maxBlock: challengeMaxBlockHeight,
@@ -109,6 +106,5 @@ module.exports = {
   getMostRecentChallengeDataAsync: getMostRecentChallengeDataAsync,
   getMostRecentChallengeDataSolutionRemovedAsync: getMostRecentChallengeDataSolutionRemovedAsync,
   setNewAuditChallengeAsync: setNewAuditChallengeAsync,
-  getChallengeDataByTimeAsync: getChallengeDataByTimeAsync,
-  getAuditChallengeSequelize: () => { return auditChallenge.sequelize }
+  getChallengeDataByTimeAsync: getChallengeDataByTimeAsync
 }

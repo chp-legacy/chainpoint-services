@@ -26,6 +26,9 @@ const calendar = require('./lib/endpoints/calendar.js')
 const config = require('./lib/endpoints/config.js')
 const root = require('./lib/endpoints/root.js')
 const cnsl = require('consul')
+const RegisteredNode = require('./lib/models/RegisteredNode.js')
+const CalendarBlock = require('./lib/models/CalendarBlock.js')
+const AuditChallenge = require('./lib/models/AuditChallenge.js')
 const connections = require('./lib/connections.js')
 
 // The redis connection used for all redis communication
@@ -121,13 +124,12 @@ server.get({ path: '/', version: '1.0.0' }, root.getV1)
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let modelSqlzArray = [
-    hashes.getSequelize(),
-    nodes.getRegisteredNodeSequelize(),
-    calendar.getCalendarBlockSequelize(),
-    config.getAuditChallengeSequelize()
+  let sqlzModelArray = [
+    RegisteredNode,
+    CalendarBlock,
+    AuditChallenge
   ]
-  await connections.openStorageConnectionAsync(modelSqlzArray)
+  await connections.openStorageConnectionAsync(sqlzModelArray)
 }
 
 /**
