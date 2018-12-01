@@ -72,19 +72,20 @@ debugPkg.log = console.info.bind(console)
 // the minimum audit passing Node version for existing registered Nodes, set by consul
 let minNodeVersionExisting = null
 
-const cachedProofState = require('./lib/models/cachedProofStateModels.js')
+const aggState = require('./lib/models/AggState.js')
+const calState = require('./lib/models/CalState.js')
+const anchorBtcAggState = require('./lib/models/AnchorBtcAggState.js')
+const btcTxState = require('./lib/models/BtcTxState.js')
+const btcHeadState = require('./lib/models/BtcHeadState.js')
+const cachedProofState = require('./lib/models/cachedProofState.js')
 const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
 const e2eNodeAuditLog = require('./lib/models/E2ENodeAuditLog.js')
-const registeredNode = require('./lib/models/RegisteredNode.js')
+const auditChallenge = require('./lib/models/AuditChallenge.js')
 const cachedAuditChallenge = require('./lib/models/cachedAuditChallenge.js')
 
-// pull in variables defined in shared database models
-let nodeAuditSequelize = nodeAuditLog.sequelize
-let NodeAuditLog = nodeAuditLog.NodeAuditLog
-let e2eNodeAuditSequelize = e2eNodeAuditLog.sequelize
-let E2ENodeAuditLog = e2eNodeAuditLog.E2ENodeAuditLog
-let registeredNodeSequelize = registeredNode.sequelize
-let Op = nodeAuditSequelize.Op
+let sequelize
+let NodeAuditLog
+let E2ENodeAuditLog
 
 // Create JavaScript Enums for E2E Audit Stage & Status
 const E2EAuditStageEnum = (function () {
@@ -615,7 +616,7 @@ async function performE2EAuditPublicProofVerificationAsync (tntAddr, publicUri, 
     }
 
     // E2E Audit PASSED - queue an update to reflect the PASSED audit
-    await updateE2EAuditScoreAsync(tntAddr, true, Object.assign({}, auditLogObj, {status: E2EAuditStatusEnum.Passed, audit_at: Date.now()}))
+    await updateE2EAuditScoreAsync(tntAddr, true, Object.assign({}, auditLogObj, { status: E2EAuditStatusEnum.Passed, audit_at: Date.now() }))
   } catch (_) {
     if (retryCount >= 2) {
       // FAILED E2E Audit, make appropriate DB changes
@@ -667,7 +668,7 @@ async function performAuditPrivateAsync (nodeData) {
 
 async function pruneAuditLogsByIdsAsync (ids) {
   try {
-    let delCount = await NodeAuditLog.destroy({ where: { id: { [Op.in]: ids } } })
+    let delCount = await NodeAuditLog.destroy({ where: { id: { [sequelize.Op.in]: ids } } })
     return `Deleted ${delCount} rows from chainpoint_node_audit_log with ids ${ids[0]}...`
   } catch (error) {
     let errorMessage = `Could not delete rows from chainpoint_node_audit_log with ids ${ids[0]}... : ${error.message}`
@@ -742,7 +743,7 @@ async function updateAuditScoreItemsAsync (scoreUpdatesJSON) {
       chainpoint_registered_nodes.fail_count + EXCLUDED.fail_count, 
       CASE WHEN EXCLUDED.consecutive_passes > 0 THEN chainpoint_registered_nodes.consecutive_passes + EXCLUDED.consecutive_passes ELSE 0 END,
       CASE WHEN EXCLUDED.consecutive_fails > 0 THEN chainpoint_registered_nodes.consecutive_fails + EXCLUDED.consecutive_fails ELSE 0 END)`
-      await registeredNodeSequelize.query(sqlCmd, { type: registeredNodeSequelize.QueryTypes.UPDATE })
+      await sequelize.query(sqlCmd, { type: sequelize.QueryTypes.UPDATE })
     }, {
       retries: 5, // The maximum amount of times to retry the operation. Default is 10
       factor: 1, // The exponential factor to use. Default is 2
@@ -783,7 +784,7 @@ async function updateE2EAuditScoreItemsAsync (scoreUpdatesJSON) {
       (GREATEST(chainpoint_registered_nodes.audit_score + EXCLUDED.audit_score, 0), 
       CASE WHEN EXCLUDED.verify_e2e_passed_at IS NOT NULL THEN EXCLUDED.verify_e2e_passed_at ELSE chainpoint_registered_nodes.verify_e2e_passed_at END,
       CASE WHEN EXCLUDED.verify_e2e_failed_at IS NOT NULL THEN EXCLUDED.verify_e2e_failed_at ELSE chainpoint_registered_nodes.verify_e2e_failed_at END)`
-      await registeredNodeSequelize.query(sqlCmd, { type: registeredNodeSequelize.QueryTypes.UPDATE })
+      await sequelize.query(sqlCmd, { type: sequelize.QueryTypes.UPDATE })
     }, {
       retries: 5, // The maximum amount of times to retry the operation. Default is 10
       factor: 1, // The exponential factor to use. Default is 2
@@ -1071,13 +1072,22 @@ async function getTNTBalance (tntAddress) {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let modelSqlzArray = [
-    registeredNodeSequelize,
-    nodeAuditSequelize,
-    e2eNodeAuditSequelize,
-    cachedAuditChallenge.getAuditChallengeSequelize()
+  let sqlzModelArray = [
+    nodeAuditLog,
+    e2eNodeAuditLog,
+    auditChallenge,
+    aggState,
+    calState,
+    anchorBtcAggState,
+    btcTxState,
+    btcHeadState
   ]
-  await connections.openStorageConnectionAsync(modelSqlzArray, debug)
+  let cxObjects = await connections.openStorageConnectionAsync(sqlzModelArray)
+  sequelize = cxObjects.sequelize
+  NodeAuditLog = cxObjects.models[0]
+  E2ENodeAuditLog = cxObjects.models[1]
+  cachedAuditChallenge.setDatabase(cxObjects.sequelize, cxObjects.models[2])
+  cachedProofState.setDatabase(cxObjects.sequelize, cxObjects.models[3], cxObjects.models[4], cxObjects.models[5], cxObjects.models[6], cxObjects.models[7])
 }
 
 /**

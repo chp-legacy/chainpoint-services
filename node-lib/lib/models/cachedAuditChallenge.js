@@ -14,12 +14,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-const auditChallenge = require('./AuditChallenge.js')
-
 const CHALLENGE_CACHE_EXPIRE_MINUTES = 60 * 24
 const AUDIT_CHALLENGE_KEY_PREFIX = 'AuditChallenge'
 
 const env = require('../parse-env.js')()
+
+let AuditChallenge
 
 // The most recent challenge redis key, supplied by consul
 let MostRecentChallengeKey = null
@@ -37,7 +37,7 @@ async function getMostRecentChallengeDataAsync () {
   // if nothing was found, it is not cached, retrieve from the database and add to cache for future requests
   if (mostRecentChallengeText === null) {
     // get the most recent challenge record
-    let mostRecentChallenge = await auditChallenge.AuditChallenge.findOne({ order: [['time', 'DESC']] })
+    let mostRecentChallenge = await AuditChallenge.findOne({ order: [['time', 'DESC']] })
     if (!mostRecentChallenge) return null
     // build the most recent challenge string
     mostRecentChallengeText = `${mostRecentChallenge.time}:${mostRecentChallenge.minBlock}:${mostRecentChallenge.maxBlock}:${mostRecentChallenge.nonce}:${mostRecentChallenge.solution}`
@@ -64,7 +64,7 @@ async function getChallengeDataByTimeAsync (challengeTime) {
   // if nothing was found, it is not cached, retrieve from the database and add to cache for future requests
   if (challengeText === null) {
     // get the challenge record by time
-    let challengeByTime = await auditChallenge.AuditChallenge.findOne({ where: { time: challengeTime } })
+    let challengeByTime = await AuditChallenge.findOne({ where: { time: challengeTime } })
     if (!challengeByTime) return null
     // build the challenge string
     challengeText = `${challengeByTime.time}:${challengeByTime.minBlock}:${challengeByTime.maxBlock}:${challengeByTime.nonce}:${challengeByTime.solution}`
@@ -77,7 +77,7 @@ async function getChallengeDataByTimeAsync (challengeTime) {
 
 async function setNewAuditChallengeAsync (challengeTime, challengeMinBlockHeight, challengeMaxBlockHeight, challengeNonce, challengeSolution) {
   // write the new challenge to the database
-  let newChallenge = await auditChallenge.AuditChallenge.create({
+  let newChallenge = await AuditChallenge.create({
     time: challengeTime,
     minBlock: challengeMinBlockHeight,
     maxBlock: challengeMaxBlockHeight,
@@ -106,5 +106,6 @@ module.exports = {
   getMostRecentChallengeDataAsync: getMostRecentChallengeDataAsync,
   getMostRecentChallengeDataSolutionRemovedAsync: getMostRecentChallengeDataSolutionRemovedAsync,
   setNewAuditChallengeAsync: setNewAuditChallengeAsync,
-  getChallengeDataByTimeAsync: getChallengeDataByTimeAsync
+  getChallengeDataByTimeAsync: getChallengeDataByTimeAsync,
+  setDatabase: (sqlz, auditChal) => { AuditChallenge = auditChal }
 }

@@ -22,12 +22,8 @@ const env = envalid.cleanEnv(process.env, {
   COCKROACH_AUDIT_CHALLENGE_TABLE_NAME: envalid.str({ default: 'chainpoint_audit_challenges', desc: 'CockroachDB table name' })
 })
 
-let AuditChallenge
-let sequelize
-let pgClientPool
-
-function defineFor (sqlz, pgPool) {
-  AuditChallenge = sqlz.define(env.COCKROACH_AUDIT_CHALLENGE_TABLE_NAME,
+function defineFor (sqlz) {
+  let AuditChallenge = sqlz.define(env.COCKROACH_AUDIT_CHALLENGE_TABLE_NAME,
     {
       time: {
         comment: 'Audit time in milliseconds since unix epoch',
@@ -93,13 +89,9 @@ function defineFor (sqlz, pgPool) {
     }
   )
 
-  sequelize = sqlz
-  pgClientPool = pgPool
+  return AuditChallenge
 }
 
 module.exports = {
-  defineFor: defineFor,
-  AuditChallenge: AuditChallenge,
-  sequelize: sequelize,
-  pgClientPool: pgClientPool
+  defineFor: defineFor
 }
