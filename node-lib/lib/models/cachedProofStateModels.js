@@ -235,7 +235,7 @@ async function getAggStateObjectsByHashIdsAsync (hashIds) {
 }
 
 async function getAggStateInfoSinceTimestampAsync (timestamp) {
-  let results = await sequelize.query(`SELECT DISTINCT agg_id, agg_root 
+  let results = await sequelize.query(`SELECT DISTINCT agg_id, agg_root, created_at
   FROM chainpoint_proof_agg_states
   WHERE created_at > '${new Date(timestamp).toISOString()}'
   ORDER BY created_at`, { type: sequelize.QueryTypes.SELECT })
