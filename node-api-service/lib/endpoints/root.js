@@ -35,7 +35,7 @@ function getV1 (req, res, next) {
  */
 function getHeartbeatV1 (req, res, next) {
   res.noCache()
-  res.send({code: 'heartbeat', timestamp: utils.formatDateISO8601NoMs(new Date())})
+  res.send({ code: 'heartbeat', timestamp: utils.formatDateISO8601NoMs(new Date()) })
   return next()
 }
 

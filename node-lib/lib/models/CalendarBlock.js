@@ -22,12 +22,8 @@ const env = envalid.cleanEnv(process.env, {
   COCKROACH_CAL_TABLE_NAME: envalid.str({ default: 'chainpoint_calendar_blockchain', desc: 'CockroachDB table name' })
 })
 
-let CalendarBlock
-let sequelize
-let pgClientPool
-
-function defineFor (sqlz, pgPool) {
-  CalendarBlock = sqlz.define(env.COCKROACH_CAL_TABLE_NAME,
+function defineFor (sqlz) {
+  let CalendarBlock = sqlz.define(env.COCKROACH_CAL_TABLE_NAME,
     {
       id: {
         comment: 'Sequential monotonically incrementing Integer ID representing block height.',
@@ -143,13 +139,9 @@ function defineFor (sqlz, pgPool) {
     }
   )
 
-  sequelize = sqlz
-  pgClientPool = pgPool
+  return CalendarBlock
 }
 
 module.exports = {
-  defineFor: defineFor,
-  CalendarBlock: CalendarBlock,
-  sequelize: sequelize,
-  pgClientPool: pgClientPool
+  defineFor: defineFor
 }

@@ -22,12 +22,8 @@ const env = envalid.cleanEnv(process.env, {
   COCKROACH_REG_NODE_TABLE_NAME: envalid.str({ default: 'chainpoint_registered_nodes', desc: 'CockroachDB table name' })
 })
 
-let RegisteredNode
-let sequelize
-let pgClientPool
-
-function defineFor (sqlz, pgPool) {
-  RegisteredNode = sqlz.define(env.COCKROACH_REG_NODE_TABLE_NAME,
+function defineFor (sqlz) {
+  let RegisteredNode = sqlz.define(env.COCKROACH_REG_NODE_TABLE_NAME,
     {
       tntAddr: {
         comment: 'A seemingly valid Ethereum address that the Node will send TNT from, or receive rewards with.',
@@ -150,13 +146,9 @@ function defineFor (sqlz, pgPool) {
     }
   )
 
-  sequelize = sqlz
-  pgClientPool = pgPool
+  return RegisteredNode
 }
 
 module.exports = {
-  defineFor: defineFor,
-  RegisteredNode: RegisteredNode,
-  sequelize: sequelize,
-  pgClientPool: pgClientPool
+  defineFor: defineFor
 }

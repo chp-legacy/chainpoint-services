@@ -1,6 +1,5 @@
 const { URL } = require('url')
 const utils = require('./utils.js')
-const db = require('./sequelize.js')
 
 /**
  * Opens a Redis connection
@@ -129,21 +128,88 @@ async function initResqueSchedulerAsync (redisClient, setSchedulerHandlers, debu
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync (modelSqlzArray, debug) {
+  const Sequelize = require('sequelize-cockroachdb')
+  const envalid = require('envalid')
+  const pg = require('pg')
+
+  const env = envalid.cleanEnv(process.env, {
+    COCKROACH_HOST: envalid.str({ devDefault: 'roach1', desc: 'CockroachDB host or IP' }),
+    COCKROACH_PORT: envalid.num({ default: 26257, desc: 'CockroachDB port' }),
+    COCKROACH_DB_NAME: envalid.str({ default: 'chainpoint', desc: 'CockroachDB name' }),
+    COCKROACH_DB_USER: envalid.str({ default: 'chainpoint', desc: 'CockroachDB user' }),
+    COCKROACH_DB_PASS: envalid.str({ default: '', desc: 'CockroachDB password' }),
+    COCKROACH_TLS_CA_CRT: envalid.str({ devDefault: '', desc: 'CockroachDB TLS CA Cert' }),
+    COCKROACH_TLS_CLIENT_KEY: envalid.str({ devDefault: '', desc: 'CockroachDB TLS Client Key' }),
+    COCKROACH_TLS_CLIENT_CRT: envalid.str({ devDefault: '', desc: 'CockroachDB TLS Client Cert' })
+  })
+
+  let pgConfig = {
+    user: env.COCKROACH_DB_USER,
+    host: env.COCKROACH_HOST,
+    database: env.COCKROACH_DB_NAME,
+    port: env.COCKROACH_PORT,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000
+  }
+
+  // Connect to CockroachDB through Sequelize.
+  let sequelizeOptions = {
+    dialect: 'postgres',
+    host: env.COCKROACH_HOST,
+    port: env.COCKROACH_PORT,
+    logging: false,
+    operatorsAliases: false,
+    pool: {
+      max: 20,
+      min: 0,
+      idle: 10000,
+      acquire: 10000,
+      evict: 10000
+    }
+  }
+
+  // Present TLS client certificate to production cluster
+  if (env.isProduction) {
+    sequelizeOptions.dialectOptions = {
+      ssl: {
+        rejectUnauthorized: false,
+        ca: env.COCKROACH_TLS_CA_CRT,
+        key: env.COCKROACH_TLS_CLIENT_KEY,
+        cert: env.COCKROACH_TLS_CLIENT_CRT
+      }
+    }
+    pgConfig.ssl = {
+      rejectUnauthorized: false,
+      ca: env.COCKROACH_TLS_CA_CRT,
+      key: env.COCKROACH_TLS_CLIENT_KEY,
+      cert: env.COCKROACH_TLS_CLIENT_CRT
+    }
+  }
+
+  let pgClientPool = new pg.Pool(pgConfig)
+  let sequelize = new Sequelize(env.COCKROACH_DB_NAME, env.COCKROACH_DB_USER, env.COCKROACH_DB_PASS, sequelizeOptions)
+
   let dbConnected = false
+  let synchedModels = []
   while (!dbConnected) {
     try {
       for (let model of modelSqlzArray) {
-        model.defineFor(db.sequelize, db.pgClientPool)
+        synchedModels.push(model.defineFor(sequelize))
       }
-      await db.sequelize.sync({ logging: false })
+      await sequelize.sync({ logging: false })
       logMessage('Sequelize connection established', debug, 'general')
       dbConnected = true
     } catch (error) {
       // catch errors when attempting to establish connection
-      console.log(error)
       console.error('Cannot establish Sequelize connection. Attempting in 5 seconds...')
       await utils.sleep(5000)
     }
+  }
+
+  return {
+    sequelize: sequelize,
+    pgClientPool: pgClientPool,
+    models: synchedModels
   }
 }
 

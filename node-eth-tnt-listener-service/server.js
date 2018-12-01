@@ -17,7 +17,7 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('eth-tnt-listener')
 
-const ethTokenTxLog = require('./lib/models/EthTokenTrxLog.js')
+const ethTokenTxLog = require('./lib/models/EthTokenTxLog.js')
 const registeredNode = require('./lib/models/RegisteredNode.js')
 const tntUnits = require('./lib/tntUnits.js')
 const loadProvider = require('./lib/eth-tnt/providerLoader.js')
@@ -25,12 +25,9 @@ const loadToken = require('./lib/eth-tnt/tokenLoader.js')
 const TokenOps = require('./lib/eth-tnt/tokenOps.js')
 const connections = require('./lib/connections.js')
 
-// pull in variables defined in shared EthTokenTrxLog module
-let ethTokenTxSequelize = ethTokenTxLog.sequelize
-let EthTokenTxLog = ethTokenTxLog.EthTokenLog
-let registeredNodeSequelize = registeredNode.sequelize
-let RegisteredNode = registeredNode.RegisteredNode
-let Op = ethTokenTxSequelize.Op
+let sequelize
+let RegisteredNode
+let EthTokenTxLog
 
 // The provider, token contract, and create the TokenOps class
 let web3Provider = null
@@ -47,7 +44,7 @@ async function getLastKnownEventInfoAsync () {
 
   // Get the latest incoming transfer from the DB
   let lastTransfer = await EthTokenTxLog.findOne({
-    where: { toAddress: { [Op.in]: addresses } },
+    where: { toAddress: { [sequelize.Op.in]: addresses } },
     order: [['created_at', 'DESC']]
   })
 
@@ -192,12 +189,14 @@ function incomingTokenTransferEvent (error, params) {
 /**
  * Opens a storage connection
  **/
-async function openStorageConnectionAsync (callback) {
-  let modelSqlzArray = [
-    ethTokenTxSequelize,
-    registeredNodeSequelize
+async function openStorageConnectionAsync () {
+  let sqlzModelArray = [
+    registeredNode,
+    ethTokenTxLog
   ]
-  await connections.openStorageConnectionAsync(modelSqlzArray)
+  let cxObjects = await connections.openStorageConnectionAsync(sqlzModelArray)
+  RegisteredNode = cxObjects.models[0]
+  EthTokenTxLog = cxObjects.models[1]
 }
 
 // process all steps need to start the application

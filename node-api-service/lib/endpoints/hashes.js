@@ -20,8 +20,9 @@ const utils = require('../utils.js')
 const BLAKE2s = require('blake2s-js')
 const _ = require('lodash')
 const crypto = require('crypto')
-const registeredNode = require('../models/RegisteredNode.js')
 const tntUnits = require('../tntUnits.js')
+
+let RegisteredNode
 
 // Disable temporarily
 // const TNT_CREDIT_COST_POST_HASH = 1
@@ -254,7 +255,7 @@ async function postHashV1Async (req, res, next) {
 
     // If Redis cache had no value, retrieve from CRDB instead
     if (_.isEmpty(regNode)) {
-      regNode = await registeredNode.RegisteredNode.findOne({ where: { tntAddr: tntAddrHeaderParam }, attributes: ['tntAddr', 'hmacKey', 'tntCredit'] })
+      regNode = await RegisteredNode.findOne({ where: { tntAddr: tntAddrHeaderParam }, attributes: ['tntAddr', 'hmacKey', 'tntCredit'] })
       if (_.isEmpty(regNode)) {
         return next(new restify.InvalidCredentialsError('authorization denied: unknown tnt-address'))
       }
@@ -332,5 +333,6 @@ module.exports = {
   getNistLatest: () => { return nistLatest },
   setNistLatest: (val) => { updateNistVars(val) },
   setRedis: (redisClient) => { redis = redisClient },
-  setEnforcePrivateStakeState: (enabled) => { enforcePrivateNodeStake = (enabled === 'true') }
+  setEnforcePrivateStakeState: (enabled) => { enforcePrivateNodeStake = (enabled === 'true') },
+  setDatabase: (sqlz, regNode) => { RegisteredNode = regNode }
 }

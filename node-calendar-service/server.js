@@ -22,8 +22,13 @@ const MerkleTools = require('merkle-tools')
 const amqp = require('amqplib')
 const uuidv1 = require('uuid/v1')
 const crypto = require('crypto')
+const aggState = require('./lib/models/AggState.js')
+const calState = require('./lib/models/CalState.js')
+const anchorBtcAggState = require('./lib/models/AnchorBtcAggState.js')
+const btcTxState = require('./lib/models/BtcTxState.js')
+const btcHeadState = require('./lib/models/BtcHeadState.js')
 const calendarBlock = require('./lib/models/CalendarBlock.js')
-const cachedProofState = require('./lib/models/cachedProofStateModels.js')
+const cachedProofState = require('./lib/models/cachedProofState.js')
 const coreNetworkState = require('./lib/models/CoreNetworkState.js')
 const cnsl = require('consul')
 const utils = require('./lib/utils.js')
@@ -32,6 +37,9 @@ const leaderElection = require('exp-leader-election')
 const schedule = require('node-schedule')
 const debugPkg = require('debug')
 const connections = require('./lib/connections.js')
+
+let pgClientPool
+let CalendarBlock
 
 // See : https://github.com/zeit/async-retry
 const retry = require('async-retry')
@@ -76,11 +84,6 @@ let amqpChannel = null
 // The latest NIST data
 // This value is updated from consul events as changes are detected
 let nistLatest = null
-
-// pull in variables defined in shared CalendarBlock module
-const calBlockSequelize = calendarBlock.sequelize
-const CalendarBlock = calendarBlock.CalendarBlock
-const pgClientPool = calendarBlock.pgClientPool
 
 let consul = null
 
@@ -875,12 +878,19 @@ async function getTNTGrainsBalanceForWalletAsync () {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let modelSqlzArray = [
-    cachedProofState.sequelize,
-    calBlockSequelize,
-    coreNetworkState.sequelize
+  let sqlzModelArray = [
+    aggState,
+    calState,
+    anchorBtcAggState,
+    btcTxState,
+    btcHeadState,
+    calendarBlock,
+    coreNetworkState
   ]
-  await connections.openStorageConnectionAsync(modelSqlzArray, debug)
+  let cxObjects = await connections.openStorageConnectionAsync(sqlzModelArray, debug)
+  pgClientPool = cxObjects.pgClientPool
+  cachedProofState.setDatabase(cxObjects.sequelize, cxObjects.models[0], cxObjects.models[1], cxObjects.models[2], cxObjects.models[3], cxObjects.models[4])
+  CalendarBlock = cxObjects.models[5]
 
   // Pre-check the current Calendar block count.
   // Trigger creation of the genesis block if needed

@@ -19,7 +19,6 @@ const restify = require('restify')
 const _ = require('lodash')
 const moment = require('moment')
 var validUrl = require('valid-url')
-const registeredNode = require('../models/RegisteredNode.js')
 const url = require('url')
 const ip = require('ip')
 const utils = require('../utils.js')
@@ -28,6 +27,9 @@ const rp = require('request-promise-native')
 const tntUnits = require('../tntUnits.js')
 
 const env = require('../parse-env.js')('api')
+
+let RegisteredNode
+let sequelize
 
 // The redis connection used for all redis communication
 // This value is set once the connection has been established
@@ -81,7 +83,7 @@ async function getNodesRandomV1Async (req, res, next) {
 
   let rndNodes
   try {
-    rndNodes = await registeredNode.sequelize.query(sqlQuery, { type: registeredNode.sequelize.QueryTypes.SELECT })
+    rndNodes = await sequelize.query(sqlQuery, { type: sequelize.QueryTypes.SELECT })
   } catch (error) {
     console.error(`getNodesRandomV1Async failed : Unable to query for random nodes : ${error.message}`)
     return next(new restify.InternalServerError(`Unable to query for random nodes`))
@@ -182,11 +184,11 @@ async function postNodeV1Async (req, res, next) {
   try {
     let whereClause
     if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
-      whereClause = { [registeredNode.sequelize.Op.or]: [{ tntAddr: lowerCasedTntAddrParam }, { publicUri: lowerCasedPublicUri }] }
+      whereClause = { [sequelize.Op.or]: [{ tntAddr: lowerCasedTntAddrParam }, { publicUri: lowerCasedPublicUri }] }
     } else {
       whereClause = { tntAddr: lowerCasedTntAddrParam }
     }
-    let result = await registeredNode.RegisteredNode.findOne({ where: whereClause, raw: true, attributes: ['tntAddr', 'publicUri'] })
+    let result = await RegisteredNode.findOne({ where: whereClause, raw: true, attributes: ['tntAddr', 'publicUri'] })
     if (result) {
       // a result was found, so some element of vaidation failed. Identify and return.
       if (lowerCasedTntAddrParam === result.tntAddr) {
@@ -206,7 +208,7 @@ async function postNodeV1Async (req, res, next) {
   let createdFromIp = getSourceIp(req)
   if (createdFromIp) {
     let thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    let matches = await registeredNode.RegisteredNode.count({ where: { createdFromIp: createdFromIp, created_at: { [registeredNode.sequelize.Op.gte]: thirtyDaysAgo } } })
+    let matches = await RegisteredNode.count({ where: { createdFromIp: createdFromIp, created_at: { [sequelize.Op.gte]: thirtyDaysAgo } } })
     if (matches > 0) return next(new restify.ConflictError('a Node has already been registered from this IP'))
   }
 
@@ -228,7 +230,7 @@ async function postNodeV1Async (req, res, next) {
 
   let newNode
   try {
-    newNode = await registeredNode.RegisteredNode.create({
+    newNode = await RegisteredNode.create({
       tntAddr: lowerCasedTntAddrParam,
       publicUri: lowerCasedPublicUri,
       hmacKey: randHMACKey,
@@ -326,11 +328,11 @@ async function putNodeV1Async (req, res, next) {
   try {
     let whereClause
     if (lowerCasedPublicUri && !_.isEmpty(lowerCasedPublicUri)) {
-      whereClause = { [registeredNode.sequelize.Op.or]: [{ tntAddr: lowerCasedTntAddrParam }, { publicUri: lowerCasedPublicUri }] }
+      whereClause = { [sequelize.Op.or]: [{ tntAddr: lowerCasedTntAddrParam }, { publicUri: lowerCasedPublicUri }] }
     } else {
       whereClause = { tntAddr: lowerCasedTntAddrParam }
     }
-    let results = await registeredNode.RegisteredNode.findAll({ where: whereClause, attributes: ['tntAddr', 'publicUri', 'hmacKey'] })
+    let results = await RegisteredNode.findAll({ where: whereClause, attributes: ['tntAddr', 'publicUri', 'hmacKey'] })
     if (results.length === 0) {
       // no results found, a node with this tntAddr does not exist
       res.status(404)
@@ -488,5 +490,6 @@ module.exports = {
   overrideGetTNTGrainsBalanceForAddressAsync: (func) => { getTNTGrainsBalanceForAddressAsync = func },
   setMinNodeVersionExisting: (ver) => { updateMinNodeVersionExisting(ver) },
   setMinNodeVersionNew: (ver) => { updateMinNodeVersionNew(ver) },
-  setRedis: (redisClient) => { redis = redisClient }
+  setRedis: (redisClient) => { redis = redisClient },
+  setDatabase: (sqlz, regNode) => { sequelize = sqlz; RegisteredNode = regNode }
 }

@@ -17,12 +17,7 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('audit')
 
-const registeredNode = require('./lib/models/RegisteredNode.js')
-const e2eNodeAuditLog = require('./lib/models/E2ENodeAuditLog.js')
 const utils = require('./lib/utils.js')
-const calendarBlock = require('./lib/models/CalendarBlock.js')
-const cachedAuditChallenge = require('./lib/models/cachedAuditChallenge.js')
-const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
 const crypto = require('crypto')
 const rnd = require('random-number-csprng')
 const MerkleTools = require('merkle-tools')
@@ -31,7 +26,17 @@ const leaderElection = require('exp-leader-election')
 const cnsl = require('consul')
 const moment = require('moment')
 const _ = require('lodash')
+const registeredNode = require('./lib/models/RegisteredNode.js')
+const calendarBlock = require('./lib/models/CalendarBlock.js')
+const nodeAuditLog = require('./lib/models/NodeAuditLog.js')
+const auditChallenge = require('./lib/models/AuditChallenge.js')
+const cachedAuditChallenge = require('./lib/models/cachedAuditChallenge.js')
 const connections = require('./lib/connections.js')
+
+let sequelize
+let RegisteredNode
+let CalendarBlock
+let NodeAuditLog
 
 let consul = null
 
@@ -62,16 +67,6 @@ let heart = heartbeats.createHeart(HEARTBEAT_INTERVAL_MS)
 // The merkle tools object for building trees and generating proof paths
 const merkleTools = new MerkleTools()
 
-// pull in variables defined in shared database models
-let regNodeSequelize = registeredNode.sequelize
-let RegisteredNode = registeredNode.RegisteredNode
-let e2eNodeAuditSequelize = e2eNodeAuditLog.sequelize
-let calBlockSequelize = calendarBlock.sequelize
-let CalendarBlock = calendarBlock.CalendarBlock
-let nodeAuditSequelize = nodeAuditLog.sequelize
-let NodeAuditLog = nodeAuditLog.NodeAuditLog
-let Op = regNodeSequelize.Op
-
 // Retrieve all registered Nodes with public_uris for auditing.
 async function auditNodesAsync (opts = { e2eAudit: false }) {
   // get list of all public Registered Nodes to audit
@@ -91,7 +86,7 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
                     ) AS al
                     ON rn.tnt_addr = al.tnt_addr
                     WHERE rn.public_uri IS NOT NULL`
-    publicNodesReadyForAudit = await regNodeSequelize.query(sqlQuery, { type: regNodeSequelize.QueryTypes.SELECT })
+    publicNodesReadyForAudit = await sequelize.query(sqlQuery, { type: sequelize.QueryTypes.SELECT })
     console.log(`${publicNodesReadyForAudit.length} public Nodes ready for audit were found`)
   } catch (error) {
     let message = `Could not retrieve public Node data : ${error.message}`
@@ -100,14 +95,14 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
 
   let e2eAuditLogs = []
   try {
-    e2eAuditLogs = await e2eNodeAuditSequelize.query(`SELECT * FROM chainpoint_node_e2e_audit_log WHERE audit_date::DATE=(current_date() - 1)`, { type: e2eNodeAuditSequelize.QueryTypes.SELECT })
+    e2eAuditLogs = await sequelize.query(`SELECT * FROM chainpoint_node_e2e_audit_log WHERE audit_date::DATE=(current_date() - 1)`, { type: sequelize.QueryTypes.SELECT })
   } catch (error) {
     let message = `Could not retrieve E2E Audit Log data : ${error.message}`
     throw new Error(message)
   }
 
   // get the total active node count, needed to deliver to Nodes during audit process
-  let activePublicNodeCount = await RegisteredNode.count({ where: { audit_score: { [Op.gt]: 0 }, consecutive_fails: { [Op.lt]: 144 }, verify_e2e_passed_at: { [Op.gte]: moment().subtract(72, 'hours').valueOf() } } })
+  let activePublicNodeCount = await RegisteredNode.count({ where: { audit_score: { [sequelize.Op.gt]: 0 }, consecutive_fails: { [sequelize.Op.lt]: 144 }, verify_e2e_passed_at: { [sequelize.Op.gte]: moment().subtract(72, 'hours').valueOf() } } })
 
   // iterate through each public Registered Node, queue up an audit task for task handler
   // If an E2E Audit is being performed, filter OUT any registered nodes that have an audit_score <= 0
@@ -191,7 +186,7 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
     let sqlQuery = `SELECT rn.tnt_addr, rn.public_uri
                    FROM chainpoint_registered_nodes rn
                    WHERE rn.public_uri IS NULL`
-    privateNodesReadyForAudit = await regNodeSequelize.query(sqlQuery, { type: regNodeSequelize.QueryTypes.SELECT })
+    privateNodesReadyForAudit = await sequelize.query(sqlQuery, { type: sequelize.QueryTypes.SELECT })
     console.log(`${privateNodesReadyForAudit.length} private Nodes ready for audit were found`)
   } catch (error) {
     let message = `Could not retrieve private Node data : ${error.message}`
@@ -215,7 +210,7 @@ async function auditNodesAsync (opts = { e2eAudit: false }) {
 
   try {
     let decPrivateNodesQuery = `UPDATE chainpoint_registered_nodes SET audit_score = GREATEST(audit_score - 1, 0) WHERE public_uri IS NULL`
-    await regNodeSequelize.query(decPrivateNodesQuery, { type: regNodeSequelize.QueryTypes.UPDATE })
+    await sequelize.query(decPrivateNodesQuery, { type: sequelize.QueryTypes.UPDATE })
   } catch (error) {
     let message = `Could not decrement private Node scores by 1 : ${error.message}`
     throw new Error(message)
@@ -257,7 +252,7 @@ async function generateAuditChallengeAsync () {
 }
 
 async function calculateChallengeSolutionAsync (min, max, nonce) {
-  let blocks = await CalendarBlock.findAll({ where: { id: { [Op.between]: [min, max] } }, order: [['id', 'ASC']] })
+  let blocks = await CalendarBlock.findAll({ where: { id: { [sequelize.Op.between]: [min, max] } }, order: [['id', 'ASC']] })
 
   if (blocks.length === 0) throw new Error('No blocks returned to create challenge tree')
 
@@ -283,7 +278,7 @@ async function calculateChallengeSolutionAsync (min, max, nonce) {
 
 async function performCreditTopoffAsync (creditAmount) {
   try {
-    await RegisteredNode.update({ tntCredit: creditAmount }, { where: { tntCredit: { [Op.lt]: creditAmount } } })
+    await RegisteredNode.update({ tntCredit: creditAmount }, { where: { tntCredit: { [sequelize.Op.lt]: creditAmount } } })
     console.log(`All Nodes topped off to ${creditAmount} credits`)
   } catch (error) {
     console.error(`Unable to perform credit topoff: ${error.message}`)
@@ -294,7 +289,7 @@ async function pruneAuditDataAsync () {
   const cutoffTimestamp = Date.now() - AUDIT_LOG_EXPIRE_HOURS * 60 * 60 * 1000
 
   // select all the audit id values that are ready to be pruned
-  let auditIds = await NodeAuditLog.findAll({ where: { audit_at: { [Op.lte]: cutoffTimestamp } }, attributes: ['id'] })
+  let auditIds = await NodeAuditLog.findAll({ where: { audit_at: { [sequelize.Op.lte]: cutoffTimestamp } }, attributes: ['id'] })
   // get an array of ids from the results
   auditIds = auditIds.map((item) => { return item.id })
 
@@ -330,7 +325,7 @@ async function pollForNewAuditDataAsync () {
     }
 
     // retrieve all log entries since LAST_AUDIT_AT_PROCESSED
-    let logItems = await NodeAuditLog.findAll({ where: { auditAt: { [Op.gt]: lastAuditAtProcessed } }, attributes: ['tntAddr', 'auditAt', 'tntBalanceGrains', 'tntBalancePass'], order: [['auditAt', 'ASC']], raw: true })
+    let logItems = await NodeAuditLog.findAll({ where: { auditAt: { [sequelize.Op.gt]: lastAuditAtProcessed } }, attributes: ['tntAddr', 'auditAt', 'tntBalanceGrains', 'tntBalancePass'], order: [['auditAt', 'ASC']], raw: true })
     if (!logItems || logItems.length === 0) return
     lastAuditAtProcessed = logItems[logItems.length - 1].auditAt
 
@@ -358,14 +353,18 @@ async function pollForNewAuditDataAsync () {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let modelSqlzArray = [
-    nodeAuditSequelize,
-    calBlockSequelize,
-    regNodeSequelize,
-    e2eNodeAuditSequelize,
-    cachedAuditChallenge.getAuditChallengeSequelize()
+  let sqlzModelArray = [
+    nodeAuditLog,
+    calendarBlock,
+    registeredNode,
+    auditChallenge
   ]
-  await connections.openStorageConnectionAsync(modelSqlzArray)
+  let cxObjects = await connections.openStorageConnectionAsync(sqlzModelArray)
+  sequelize = cxObjects.sequelize
+  RegisteredNode = cxObjects.models[2]
+  CalendarBlock = cxObjects.models[1]
+  NodeAuditLog = cxObjects.models[0]
+  cachedAuditChallenge.setDatabase(cxObjects.sequelize, cxObjects.models[3])
 }
 
 /**

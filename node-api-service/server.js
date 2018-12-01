@@ -26,9 +26,9 @@ const calendar = require('./lib/endpoints/calendar.js')
 const config = require('./lib/endpoints/config.js')
 const root = require('./lib/endpoints/root.js')
 const cnsl = require('consul')
-const RegisteredNode = require('./lib/models/RegisteredNode.js')
-const CalendarBlock = require('./lib/models/CalendarBlock.js')
-const AuditChallenge = require('./lib/models/AuditChallenge.js')
+const registeredNode = require('./lib/models/RegisteredNode.js')
+const calendarBlock = require('./lib/models/CalendarBlock.js')
+const auditChallenge = require('./lib/models/AuditChallenge.js')
 const connections = require('./lib/connections.js')
 
 // The redis connection used for all redis communication
@@ -125,11 +125,15 @@ server.get({ path: '/', version: '1.0.0' }, root.getV1)
  **/
 async function openStorageConnectionAsync () {
   let sqlzModelArray = [
-    RegisteredNode,
-    CalendarBlock,
-    AuditChallenge
+    registeredNode,
+    calendarBlock,
+    auditChallenge
   ]
-  await connections.openStorageConnectionAsync(sqlzModelArray)
+  let cxObjects = await connections.openStorageConnectionAsync(sqlzModelArray)
+  nodes.setDatabase(cxObjects.sequelize, cxObjects.models[0])
+  hashes.setDatabase(cxObjects.sequelize, cxObjects.models[0])
+  config.setDatabase(cxObjects.sequelize, cxObjects.models[1], cxObjects.models[2])
+  calendar.setDatabase(cxObjects.sequelize, cxObjects.models[1])
 }
 
 /**
@@ -280,8 +284,6 @@ module.exports = {
     hashes.setAMQPChannel(chan)
   },
   setNistLatest: (val) => { hashes.setNistLatest(val) },
-  setHashesRegisteredNode: (regNode) => { hashes.setHashesRegisteredNode(regNode) },
-  setNodesRegisteredNode: (regNode) => { nodes.setNodesRegisteredNode(regNode) },
   server: server,
   config: config,
   setMinNodeVersionNew: (val) => { nodes.setMinNodeVersionNew(val) },
