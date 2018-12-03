@@ -85,6 +85,7 @@ services:
       ETH_TNT_LISTEN_ADDRS: ${ETH_TNT_LISTEN_ADDRS}    
       SIGNING_SECRET_KEY: ${SIGNING_SECRET_KEY}
       VIRTUAL_HOST: api.local
+      #DEBUG: sequelize*
 
   api-test:
     image: gcr.io/chainpoint-registry/github-chainpoint-chainpoint-services/node-api-service-test:${DOCKER_TAG}
