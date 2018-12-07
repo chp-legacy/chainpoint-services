@@ -177,14 +177,13 @@ function initNISTSockets () {
   console.log(`Requesting initial NIST value`)
   requestSocket.send('get nist')
 
-  const topic = `nist`
-
-  subscribeSocket.subscribe(topic)
+  subscribeSocket.subscribe(`nist`)
 
   subscribeSocket.on(`message`, function (topic, msg) {
-    if (msg && hashes.getNistLatest() !== msg.toString()) {
-      console.log(`Received updated NIST value : ${msg}`)
-      hashes.setNistLatest(String(msg || ''))
+    let newValue = String(msg || '')
+    if (msg && hashes.getNistLatest() !== newValue) {
+      console.log(`Received new NIST value : ${msg}`)
+      hashes.setNistLatest(newValue)
     }
   })
 }

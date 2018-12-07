@@ -22,6 +22,9 @@ const BEACON = require('nist-randomness-beacon')
 const connections = require('./lib/connections.js')
 const utils = require(`./lib/utils.js`)
 
+let responseSocket
+let publishSocket
+
 let nistLatest = null
 
 async function getNistLatestAsync () {
@@ -33,8 +36,12 @@ async function getNistLatestAsync () {
     let timestampMS = new Date(result.pulse.timeStamp).getTime()
     let timeAndSeed = `${timestampMS}:${result.pulse.localRandomValue}`.toLowerCase()
 
-    nistLatest = timeAndSeed
-    console.log(`New NIST value generated: ${timeAndSeed}`)
+    // broadcast NIST value if it is a new one
+    if (timeAndSeed !== nistLatest) {
+      nistLatest = timeAndSeed
+      console.log(`Broadcasting new NIST value : ${nistLatest}`)
+      publishSocket.send(['nist', nistLatest])
+    }
   } catch (error) {
     console.error(`NIST beacon error : ${error.message}`)
   }
@@ -56,8 +63,8 @@ function startIntervals () {
 }
 
 function initNISTSockets () {
-  const responseSocket = zmq.socket(`rep`) // init response socket to handle direct NIST requests from other services on startup
-  const publishSocket = zmq.socket(`pub`) // init publish socket to handle broadcasting new NIST values
+  responseSocket = zmq.socket(`rep`) // init response socket to handle direct NIST requests from other services on startup
+  publishSocket = zmq.socket(`pub`) // init publish socket to handle broadcasting new NIST values
 
   responseSocket.bindSync(env.NIST_RES_0MQ_SOCKET_URI)
   publishSocket.bindSync(env.NIST_PUB_0MQ_SOCKET_URI)
@@ -66,18 +73,6 @@ function initNISTSockets () {
     console.log(`Received NIST value request : ${nistLatest}`)
     responseSocket.send(nistLatest)
   })
-
-  const topic = `nist`
-  let currentNIST = null
-
-  setInterval(function () {
-    // ensure that the NIST value has not already been broadcasted
-    if (currentNIST !== nistLatest) {
-      console.log(`Broadcasting new NIST value : ${nistLatest}`)
-      publishSocket.send([topic, nistLatest])
-      currentNIST = nistLatest
-    }
-  }, env.NIST_INTERVAL_MS)
 }
 
 async function start () {

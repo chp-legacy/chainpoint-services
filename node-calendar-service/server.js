@@ -893,12 +893,10 @@ function initNISTSockets () {
   debug.general(`Requesting initial NIST value`)
   requestSocket.send('get nist')
 
-  const topic = `nist`
-
-  subscribeSocket.subscribe(topic)
+  subscribeSocket.subscribe(`nist`)
 
   subscribeSocket.on(`message`, function (topic, msg) {
-    debug.general(`Received updated NIST value : ${msg}`)
+    debug.general(`Received new NIST value : ${msg}`)
     nistLatest = String(msg || '')
   })
 }
