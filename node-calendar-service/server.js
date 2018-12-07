@@ -82,7 +82,7 @@ const merkleTools = new MerkleTools()
 let amqpChannel = null
 
 // The latest NIST data
-// This value is updated via zeromq broadcast
+// This value is updated via ZeroMQ broadcast
 let nistLatest = null
 
 // Calculate the hash of the signing public key bytes
@@ -873,7 +873,7 @@ async function getTNTGrainsBalanceForWalletAsync () {
 }
 
 /**
- * Initializes zeroMQ request and subscribe sockets
+ * Initializes ZeroMQ request and subscribe sockets
  * Requests the latest NIST value immediately
  * Receives NIST value updates when broadcasted
  *
