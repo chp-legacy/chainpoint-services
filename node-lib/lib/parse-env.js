@@ -172,10 +172,10 @@ let envDefinitions = {
   RMQ_WORK_IN_TASK_ACC_QUEUE: envalid.str({ default: 'work.taskacc', desc: 'The queue name for message consumption originating from the other services' }),
 
   // ZeroMQ socket settings
-  NIST_REQ_0MQ_SOCKET_URI: envalid.url({ default: 'tcp://nist-beacon:3001', desc: 'The nist-beacon client Request zmq socket URI' }),
-  NIST_RES_0MQ_SOCKET_URI: envalid.url({ default: 'tcp://0.0.0.0:3001', desc: 'The nist-beacon server Response zmq socket URI' }),
-  NIST_SUB_0MQ_SOCKET_URI: envalid.url({ default: 'tcp://nist-beacon:3002', desc: 'The nist-beacon client Sub zmq socket URI' }),
-  NIST_PUB_0MQ_SOCKET_URI: envalid.url({ default: 'tcp://0.0.0.0:3002', desc: 'The nist-beacon server Pub zmq socket URI' })
+  NIST_REQ_ZEROMQ_SOCKET_URI: envalid.url({ default: 'tcp://nist-beacon:3001', desc: 'The nist-beacon client Request ZeroMQ socket URI' }),
+  NIST_RES_ZEROMQ_SOCKET_URI: envalid.url({ default: 'tcp://0.0.0.0:3001', desc: 'The nist-beacon server Response ZeroMQ socket URI' }),
+  NIST_SUB_ZEROMQ_SOCKET_URI: envalid.url({ default: 'tcp://nist-beacon:3002', desc: 'The nist-beacon client Sub ZeroMQ socket URI' }),
+  NIST_PUB_ZEROMQ_SOCKET_URI: envalid.url({ default: 'tcp://0.0.0.0:3002', desc: 'The nist-beacon server Pub ZeroMQ socket URI' })
 }
 
 module.exports = (service) => {

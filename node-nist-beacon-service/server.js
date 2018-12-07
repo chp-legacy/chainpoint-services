@@ -17,7 +17,7 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('nist')
 
-const zmq = require('zeromq')
+const zeromq = require('zeromq')
 const BEACON = require('nist-randomness-beacon')
 const connections = require('./lib/connections.js')
 const utils = require(`./lib/utils.js`)
@@ -63,11 +63,11 @@ function startIntervals () {
 }
 
 function initNISTSockets () {
-  responseSocket = zmq.socket(`rep`) // init response socket to handle direct NIST requests from other services on startup
-  publishSocket = zmq.socket(`pub`) // init publish socket to handle broadcasting new NIST values
+  responseSocket = zeromq.socket(`rep`) // init response socket to handle direct NIST requests from other services on startup
+  publishSocket = zeromq.socket(`pub`) // init publish socket to handle broadcasting new NIST values
 
-  responseSocket.bindSync(env.NIST_RES_0MQ_SOCKET_URI)
-  publishSocket.bindSync(env.NIST_PUB_0MQ_SOCKET_URI)
+  responseSocket.bindSync(env.NIST_RES_ZEROMQ_SOCKET_URI)
+  publishSocket.bindSync(env.NIST_PUB_ZEROMQ_SOCKET_URI)
 
   responseSocket.on(`message`, function (msg) {
     console.log(`Received NIST value request : ${nistLatest}`)

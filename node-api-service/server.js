@@ -29,7 +29,7 @@ const cnsl = require('consul')
 const registeredNode = require('./lib/models/RegisteredNode.js')
 const calendarBlock = require('./lib/models/CalendarBlock.js')
 const auditChallenge = require('./lib/models/AuditChallenge.js')
-const zmq = require('zeromq')
+const zeromq = require('zeromq')
 const connections = require('./lib/connections.js')
 
 // The redis connection used for all redis communication
@@ -157,17 +157,17 @@ async function openRMQConnectionAsync (connectURI) {
 }
 
 /**
- * Initializes zeroMQ request and subscribe sockets
+ * Initializes ZeroMQ request and subscribe sockets
  * Requests the latest NIST value immediately
  * Receives NIST value updates when broadcasted
  *
  */
 function initNISTSockets () {
-  const requestSocket = zmq.socket(`req`)
-  const subscribeSocket = zmq.socket(`sub`)
+  const requestSocket = zeromq.socket(`req`)
+  const subscribeSocket = zeromq.socket(`sub`)
 
-  requestSocket.connect(env.NIST_REQ_0MQ_SOCKET_URI)
-  subscribeSocket.connect(env.NIST_SUB_0MQ_SOCKET_URI)
+  requestSocket.connect(env.NIST_REQ_ZEROMQ_SOCKET_URI)
+  subscribeSocket.connect(env.NIST_SUB_ZEROMQ_SOCKET_URI)
 
   requestSocket.on(`message`, function (msg) {
     console.log(`Received initial NIST value : ${msg}`)

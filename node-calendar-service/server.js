@@ -35,7 +35,7 @@ const rp = require('request-promise-native')
 const leaderElection = require('exp-leader-election')
 const schedule = require('node-schedule')
 const debugPkg = require('debug')
-const zmq = require('zeromq')
+const zeromq = require('zeromq')
 const connections = require('./lib/connections.js')
 
 let pgClientPool
@@ -879,11 +879,11 @@ async function getTNTGrainsBalanceForWalletAsync () {
  *
  */
 function initNISTSockets () {
-  const requestSocket = zmq.socket(`req`)
-  const subscribeSocket = zmq.socket(`sub`)
+  const requestSocket = zeromq.socket(`req`)
+  const subscribeSocket = zeromq.socket(`sub`)
 
-  requestSocket.connect(env.NIST_REQ_0MQ_SOCKET_URI)
-  subscribeSocket.connect(env.NIST_SUB_0MQ_SOCKET_URI)
+  requestSocket.connect(env.NIST_REQ_ZEROMQ_SOCKET_URI)
+  subscribeSocket.connect(env.NIST_SUB_ZEROMQ_SOCKET_URI)
 
   requestSocket.on(`message`, function (msg) {
     debug.general(`Received initial NIST value : ${msg}`)
@@ -1048,7 +1048,7 @@ async function start () {
   }
 
   try {
-    debug.general('start : init zmq sockets')
+    debug.general('start : init ZeroMQ sockets')
     initNISTSockets()
     debug.general('start : init Sequelize connection')
     await openStorageConnectionAsync()
