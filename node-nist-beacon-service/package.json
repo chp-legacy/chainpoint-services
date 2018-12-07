@@ -9,8 +9,8 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "consul": "^0.30.0",
     "envalid": "^3.1.1",
-    "nist-randomness-beacon": "^2.0.4"
+    "nist-randomness-beacon": "^2.0.4",
+    "zeromq": "^5.1.0"
   }
 }

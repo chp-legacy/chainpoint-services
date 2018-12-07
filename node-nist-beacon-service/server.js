@@ -17,11 +17,12 @@
 // load all environment variables into env object
 const env = require('./lib/parse-env.js')('nist')
 
+const zmq = require('zeromq')
 const BEACON = require('nist-randomness-beacon')
-const cnsl = require('consul')
 const connections = require('./lib/connections.js')
+const utils = require(`./lib/utils.js`)
 
-let consul = null
+let nistLatest = null
 
 async function getNistLatestAsync () {
   try {
@@ -32,26 +33,10 @@ async function getNistLatestAsync () {
     let timestampMS = new Date(result.pulse.timeStamp).getTime()
     let timeAndSeed = `${timestampMS}:${result.pulse.localRandomValue}`.toLowerCase()
 
-    // The latest NIST value will always be stored under
-    // a known key which can always be used if present.
-    // It will be updated every minute if the service API
-    // is available. Clients that are watching this key
-    // should gracefully handle null values for this key.
-    consul.kv.get(env.NIST_KEY, function (err, result) {
-      if (err) {
-        console.error(err)
-      } else {
-        // Only write to the key if the value changed.
-        if (!result || result.Value !== timeAndSeed) {
-          console.log(`New NIST value received: ${timeAndSeed}`)
-          consul.kv.set(env.NIST_KEY, timeAndSeed, function (err, result) {
-            if (err) throw err
-          })
-        }
-      }
-    })
+    nistLatest = timeAndSeed
+    console.log(`New NIST value generated: ${timeAndSeed}`)
   } catch (error) {
-    console.error(error)
+    console.error(`NIST beacon error : ${error.message}`)
   }
 }
 
@@ -70,13 +55,46 @@ function startIntervals () {
   connections.startIntervals(intervals)
 }
 
+function initNISTSockets () {
+  const responseSocket = zmq.socket(`rep`) // init response socket to handle direct NIST requests from other services on startup
+  const publishSocket = zmq.socket(`pub`) // init publish socket to handle broadcasting new NIST values
+
+  responseSocket.bindSync(env.NIST_RES_0MQ_SOCKET_URI)
+  publishSocket.bindSync(env.NIST_PUB_0MQ_SOCKET_URI)
+
+  responseSocket.on(`message`, function (msg) {
+    console.log(`Received NIST value request : ${nistLatest}`)
+    responseSocket.send(nistLatest)
+  })
+
+  const topic = `nist`
+  let currentNIST = null
+
+  setInterval(function () {
+    // ensure that the NIST value has not already been broadcasted
+    if (currentNIST !== nistLatest) {
+      console.log(`Broadcasting new NIST value : ${nistLatest}`)
+      publishSocket.send([topic, nistLatest])
+      currentNIST = nistLatest
+    }
+  }, env.NIST_INTERVAL_MS)
+}
+
 async function start () {
   if (env.NODE_ENV === 'test') return
   try {
-    // init consul
-    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT)
     // init interval functions
     startIntervals()
+    // wait until first valid NIST value is received
+    let currentNIST = nistLatest
+    while (currentNIST === null) {
+      console.log(`Waiting for initial NIST value`)
+      await utils.sleep(1000)
+      currentNIST = nistLatest
+    }
+    console.log(`Initial NIST value : ${nistLatest}`)
+    // init ZeroMQ sockets
+    initNISTSockets()
     console.log('startup completed successfully')
   } catch (error) {
     console.error(`An error has occurred on startup: ${error.message}`)
