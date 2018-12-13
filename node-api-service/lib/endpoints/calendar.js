@@ -16,14 +16,11 @@
 
 const _ = require('lodash')
 const restify = require('restify')
-const calendarBlock = require('../models/CalendarBlock.js')
+
+let CalendarBlock
+let sequelize
 
 const BLOCKRANGE_SIZE = 100
-
-// pull in variables defined in shared CalendarBlock module
-let sequelize = calendarBlock.sequelize
-let CalendarBlock = calendarBlock.CalendarBlock
-let Op = sequelize.Op
 
 /**
  * GET /calendar/:height handler
@@ -101,7 +98,7 @@ async function getCalBlockRangeV2Async (req, res, next) {
 
   let blocks
   try {
-    blocks = await CalendarBlock.findAll({ where: { id: { [Op.between]: [fromHeight, toHeight] } }, order: [['id', 'ASC']], raw: true })
+    blocks = await CalendarBlock.findAll({ where: { id: { [sequelize.Op.between]: [fromHeight, toHeight] } }, order: [['id', 'ASC']], raw: true })
   } catch (error) {
     console.error(`getCalBlockRangeV2Async failed : Could not query for block range : ${error.message}`)
     return next(new restify.InternalServerError('Could not query for block range'))
@@ -198,9 +195,9 @@ async function getCalBlockHashByHeightV1Async (req, res, next) {
 }
 
 module.exports = {
-  getCalendarBlockSequelize: () => { return sequelize },
   getCalBlockByHeightV1Async: getCalBlockByHeightV1Async,
   getCalBlockRangeV2Async: getCalBlockRangeV2Async,
   getCalBlockDataByHeightV1Async: getCalBlockDataByHeightV1Async,
-  getCalBlockHashByHeightV1Async: getCalBlockHashByHeightV1Async
+  getCalBlockHashByHeightV1Async: getCalBlockHashByHeightV1Async,
+  setDatabase: (sqlz, calBlock) => { sequelize = sqlz; CalendarBlock = calBlock }
 }

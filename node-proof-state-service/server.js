@@ -21,7 +21,12 @@ const amqp = require('amqplib')
 const leaderElection = require('exp-leader-election')
 const connections = require('./lib/connections.js')
 
-const cachedProofState = require('./lib/models/cachedProofStateModels.js')
+const aggState = require('./lib/models/AggState.js')
+const calState = require('./lib/models/CalState.js')
+const anchorBtcAggState = require('./lib/models/AnchorBtcAggState.js')
+const btcTxState = require('./lib/models/BtcTxState.js')
+const btcHeadState = require('./lib/models/BtcHeadState.js')
+const cachedProofState = require('./lib/models/cachedProofState.js')
 
 // The channel used for all amqp communication
 // This value is set once the connection has been established
@@ -343,7 +348,15 @@ async function performLeaderElection () {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  await connections.openStorageConnectionAsync([cachedProofState.sequelize])
+  let sqlzModelArray = [
+    aggState,
+    calState,
+    anchorBtcAggState,
+    btcTxState,
+    btcHeadState
+  ]
+  let cxObjects = await connections.openStorageConnectionAsync(sqlzModelArray)
+  cachedProofState.setDatabase(cxObjects.sequelize, cxObjects.models[0], cxObjects.models[1], cxObjects.models[2], cxObjects.models[3], cxObjects.models[4])
 }
 
 /**

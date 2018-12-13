@@ -14,12 +14,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-const auditChallenge = require('./AuditChallenge.js')
-
 const CHALLENGE_CACHE_EXPIRE_MINUTES = 60 * 24
 const AUDIT_CHALLENGE_KEY_PREFIX = 'AuditChallenge'
 
 const env = require('../parse-env.js')()
+
+let AuditChallenge
 
 // The most recent challenge redis key, supplied by consul
 let MostRecentChallengeKey = null
@@ -31,9 +31,6 @@ let redis = null
 // The consul connection used for all consul communication
 // This value is set once the connection has been established
 let consul = null
-
-// pull in variables defined in shared AuditChallenge module
-let AuditChallenge = auditChallenge.AuditChallenge
 
 async function getMostRecentChallengeDataAsync () {
   let mostRecentChallengeText = (redis && MostRecentChallengeKey) ? await redis.get(MostRecentChallengeKey) : null
@@ -110,5 +107,5 @@ module.exports = {
   getMostRecentChallengeDataSolutionRemovedAsync: getMostRecentChallengeDataSolutionRemovedAsync,
   setNewAuditChallengeAsync: setNewAuditChallengeAsync,
   getChallengeDataByTimeAsync: getChallengeDataByTimeAsync,
-  getAuditChallengeSequelize: () => { return auditChallenge.sequelize }
+  setDatabase: (sqlz, auditChal) => { AuditChallenge = auditChal }
 }

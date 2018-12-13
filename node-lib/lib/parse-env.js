@@ -72,7 +72,6 @@ let envDefinitions = {
   // Consul related variables and keys
   CONSUL_HOST: envalid.str({ default: 'consul', desc: 'Consul server host' }),
   CONSUL_PORT: envalid.num({ default: 8500, desc: 'Consul server port' }),
-  NIST_KEY: envalid.str({ default: 'service/nist/latest', desc: 'The consul key to write to, watch to receive updated NIST object' }),
   AUDIT_CHALLENGE_RECENT_KEY: envalid.str({ default: 'service/audit/mostrecentrediskey', desc: 'Key used for acquiring most recent audit challenge redis key' }),
   MIN_NODE_VERSION_EXISTING_KEY: envalid.str({ default: 'service/api/minnodeversionexisting', desc: 'Key used for the minimum acceptable Node version for existing registrations and to pass audits' }),
   MIN_NODE_VERSION_NEW_KEY: envalid.str({ default: 'service/api/minnodeversionnew', desc: 'Key used for the minimum acceptable Node version for new registrations' }),
@@ -170,7 +169,13 @@ let envDefinitions = {
 
   // Task accumulator specific variables
   RMQ_PREFETCH_COUNT_TASK_ACC: envalid.num({ default: 0, desc: 'The maximum number of messages sent over the channel that can be awaiting acknowledgement, 0 = no limit' }),
-  RMQ_WORK_IN_TASK_ACC_QUEUE: envalid.str({ default: 'work.taskacc', desc: 'The queue name for message consumption originating from the other services' })
+  RMQ_WORK_IN_TASK_ACC_QUEUE: envalid.str({ default: 'work.taskacc', desc: 'The queue name for message consumption originating from the other services' }),
+
+  // ZeroMQ socket settings
+  NIST_REQ_ZEROMQ_SOCKET_URI: envalid.url({ default: 'tcp://nist-beacon:3001', desc: 'The nist-beacon client Request ZeroMQ socket URI' }),
+  NIST_RES_ZEROMQ_SOCKET_URI: envalid.url({ default: 'tcp://0.0.0.0:3001', desc: 'The nist-beacon server Response ZeroMQ socket URI' }),
+  NIST_SUB_ZEROMQ_SOCKET_URI: envalid.url({ default: 'tcp://nist-beacon:3002', desc: 'The nist-beacon client Sub ZeroMQ socket URI' }),
+  NIST_PUB_ZEROMQ_SOCKET_URI: envalid.url({ default: 'tcp://0.0.0.0:3002', desc: 'The nist-beacon server Pub ZeroMQ socket URI' })
 }
 
 module.exports = (service) => {

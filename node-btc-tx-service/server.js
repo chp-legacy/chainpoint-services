@@ -22,13 +22,11 @@ const BlockchainAnchor = require('blockchain-anchor')
 const btcTxLog = require('./lib/models/BtcTxLog.js')
 const connections = require('./lib/connections.js')
 
+let BtcTxLog
+
 // The channel used for all amqp communication
 // This value is set once the connection has been established
 let amqpChannel = null
-
-// pull in variables defined in shared BtcTxLog module
-let sequelize = btcTxLog.sequelize
-let BtcTxLog = btcTxLog.BtcTxLog
 
 // Initialize BlockchainAnchor object
 let anchor = new BlockchainAnchor({
@@ -155,8 +153,12 @@ async function processIncomingAnchorBTCJobAsync (msg) {
 /**
  * Opens a storage connection
  **/
-async function openStorageConnectionAsync (callback) {
-  await connections.openStorageConnectionAsync([sequelize])
+async function openStorageConnectionAsync () {
+  let sqlzModelArray = [
+    btcTxLog
+  ]
+  let cxObjects = await connections.openStorageConnectionAsync(sqlzModelArray)
+  BtcTxLog = cxObjects.models[0]
 }
 
 /**

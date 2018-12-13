@@ -22,16 +22,24 @@ const MerkleTools = require('merkle-tools')
 const amqp = require('amqplib')
 const uuidv1 = require('uuid/v1')
 const crypto = require('crypto')
+const aggState = require('./lib/models/AggState.js')
+const calState = require('./lib/models/CalState.js')
+const anchorBtcAggState = require('./lib/models/AnchorBtcAggState.js')
+const btcTxState = require('./lib/models/BtcTxState.js')
+const btcHeadState = require('./lib/models/BtcHeadState.js')
 const calendarBlock = require('./lib/models/CalendarBlock.js')
-const cachedProofState = require('./lib/models/cachedProofStateModels.js')
+const cachedProofState = require('./lib/models/cachedProofState.js')
 const coreNetworkState = require('./lib/models/CoreNetworkState.js')
-const cnsl = require('consul')
 const utils = require('./lib/utils.js')
 const rp = require('request-promise-native')
 const leaderElection = require('exp-leader-election')
 const schedule = require('node-schedule')
 const debugPkg = require('debug')
+const zeromq = require('zeromq')
 const connections = require('./lib/connections.js')
+
+let pgClientPool
+let CalendarBlock
 
 // See : https://github.com/zeit/async-retry
 const retry = require('async-retry')
@@ -74,15 +82,8 @@ const merkleTools = new MerkleTools()
 let amqpChannel = null
 
 // The latest NIST data
-// This value is updated from consul events as changes are detected
+// This value is updated via ZeroMQ broadcast
 let nistLatest = null
-
-// pull in variables defined in shared CalendarBlock module
-const calBlockSequelize = calendarBlock.sequelize
-const CalendarBlock = calendarBlock.CalendarBlock
-const pgClientPool = calendarBlock.pgClientPool
-
-let consul = null
 
 // Calculate the hash of the signing public key bytes
 // to allow lookup of which pubkey was used to sign
@@ -872,15 +873,51 @@ async function getTNTGrainsBalanceForWalletAsync () {
 }
 
 /**
+ * Initializes ZeroMQ request and subscribe sockets
+ * Requests the latest NIST value immediately
+ * Receives NIST value updates when broadcasted
+ *
+ */
+function initNISTSockets () {
+  const requestSocket = zeromq.socket(`req`)
+  const subscribeSocket = zeromq.socket(`sub`)
+
+  requestSocket.connect(env.NIST_REQ_ZEROMQ_SOCKET_URI)
+  subscribeSocket.connect(env.NIST_SUB_ZEROMQ_SOCKET_URI)
+
+  requestSocket.on(`message`, function (msg) {
+    debug.general(`Received initial NIST value : ${msg}`)
+    nistLatest = String(msg || '')
+  })
+
+  debug.general(`Requesting initial NIST value`)
+  requestSocket.send('get nist')
+
+  subscribeSocket.subscribe(`nist`)
+
+  subscribeSocket.on(`message`, function (topic, msg) {
+    debug.general(`Received new NIST value : ${msg}`)
+    nistLatest = String(msg || '')
+  })
+}
+
+/**
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let modelSqlzArray = [
-    cachedProofState.sequelize,
-    calBlockSequelize,
-    coreNetworkState.sequelize
+  let sqlzModelArray = [
+    aggState,
+    calState,
+    anchorBtcAggState,
+    btcTxState,
+    btcHeadState,
+    calendarBlock,
+    coreNetworkState
   ]
-  await connections.openStorageConnectionAsync(modelSqlzArray, debug)
+  let cxObjects = await connections.openStorageConnectionAsync(sqlzModelArray, debug)
+  pgClientPool = cxObjects.pgClientPool
+  cachedProofState.setDatabase(cxObjects.sequelize, cxObjects.models[0], cxObjects.models[1], cxObjects.models[2], cxObjects.models[3], cxObjects.models[4])
+  CalendarBlock = cxObjects.models[5]
 
   // Pre-check the current Calendar block count.
   // Trigger creation of the genesis block if needed
@@ -941,22 +978,6 @@ async function performLeaderElection () {
     () => { IS_LEADER = true },
     () => { IS_LEADER = false },
     debug)
-}
-
-// Initializes all the consul watches
-function startConsulWatches () {
-  let watches = [{
-    key: env.NIST_KEY,
-    onChange: (data, res) => {
-      // process only if a value has been returned and it is different than what is already stored
-      if (data && data.Value && nistLatest !== data.Value) {
-        debug.nist(`startConsulWatches : nistLatest : ${data.Value}`)
-        nistLatest = data.Value
-      }
-    },
-    onError: null
-  }]
-  connections.startConsulWatches(consul, watches, null, debug)
 }
 
 // SCHEDULED ACTIONS
@@ -1027,9 +1048,8 @@ async function start () {
   }
 
   try {
-    // init consul
-    debug.general('start : init consul')
-    consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT, debug)
+    debug.general('start : init ZeroMQ sockets')
+    initNISTSockets()
     debug.general('start : init Sequelize connection')
     await openStorageConnectionAsync()
     debug.general('start : init Redis connection')
@@ -1038,8 +1058,6 @@ async function start () {
     performLeaderElection()
     debug.general('start : init RabbitMQ connection')
     await openRMQConnectionAsync(env.RABBITMQ_CONNECT_URI)
-    debug.general('start : init Consul watches')
-    startConsulWatches()
     debug.general('start : init scheduled actions')
     await scheduleActionsAsync()
     debug.general('start : complete')

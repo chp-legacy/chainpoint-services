@@ -16,18 +16,17 @@
 
 const env = require('../parse-env.js')('api')
 
-const calendarBlock = require('../models/CalendarBlock.js')
 const cachedAuditChallenge = require('../models/cachedAuditChallenge.js')
 const restify = require('restify')
 const crypto = require('crypto')
+
+let CalendarBlock
 
 // TweetNaCl.js
 // see: http://ed25519.cr.yp.to
 // see: https://github.com/dchest/tweetnacl-js#signatures
 const nacl = require('tweetnacl')
 nacl.util = require('tweetnacl-util')
-
-let CalendarBlock = calendarBlock.CalendarBlock
 
 let NODE_AGGREGATION_INTERVAL_SECONDS
 
@@ -105,13 +104,12 @@ async function getConfigInfoV1Async (req, res, next) {
 
 module.exports = {
   getConfigInfoV1Async: getConfigInfoV1Async,
-  setCalendarBlock: (calBlock) => { CalendarBlock = calBlock },
   setRedis: (r) => { cachedAuditChallenge.setRedis(r) },
   setConsul: async (c) => {
     cachedAuditChallenge.setConsul(c)
   },
   setNodeAggregationInterval: (val) => { NODE_AGGREGATION_INTERVAL_SECONDS = val },
   setMostRecentChallengeKey: (key) => { cachedAuditChallenge.setMostRecentChallengeKey(key) },
-  getAuditChallengeSequelize: () => { return cachedAuditChallenge.getAuditChallengeSequelize() },
-  setMinNodeVersionExisting: (v) => { minNodeVersionExisting = v }
+  setMinNodeVersionExisting: (v) => { minNodeVersionExisting = v },
+  setDatabase: (sqlz, calBlock, auditChal) => { CalendarBlock = calBlock; cachedAuditChallenge.setDatabase(sqlz, auditChal) }
 }

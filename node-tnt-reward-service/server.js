@@ -27,6 +27,11 @@ const heartbeats = require('heartbeats')
 const leaderElection = require('exp-leader-election')
 const connections = require('./lib/connections.js')
 
+let sequelize
+let RegisteredNode
+let RegisteredCore
+let CalendarBlock
+
 // The channel used for all amqp communication
 // This value is set once the connection has been established
 let amqpChannel = null
@@ -50,15 +55,6 @@ let NODE_REWARD_TNT_ADDR_BLACKLIST = [
   '0x444b1B76da517281ef92bc6689C0108b5074addf'.toLowerCase()
 ]
 
-// pull in variables defined in shared database models
-let calBlockSequelize = calendarBlock.sequelize
-let CalendarBlock = calendarBlock.CalendarBlock
-let registeredCoreSequelize = registeredCore.sequelize
-let RegisteredCore = registeredCore.RegisteredCore
-let registeredNodeSequelize = registeredNode.sequelize
-let RegisteredNode = registeredNode.RegisteredNode
-let Op = registeredNodeSequelize.Op
-
 const REWARD_SELECTION_COUNT = 100 // Selecting from the top 100 of audit scores
 
 // Randomly select and deliver token reward from the list
@@ -68,7 +64,7 @@ async function performRewardAsync () {
   let candidateNodeAddresses
   try {
     // retrieve a list of the top REWARD_SELECTION_PC public Nodes
-    candidateNodeAddresses = await RegisteredNode.findAll({ where: { publicUri: { [Op.ne]: null }, tntAddr: { [Op.notIn]: NODE_REWARD_TNT_ADDR_BLACKLIST } }, attributes: ['tntAddr'], order: [['auditScore', 'DESC'], ['created_at', 'ASC']], limit: REWARD_SELECTION_COUNT })
+    candidateNodeAddresses = await RegisteredNode.findAll({ where: { publicUri: { [sequelize.Op.ne]: null }, tntAddr: { [sequelize.Op.notIn]: NODE_REWARD_TNT_ADDR_BLACKLIST } }, attributes: ['tntAddr'], order: [['auditScore', 'DESC'], ['created_at', 'ASC']], limit: REWARD_SELECTION_COUNT })
     if (!candidateNodeAddresses || candidateNodeAddresses.length < 1) {
       console.log('No reward candidate Nodes were found')
       return
@@ -291,12 +287,16 @@ async function performLeaderElection () {
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let modelSqlzArray = [
-    calBlockSequelize,
-    registeredCoreSequelize,
-    registeredNodeSequelize
+  let sqlzModelArray = [
+    registeredNode,
+    registeredCore,
+    calendarBlock
   ]
-  await connections.openStorageConnectionAsync(modelSqlzArray)
+  let cxObjects = await connections.openStorageConnectionAsync(sqlzModelArray)
+  sequelize = cxObjects.sequelize
+  RegisteredNode = cxObjects.models[0]
+  RegisteredCore = cxObjects.models[1]
+  CalendarBlock = cxObjects.models[2]
 }
 
 /**

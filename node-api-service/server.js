@@ -26,6 +26,10 @@ const calendar = require('./lib/endpoints/calendar.js')
 const config = require('./lib/endpoints/config.js')
 const root = require('./lib/endpoints/root.js')
 const cnsl = require('consul')
+const registeredNode = require('./lib/models/RegisteredNode.js')
+const calendarBlock = require('./lib/models/CalendarBlock.js')
+const auditChallenge = require('./lib/models/AuditChallenge.js')
+const zeromq = require('zeromq')
 const connections = require('./lib/connections.js')
 
 // The redis connection used for all redis communication
@@ -121,13 +125,16 @@ server.get({ path: '/', version: '1.0.0' }, root.getV1)
  * Opens a storage connection
  **/
 async function openStorageConnectionAsync () {
-  let modelSqlzArray = [
-    hashes.getSequelize(),
-    nodes.getRegisteredNodeSequelize(),
-    calendar.getCalendarBlockSequelize(),
-    config.getAuditChallengeSequelize()
+  let sqlzModelArray = [
+    registeredNode,
+    calendarBlock,
+    auditChallenge
   ]
-  await connections.openStorageConnectionAsync(modelSqlzArray)
+  let cxObjects = await connections.openStorageConnectionAsync(sqlzModelArray)
+  nodes.setDatabase(cxObjects.sequelize, cxObjects.models[0])
+  hashes.setDatabase(cxObjects.sequelize, cxObjects.models[0])
+  config.setDatabase(cxObjects.sequelize, cxObjects.models[1], cxObjects.models[2])
+  calendar.setDatabase(cxObjects.sequelize, cxObjects.models[1])
 }
 
 /**
@@ -147,6 +154,38 @@ async function openRMQConnectionAsync (connectURI) {
       setTimeout(() => { openRMQConnectionAsync(connectURI) }, 5000)
     }
   )
+}
+
+/**
+ * Initializes ZeroMQ request and subscribe sockets
+ * Requests the latest NIST value immediately
+ * Receives NIST value updates when broadcasted
+ *
+ */
+function initNISTSockets () {
+  const requestSocket = zeromq.socket(`req`)
+  const subscribeSocket = zeromq.socket(`sub`)
+
+  requestSocket.connect(env.NIST_REQ_ZEROMQ_SOCKET_URI)
+  subscribeSocket.connect(env.NIST_SUB_ZEROMQ_SOCKET_URI)
+
+  requestSocket.on(`message`, function (msg) {
+    console.log(`Received initial NIST value : ${msg}`)
+    hashes.setNistLatest(String(msg || ''))
+  })
+
+  console.log(`Requesting initial NIST value`)
+  requestSocket.send('get nist')
+
+  subscribeSocket.subscribe(`nist`)
+
+  subscribeSocket.on(`message`, function (topic, msg) {
+    let newValue = String(msg || '')
+    if (msg && hashes.getNistLatest() !== newValue) {
+      console.log(`Received new NIST value : ${msg}`)
+      hashes.setNistLatest(newValue)
+    }
+  })
 }
 
 /**
@@ -173,15 +212,6 @@ function openRedisConnection (redisURIs) {
 // This initializes all the consul watches
 function startConsulWatches () {
   let watches = [{
-    key: env.NIST_KEY,
-    onChange: (data, res) => {
-      // process only if a value has been returned and it is different than what is already stored
-      if (data && data.Value && hashes.getNistLatest() !== data.Value) {
-        hashes.setNistLatest(data.Value)
-      }
-    },
-    onError: null
-  }, {
     key: env.MIN_NODE_VERSION_EXISTING_KEY,
     onChange: (data, res) => {
       // process only if a value has been returned
@@ -244,6 +274,8 @@ function startConsulWatches () {
 async function start () {
   if (env.NODE_ENV === 'test') return
   try {
+    // init ZeroMQ sockets
+    initNISTSockets()
     // init consul
     consul = connections.initConsul(cnsl, env.CONSUL_HOST, env.CONSUL_PORT)
     await config.setConsul(consul)
@@ -278,8 +310,6 @@ module.exports = {
     hashes.setAMQPChannel(chan)
   },
   setNistLatest: (val) => { hashes.setNistLatest(val) },
-  setHashesRegisteredNode: (regNode) => { hashes.setHashesRegisteredNode(regNode) },
-  setNodesRegisteredNode: (regNode) => { nodes.setNodesRegisteredNode(regNode) },
   server: server,
   config: config,
   setMinNodeVersionNew: (val) => { nodes.setMinNodeVersionNew(val) },

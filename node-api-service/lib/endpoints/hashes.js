@@ -20,8 +20,9 @@ const utils = require('../utils.js')
 const BLAKE2s = require('blake2s-js')
 const _ = require('lodash')
 const crypto = require('crypto')
-const registeredNode = require('../models/RegisteredNode.js')
 const tntUnits = require('../tntUnits.js')
+
+let RegisteredNode
 
 // Disable temporarily
 // const TNT_CREDIT_COST_POST_HASH = 1
@@ -42,10 +43,6 @@ let amqpChannel = null
 // This value is updated from consul events as changes are detected
 let nistLatest = null
 let nistLatestEpoch = null
-
-// pull in variables defined in shared RegisteredNode module
-let sequelize = registeredNode.sequelize
-let RegisteredNode = registeredNode.RegisteredNode
 
 // The minimium TNT grains required to operate a Node
 const minGrainsBalanceNeeded = env.MIN_TNT_GRAINS_BALANCE_FOR_REWARD
@@ -330,13 +327,12 @@ function updateNistVars (nistValue) {
 }
 
 module.exports = {
-  getSequelize: () => { return sequelize },
   postHashV1Async: postHashV1Async,
   generatePostHashResponse: generatePostHashResponse,
   setAMQPChannel: (chan) => { amqpChannel = chan },
   getNistLatest: () => { return nistLatest },
   setNistLatest: (val) => { updateNistVars(val) },
-  setHashesRegisteredNode: (regNode) => { RegisteredNode = regNode },
   setRedis: (redisClient) => { redis = redisClient },
-  setEnforcePrivateStakeState: (enabled) => { enforcePrivateNodeStake = (enabled === 'true') }
+  setEnforcePrivateStakeState: (enabled) => { enforcePrivateNodeStake = (enabled === 'true') },
+  setDatabase: (sqlz, regNode) => { RegisteredNode = regNode }
 }
