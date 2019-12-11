@@ -11,9 +11,9 @@ This software is deprecated and is no longer supported.
 Chainpoint Services is at the Core of the Chainpoint Network and
 built as a modern [microservices architecture](https://martinfowler.com/articles/microservices.html). It is intended to be run as the Core of the Chainpoint Network. If you are interested in running a Chainpoint Node, or installing a copy of our command line interface please instead visit:
 
-[https://github.com/chainpoint/chainpoint-node](https://github.com/chainpoint/chainpoint-node)
+[https://github.com/chainpoint/chainpoint-node](https://github.com/tnt-legacy/chainpoint-node)
 
-[https://github.com/chainpoint/chainpoint-cli](https://github.com/chainpoint/chainpoint-cli)
+[https://github.com/chainpoint/chainpoint-cli](https://github.com/tnt-legacy/chainpoint-cli)
 
 
 ## TL;DR
@@ -22,7 +22,7 @@ Build and start the whole system locally with `make up`. Running `make help`
 will display additional `Makefile` commands that are available.
 
 ```sh
-git clone https://github.com/chainpoint/chainpoint-services
+git clone https://github.com/tnt-legacy/chainpoint-services
 cd chainpoint-services
 make
 ```
