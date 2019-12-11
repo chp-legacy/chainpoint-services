@@ -1,6 +1,6 @@
 # chainpoint-node-audit-producer-service
 
-Audit Tierion Network Nodes that have registered
+Audit Chainpoint Network Nodes that have registered
 as being publicly available.
 
 Audits performed include:

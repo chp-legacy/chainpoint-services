@@ -1,25 +1,20 @@
+# Important Notice
+
+This software is deprecated and as such is no longer supported. 
+
 # Chainpoint Services
 
+[![Deprecation Notice](https://img.shields.io/badge/deprecated-legacy-lightgrey)](https://github.com/tnt-legacy)
 [![JavaScript Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://standardjs.com)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-Chainpoint Services is at the Core of the Tierion Network and
-built as a modern [microservices architecture](https://martinfowler.com/articles/microservices.html).
-
-The services provided are generally composed of Node.js applications
-running within Alpine Linux Docker containers. These containers,
-while intended to be run within a full Docker orchestration
-system such as Kubernetes in production, run well on a single host
-using [Docker Compose](https://docs.docker.com/compose/overview/).
-This run method is suitable for development only.
-
-## Important Notice
-
-This software is intended to be run as the Core of the Tierion Network. It is not for end users. If you are interested in running a Tierion Node, or installing a copy of our command line interface please instead visit:
+Chainpoint Services is at the Core of the Chainpoint Network and
+built as a modern [microservices architecture](https://martinfowler.com/articles/microservices.html). It is intended to be run as the Core of the Chainpoint Network. If you are interested in running a Chainpoint Node, or installing a copy of our command line interface please instead visit:
 
 [https://github.com/chainpoint/chainpoint-node](https://github.com/chainpoint/chainpoint-node)
 
 [https://github.com/chainpoint/chainpoint-cli](https://github.com/chainpoint/chainpoint-cli)
+
 
 ## TL;DR
 
